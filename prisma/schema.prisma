@@ -1,0 +1,124 @@
+// Schema do dashboard Casa Louzada — ver seção 3 do PLANO.md.
+// A tabela `metas` está documentada no plano mas fica fora da v1.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// A partir do Prisma 7 as URLs não moram mais aqui:
+//   - migrações e introspecção leem `datasource.url` do prisma.config.ts (DIRECT_URL)
+//   - a aplicação em runtime conecta pelo driver adapter em src/lib/db.ts (DATABASE_URL, pooler)
+datasource db {
+  provider = "postgresql"
+}
+
+/// Captação exclusiva é um tipo próprio e independente: um lançamento é uma
+/// coisa ou outra, nunca as duas. Os totais nunca se sobrepõem.
+enum TipoLancamento {
+  VENDA
+  LOCACAO
+  CAPTACAO_VENDA
+  CAPTACAO_EXCLUSIVA
+  CAPTACAO_LOCACAO
+  PROPOSTA
+  AVALIACAO_GOOGLE
+
+  @@map("tipo_lancamento")
+}
+
+model Equipe {
+  id            String   @id @default(uuid()) @db.Uuid
+  nome          String   @unique
+  gerenteNome   String   @map("gerente_nome")
+  ordemExibicao Int      @map("ordem_exibicao")
+  ativa         Boolean  @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+
+  corretores  Corretor[]
+  lancamentos Lancamento[]
+
+  @@index([ordemExibicao])
+  @@map("equipes")
+}
+
+model Corretor {
+  id           String    @id @default(uuid()) @db.Uuid
+  nomeCompleto String    @map("nome_completo")
+  /// Como aparece na TV — nomes curtos leem melhor à distância.
+  nomeExibicao String    @map("nome_exibicao")
+  fotoUrl      String?   @map("foto_url")
+  creci        String?
+  equipeId     String    @map("equipe_id") @db.Uuid
+  /// Inativo some do painel mas mantém o histórico.
+  ativo        Boolean   @default(true)
+  dataEntrada  DateTime? @map("data_entrada") @db.Date
+  criadoEm     DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm DateTime  @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+
+  equipe      Equipe       @relation(fields: [equipeId], references: [id], onDelete: Restrict)
+  lancamentos Lancamento[]
+
+  @@index([equipeId])
+  @@index([ativo])
+  @@map("corretores")
+}
+
+model Lancamento {
+  id         String         @id @default(uuid()) @db.Uuid
+  tipo       TipoLancamento
+  corretorId String         @map("corretor_id") @db.Uuid
+  /// Gravado no momento do lançamento, para o histórico não mudar se o
+  /// corretor trocar de equipe.
+  equipeId   String         @map("equipe_id") @db.Uuid
+  /// Data do fato, não a data em que foi digitado.
+  dataReferencia DateTime   @map("data_referencia") @db.Date
+  /// Preenchido apenas em vendas e locações.
+  valor      Decimal?       @db.Decimal(14, 2)
+  imovelRef  String?        @map("imovel_ref")
+  observacao String?
+  criadoPor  String?        @map("criado_por") @db.Uuid
+  criadoEm   DateTime       @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm DateTime     @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+
+  corretor Corretor @relation(fields: [corretorId], references: [id], onDelete: Restrict)
+  equipe   Equipe   @relation(fields: [equipeId], references: [id], onDelete: Restrict)
+  autor    Usuario? @relation(fields: [criadoPor], references: [id], onDelete: SetNull)
+
+  @@index([tipo, dataReferencia])
+  @@index([dataReferencia])
+  @@index([corretorId, dataReferencia])
+  @@index([equipeId, dataReferencia])
+  @@map("lancamentos")
+}
+
+/// Evita cadastrar retroativamente centenas de vendas antigas.
+/// Entra apenas nos big numbers acumulados. Nunca nos períodos.
+model SaldoHistorico {
+  id           String         @id @default(uuid()) @db.Uuid
+  tipo         TipoLancamento
+  quantidade   Int            @default(0)
+  valorTotal   Decimal        @default(0) @map("valor_total") @db.Decimal(14, 2)
+  dataCorte    DateTime       @map("data_corte") @db.Date
+  descricao    String?
+  criadoEm     DateTime       @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm DateTime       @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+
+  @@index([tipo])
+  @@map("saldo_historico")
+}
+
+model Usuario {
+  id           String   @id @default(uuid()) @db.Uuid
+  nome         String
+  email        String   @unique
+  senhaHash    String   @map("senha_hash")
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+
+  lancamentos Lancamento[]
+
+  @@map("usuarios")
+}

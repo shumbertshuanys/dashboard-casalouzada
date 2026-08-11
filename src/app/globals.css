@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/* Identidade visual — seção 6 do PLANO.md, derivada do logotipo.
+   O ajuste fino para a TV 4K é a Fase 4; aqui ficam só os tokens de cor. */
+@theme {
+  --color-fundo: #544c3f;
+  --color-superficie: #5f5749;
+  --color-texto: #f1efea;
+  --color-texto-secundario: #bdb5a6;
+  --color-destaque: #c9a96a;
+  --color-positivo: #7e9b6e;
+  --color-negativo: #c1745b;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-fundo);
+  color: var(--color-texto);
+}
