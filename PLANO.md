@@ -137,7 +137,7 @@ o registro inicial vem pelo seed e a senha se troca pela própria área administ
 
 > **O saldo histórico nunca participa de mês, trimestre ou ano.** Ele só entra nos
 > acumulados dos big numbers. Os recortes por período usam exclusivamente lançamentos,
-> e ignoram `dataCorte` (DEC-004, DEC-040).
+> e ignoram `dataCorte` (DEC-004, DEC-036).
 
 ---
 
