@@ -379,11 +379,15 @@ sessão do Claude.ai. A implementação visual parte dele.
 **Motivo.** O HTML carrega decisões de layout já tomadas e aprovadas. Redesenhar do
 zero as descartaria e produziria uma terceira versão do mesmo painel.
 
-**Impacto.** Antes de escrever a tela é obrigatório analisar o HTML original. O port
-é a próxima entrega de desenvolvimento, antes da F2.
+**Impacto.** O HTML foi auditado regra a regra antes da implementação — cores, grid,
+paddings, tracking, réguas, marcadores e temporização — e o desenho foi portado, não
+recriado. O port está feito: `/preview` existe. As divergências deliberadas em
+relação ao original estão registradas no handoff. O HTML segue fora do repositório,
+como referência de consulta.
 
-**Fonte.** informação operacional do proprietário; `/preview` não existe no
-repositório. **invariante futura**
+**Fonte.** HTML de referência auditado (SHA-256
+`9b6b875093b3f4940c698d7bf9af9905835fe9841d847350ff096d53b9d5bd10`);
+`src/app/preview/page.tsx`; commit `22bf943`. **implementada**
 
 ### DEC-028 — F2 precede F3
 
@@ -451,3 +455,24 @@ arquivo.
 mora em `src/proxy.ts`.
 
 **Fonte.** `src/proxy.ts`. **implementada**
+
+### DEC-033 — O ciclo dos quadros usa oito métricas
+
+**Decisão.** Os quadros das três equipes percorrem **oito** métricas, na ordem do
+protótipo: vendidos, VGV, locados, captação de venda, exclusividades, captação de
+locação, propostas e avaliações Google. Cada etapa dura 20 segundos, o que dá uma
+volta completa de 160 s — 2min40s. As três equipes compartilham o mesmo índice
+ativo e trocam em sincronia.
+
+**Motivo.** O `PLANO.md` §5.2 diz "Ciclo de 7 métricas × 20 segundos = 2min20s",
+mas a frase seguinte enumera oito. O HTML de referência e o port usam oito. A
+contagem de sete é o erro; a enumeração é que está certa.
+
+**Impacto.** A F3 preserva esse comportamento, salvo decisão posterior explícita.
+Não confundir com o cálculo real: a rotação é apresentação, e a origem dos valores
+continua sendo responsabilidade da DEC-013. O quadro "mensal geral" segue com sete
+linhas — ali o VGV não entra, porque tem faixa própria.
+
+**Fonte.** HTML de referência auditado; `src/lib/mock-painel.ts`;
+`src/components/painel/quadros-equipe.tsx`; commit `22bf943`.
+**implementada no protótipo**
