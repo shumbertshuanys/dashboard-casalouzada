@@ -97,7 +97,11 @@ model Lancamento {
 /// Entra apenas nos big numbers acumulados. Nunca nos períodos.
 model SaldoHistorico {
   id           String         @id @default(uuid()) @db.Uuid
-  tipo         TipoLancamento
+  /// Saldo de abertura: no máximo uma linha por tipo. A unicidade é do banco,
+  /// não de código — checar antes de inserir abriria corrida entre o SELECT e
+  /// o INSERT. O índice único também serve às buscas por tipo, então o
+  /// `@@index([tipo])` que existia aqui virou redundante.
+  tipo         TipoLancamento @unique
   quantidade   Int            @default(0)
   valorTotal   Decimal        @default(0) @map("valor_total") @db.Decimal(14, 2)
   dataCorte    DateTime       @map("data_corte") @db.Date
@@ -105,7 +109,6 @@ model SaldoHistorico {
   criadoEm     DateTime       @default(now()) @map("criado_em") @db.Timestamptz(6)
   atualizadoEm DateTime       @updatedAt @map("atualizado_em") @db.Timestamptz(6)
 
-  @@index([tipo])
   @@map("saldo_historico")
 }
 

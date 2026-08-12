@@ -32,8 +32,7 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
           <p className="text-sm text-texto-secundario">{administrador.nome}</p>
         </div>
         <div className="flex items-center gap-6">
-          {/* Só entra link de rota que existe. Saldo histórico chega no
-              próximo slice. */}
+          {/* Só entra link de rota que existe. */}
           <nav className="flex items-center gap-4">
             <Link
               href="/admin/equipes"
@@ -52,6 +51,12 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
               className="text-sm text-texto-secundario underline-offset-4 hover:text-texto hover:underline"
             >
               Lançamentos
+            </Link>
+            <Link
+              href="/admin/saldo-historico"
+              className="text-sm text-texto-secundario underline-offset-4 hover:text-texto hover:underline"
+            >
+              Saldo histórico
             </Link>
           </nav>
           <form action={sair}>
