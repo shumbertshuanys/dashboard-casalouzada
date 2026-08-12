@@ -78,7 +78,13 @@ do dia 1º para o mês anterior.
 **Impacto.** Nenhum cálculo de período pode usar o fuso do servidor. O fuso é fixo,
 não é o do navegador nem o da máquina de deploy.
 
-**Fonte.** `PLANO.md` §4. **invariante futura** — a camada de cálculo ainda não existe
+**Fonte.** `PLANO.md` §4; `src/lib/datas.ts`; commit `592df35`.
+**suporte técnico implementado na F3.1** — `mesCorrente`, `trimestreCorrente` e
+`anoCorrente` materializam as janelas civis em `America/Sao_Paulo` como intervalos
+semiabertos, decidindo o período corrente por `hojeEmSaoPaulo` e ancorando os limites
+na meia-noite UTC, de modo que o fuso do servidor não interfere. A **aplicação** dessas
+janelas aos cálculos do painel ainda pertence às fatias seguintes da F3: nada as
+consome hoje.
 
 ### DEC-006 — Corretor se inativa, não se exclui
 

@@ -139,6 +139,11 @@ o registro inicial vem pelo seed e a senha se troca pela própria área administ
 > acumulados dos big numbers. Os recortes por período usam exclusivamente lançamentos,
 > e ignoram `dataCorte` (DEC-004, DEC-036).
 
+Desde a F3.1, os limites desses três recortes existem em código: `mesCorrente`,
+`trimestreCorrente` e `anoCorrente`, em `src/lib/datas.ts`, devolvem a janela civil
+corrente em `America/Sao_Paulo` como intervalo semiaberto `[inicio, fimExclusivo)`. São
+só os limites — nenhum cálculo do painel os consome ainda.
+
 ---
 
 ## 5. Telas
@@ -281,18 +286,19 @@ referência para a rota `/preview`, com dados fictícios. Serve de contrato visu
 CRUD de equipes, corretores e lançamentos. Saldo histórico. Ao final desta fase você
 já consegue alimentar o sistema de verdade, mesmo sem o painel pronto.
 
-**Fase 3 — Painel** · *em curso: F3.0 concluída, F3.1 é a próxima*
+**Fase 3 — Painel** · *em curso: F3.0 e F3.1 concluídas, F3.2 é a próxima*
 Camada de cálculo, as três faixas do layout, atualização automática, rotação de métricas,
-proteção por token na URL. Hoje `/painel/[token]` existe protegida por token, mas **não
-consulta o banco** — nenhum código de F3 foi escrito.
+proteção por token na URL. A F3.1 já acrescentou as janelas civis a `src/lib/datas.ts`,
+mas `src/lib/metricas.ts` ainda não existe e `/painel/[token]`, embora protegida por
+token, **continua sem consultar o banco**.
 
 A fase foi fatiada assim:
 
 | Fatia | Escopo | Estado |
 |---|---|---|
 | F3.0 | decisões e contratos | **concluída** — DEC-036 a DEC-042 |
-| F3.1 | janelas civis (mês, trimestre, ano) em `America/Sao_Paulo` | **próxima, não iniciada** |
-| F3.2 | núcleo puro de métricas | não iniciada |
+| F3.1 | janelas civis (mês, trimestre, ano) em `America/Sao_Paulo` | **concluída** — commit `592df35` |
+| F3.2 | núcleo puro de métricas | **próxima, não iniciada** |
 | F3.3 | leitura Prisma | não iniciada |
 | F3.4 | shape de apresentação e tipos fora do mock | não iniciada |
 | F3.5 | painel real ligado aos dados | não iniciada |

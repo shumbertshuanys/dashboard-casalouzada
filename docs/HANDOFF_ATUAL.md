@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `485ba36` — `feat: adiciona administração do saldo histórico` |
+| Commit de referência | `592df35` — `feat: adiciona janelas civis do painel` |
 | Data do handoff | 2026-08-12 |
 
 ## Estado executivo
@@ -22,12 +22,17 @@ A **Fase 2 — Administração está concluída**. Equipes, corretores, lançame
 saldo histórico podem ser gerenciados pela área administrativa, e o sistema já pode
 ser alimentado de verdade.
 
-Da **F3 — Painel**, só a fatia **F3.0 — decisões e contratos** está concluída: as
-regras foram aprovadas pelo proprietário em 2026-08-12 e registradas nas DEC-036 a
-DEC-042. **Nenhum código de F3 foi escrito.** `src/lib/metricas.ts` não existe, e
-`/painel/[token]` continua respondendo "Painel em construção" sem consultar o banco.
+Da **F3 — Painel**, duas fatias estão concluídas. A **F3.0 — decisões e contratos**
+registrou nas DEC-036 a DEC-042 as regras aprovadas pelo proprietário em 2026-08-12. A
+**F3.1 — janelas civis** foi implementada e publicada em `592df35`, e entregou
+**somente a infraestrutura temporal**: o tipo `JanelaCivil` e as funções
+`mesCorrente`, `trimestreCorrente` e `anoCorrente` em `src/lib/datas.ts`.
 
-A próxima fatia é a **F3.1 — janelas civis**, ainda não iniciada.
+Nada além disso do painel existe. `src/lib/metricas.ts` continua ausente,
+`/painel/[token]` continua respondendo "Painel em construção" sem consultar o banco, e
+nenhum cálculo consome as janelas ainda.
+
+A próxima fatia é a **F3.2 — núcleo puro de métricas**, não iniciada.
 
 ## Fases
 
@@ -43,8 +48,8 @@ A próxima fatia é a **F3.1 — janelas civis**, ainda não iniciada.
 | F2.5 — Saldo histórico | **Concluída** | `485ba36` |
 | **F2 — Administração** | **Concluída** | — |
 | F3.0 — Decisões e contratos do painel | **Concluída** | DEC-036 a DEC-042; sem código |
-| F3.1 — Janelas civis | **Não iniciada** — próxima | — |
-| F3.2 — Núcleo puro de métricas | **Não iniciada** | — |
+| F3.1 — Janelas civis | **Concluída** | `592df35` |
+| F3.2 — Núcleo puro de métricas | **Não iniciada** — próxima | `src/lib/metricas.ts` ausente |
 | F3.3 — Leitura Prisma | **Não iniciada** | — |
 | F3.4 — Shape de apresentação | **Não iniciada** | — |
 | F3.5 — Painel real | **Não iniciada** | `/painel/[token]` sem banco |
@@ -67,8 +72,9 @@ A próxima fatia é a **F3.1 — janelas civis**, ainda não iniciada.
   continuaria entrando. Toda página que lê dado e toda Server Action chama a guarda
   por conta própria — o layout não é fronteira de autorização.
 - **Helpers**: `src/lib/datas.ts` (data civil sempre em UTC, com `hojeEmSaoPaulo`
-  como único ponto que conhece o fuso do negócio) e `src/lib/dinheiro.ts` (dinheiro
-  como string decimal, sem ponto flutuante em nenhum caminho de persistência).
+  como único ponto que conhece o fuso do negócio e, desde a F3.1, as janelas civis de
+  mês, trimestre e ano) e `src/lib/dinheiro.ts` (dinheiro como string decimal, sem
+  ponto flutuante em nenhum caminho de persistência).
 
 ## Administração implementada
 
@@ -180,14 +186,36 @@ Duas migrations versionadas:
 
 ## Testes
 
-Baseline **verificado no gate de publicação da F2.5** — são as contagens daquele
-momento, não uma promessa de estabilidade futura:
+Cada baseline é o snapshot de uma entrega: vale como registro do que foi medido
+naquele gate, e não como promessa de estabilidade futura. Ficam os dois, lado a lado.
+
+### Baseline do fechamento da F2.5
+
+Verificado no gate de publicação da F2.5 — são as contagens **daquele** momento, não
+a contagem atual:
 
 | Comando | Resultado verificado |
 |---|---|
 | `npm test` | 168 testes, 44 suítes, 0 falhas |
 | `npm run test:fusos` | 504 aprovações (3 × 168), 0 falhas |
 | `npm run test:integracao` | 88 testes, 33 suítes, 0 falhas |
+
+### Baseline da entrega da F3.1
+
+Medido durante a F3.1, snapshot posterior ao da F2.5:
+
+| Comando | Resultado verificado |
+|---|---|
+| `npm test` | 188 testes, 49 suítes, 188 aprovados, 0 falhas, 0 pulados |
+| `npm run test:fusos` | 188/188 em `UTC`, 188/188 em `America/Sao_Paulo`, 188/188 em `Asia/Tokyo` |
+| `npm run test:integracao` | 88 testes, 33 suítes, 88 aprovados, 0 falhas |
+| `tests/datas.test.ts` isolado | 30 testes, 30 aprovados, 0 falhas |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `npm run build` | exit 0 |
+
+Os 20 testes e 5 suítes que separam um baseline do outro são os da F3.1, todos em
+`tests/datas.test.ts`.
 
 `npm test` é rápido e não toca banco. `test:fusos` roda a suíte unitária em `UTC`,
 `America/Sao_Paulo` e `Asia/Tokyo`, para provar que nenhum teste depende do relógio
@@ -228,14 +256,14 @@ Não se pode dizer que a situação de credenciais esteja saneada hoje.
 
 ## O que ainda NÃO está implementado
 
-Verificado na árvore em `485ba36`, arquivo por arquivo.
+Verificado na árvore em `592df35`, arquivo por arquivo.
 
 | Item | Estado | Fase |
 |---|---|---|
 | `src/lib/metricas.ts` | ausente | F3 |
 | Cálculo real do painel | ausente | F3 |
 | Big numbers reais | ausente | F3 |
-| Períodos reais (mês, trimestre, ano) | ausente | F3 |
+| Períodos reais (mês, trimestre, ano) | só os limites, pela F3.1; nenhum cálculo os usa | F3 |
 | Rankings ligados ao banco | ausente | F3 |
 | Troca do mock pela origem real | ausente — `/preview` ainda usa `src/lib/mock-painel.ts` | F3 |
 | Atualização automática do painel real | ausente | F3 |
@@ -326,20 +354,34 @@ entre atualizações.
 ### Sem migration
 
 As decisões da F3.0 são implementáveis sobre o schema atual. **A F3, no desenho
-atual, não exige migration.** (A migration da F2.5 continua pendente de aplicação em
-produção, mas isso é outro gate — ver Pendências.)
+atual, não exige migration**, e a F3.1 confirmou isso na prática: não tocou
+`prisma/schema.prisma` nem `prisma/migrations/`. (A migration da F2.5 continua
+pendente de aplicação em produção, mas isso é outro gate — ver Pendências.)
 
-### F3.1 — janelas civis · próxima, não iniciada
+### F3.1 — janelas civis · concluída
 
-Objetivo: janelas civis de mês, trimestre e ano correntes em `America/Sao_Paulo`, com
-intervalos semiabertos `[inicio, fimExclusivo)`. Deve alterar `src/lib/datas.ts` e
-seus testes. **Nada disso existe hoje.**
+Publicada em `592df35`, alterando apenas `src/lib/datas.ts` e `tests/datas.test.ts`.
+Entregou os **limites** dos recortes de período, nada além disso:
+
+| Símbolo | O que devolve |
+|---|---|
+| `JanelaCivil` | `{ inicio, fimExclusivo }` — intervalo semiaberto `[inicio, fimExclusivo)` |
+| `mesCorrente(agora?)` | mês civil corrente em São Paulo |
+| `trimestreCorrente(agora?)` | trimestre civil fixo: Q1 jan–mar, Q2 abr–jun, Q3 jul–set, Q4 out–dez |
+| `anoCorrente(agora?)` | ano civil corrente |
+
+Os dois limites são datas civis ancoradas na **meia-noite UTC**, como o resto do
+módulo. Qual período é o corrente se decide por `hojeEmSaoPaulo`; depois disso o fuso
+da máquina não interfere, o que a suíte prova rodando em três fusos.
+
+**Nenhum cálculo do painel consome essas janelas ainda.** Não há métricas, não há
+consulta ao banco, não há estado de tela.
 
 ### Fatias seguintes
 
-`F3.2` núcleo puro de métricas · `F3.3` leitura Prisma · `F3.4` shape de apresentação
-e tipos fora do mock · `F3.5` painel real ligado aos dados · `F3.6` atualização
-automática. Nenhuma iniciada.
+`F3.2` núcleo puro de métricas — **próxima** · `F3.3` leitura Prisma · `F3.4` shape de
+apresentação e tipos fora do mock · `F3.5` painel real ligado aos dados · `F3.6`
+atualização automática. Nenhuma iniciada.
 
 ### Fora da F3
 
@@ -353,7 +395,7 @@ não bloqueia a F3 e não reabre a F2 agora.
    proprietário, mas não resolvido.
 2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
    antes de ativar lá a versão correspondente, com gate apropriado.
-3. **F3.1 — janelas civis**: próxima fatia de implementação.
+3. **F3.2 — núcleo puro de métricas**: próxima fatia de implementação.
 4. **F4 — Identidade e modo TV**: depende da F3.
 5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
 
