@@ -32,14 +32,20 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
           <p className="text-sm text-texto-secundario">{administrador.nome}</p>
         </div>
         <div className="flex items-center gap-6">
-          {/* Só entra link de rota que existe. Corretores, lançamentos e saldo
-              histórico chegam nos próximos slices. */}
-          <nav>
+          {/* Só entra link de rota que existe. Lançamentos e saldo histórico
+              chegam nos próximos slices. */}
+          <nav className="flex items-center gap-4">
             <Link
               href="/admin/equipes"
               className="text-sm text-texto-secundario underline-offset-4 hover:text-texto hover:underline"
             >
               Equipes
+            </Link>
+            <Link
+              href="/admin/corretores"
+              className="text-sm text-texto-secundario underline-offset-4 hover:text-texto hover:underline"
+            >
+              Corretores
             </Link>
           </nav>
           <form action={sair}>
