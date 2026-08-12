@@ -6,294 +6,307 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `22bf943` — `feat: porta protótipo visual para preview` |
+| Commit de referência | `485ba36` — `feat: adiciona administração do saldo histórico` |
 | Data do handoff | 2026-08-12 |
 
 ## Estado executivo
 
-A Fase 1 está concluída e publicada: o projeto Next.js roda, o banco tem schema e
-migração aplicados, o seed cria as três equipes e o administrador, e o login
-funciona com sessão em cookie assinado. A área administrativa e o painel real
-existem apenas como esqueletos protegidos — nenhum cadastro e nenhum cálculo foi
-escrito.
+A **Fase 1** está concluída: o projeto Next.js roda, o banco tem schema e migrações
+aplicadas, o seed cria as três equipes e o administrador, e o login funciona com
+sessão em cookie assinado.
 
-O saneamento pós-F1 terminou: a F1 foi publicada no GitHub, um mecanismo explícito
-de troca de senha foi adicionado, e todas as credenciais foram rotacionadas fora do
-Git.
+O **protótipo visual** está concluído e versionado: `/preview` desenha o painel
+inteiro a partir de dados fictícios.
 
-O **port do protótipo visual está concluído e versionado** (`22bf943`). A rota
-`/preview` desenha o painel inteiro a partir de dados fictícios em
-`src/lib/mock-painel.ts`: não consulta o banco, não lê configuração e não substitui
-`/painel/[token]`.
+A **Fase 2 — Administração está concluída**. Equipes, corretores, lançamentos e
+saldo histórico podem ser gerenciados pela área administrativa, e o sistema já pode
+ser alimentado de verdade.
 
-A próxima fase é a **F2 — Administração**.
+A próxima fase é a **F3 — Painel**, que **não foi iniciada**: `src/lib/metricas.ts`
+não existe, e `/painel/[token]` continua respondendo "Painel em construção" sem
+consultar o banco.
 
 ## Fases
 
-| Fase | Estado | Evidência / resumo |
+| Fase | Estado | Evidência |
 |---|---|---|
-| F1 — Fundação | **Concluída** | `b463e86`; 5 tabelas, seed e login verificados no código |
-| Protótipo visual | **Concluído** | `22bf943`; `/preview`, mock e componentes versionados |
-| F2 — Administração | **Não iniciada** — próxima | nenhum CRUD e nenhuma rota de API na árvore |
-| F3 — Painel | **Não iniciada** | `src/lib/metricas.ts` ausente; painel não consulta o banco |
-| F4 — Identidade e modo TV | **Não iniciada** | tokens de cor na F1; tipografia e escala 4K comprovadas **só no protótipo** |
+| F1 — Fundação | **Concluída** | `b463e86` |
+| Protótipo visual | **Concluído** | `22bf943` |
+| F2.0 — Infraestrutura da administração | **Concluída** | `bee7df7` |
+| F2.1 — Equipes | **Concluída** | `e75a543`, com microcorreção em `6b4ff7d` |
+| F2.2 — Corretores | **Concluída** | `fa49528` |
+| F2.3 — Lançamentos (criação e listagem) | **Concluída** | `5ae39e5` |
+| F2.4 — Lançamentos (edição e exclusão) | **Concluída** | `caa151f` |
+| F2.5 — Saldo histórico | **Concluída** | `485ba36` |
+| **F2 — Administração** | **Concluída** | — |
+| F3 — Painel | **Não iniciada** — próxima | `src/lib/metricas.ts` ausente |
+| F4 — Identidade e modo TV | **Não iniciada** | depende da F3 |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
-## O que está implementado
+## Fundação técnica
 
-Somente itens confirmados no código, não no plano.
+- **Next.js 16.3.0 (App Router) + TypeScript**, **Tailwind CSS v4**.
+- **Prisma 7.9.1 sobre PostgreSQL**, com driver adapter em `src/lib/db.ts`. As URLs
+  saíram do `schema.prisma`: migrações leem `DIRECT_URL` pelo `prisma.config.ts` e a
+  aplicação usa `DATABASE_URL` em runtime (DEC-031).
+- **Sessão em JWT HS256** em cookie `httpOnly`, validade de 7 dias.
+- **Middleware** em `src/proxy.ts` — no Next 16 a convenção passou a ser `proxy`
+  (DEC-032).
+- **Guarda administrativa** em `src/lib/admin/guarda.ts`: `exigirAdministradorAtivo()`
+  consulta o banco e exige `ativo === true` **no momento da operação**. O middleware
+  só confere a assinatura do JWT, que vale 7 dias; sem a guarda, uma conta desativada
+  continuaria entrando. Toda página que lê dado e toda Server Action chama a guarda
+  por conta própria — o layout não é fronteira de autorização.
+- **Helpers**: `src/lib/datas.ts` (data civil sempre em UTC, com `hojeEmSaoPaulo`
+  como único ponto que conhece o fuso do negócio) e `src/lib/dinheiro.ts` (dinheiro
+  como string decimal, sem ponto flutuante em nenhum caminho de persistência).
 
-### Fundação técnica
+## Administração implementada
 
-- **Next.js 16.3.0 (App Router) + TypeScript** — `package.json`, `src/app/`.
-- **Tailwind CSS v4** — `@import "tailwindcss"` em `src/app/globals.css`, via `@tailwindcss/postcss`.
-- **Prisma 7.9.1 sobre PostgreSQL** — `prisma/schema.prisma`, com driver adapter
-  `@prisma/adapter-pg` em `src/lib/db.ts`. A partir do Prisma 7 as URLs saíram do
-  `schema.prisma`: migrações leem `DIRECT_URL` pelo `prisma.config.ts` e a aplicação
-  usa `DATABASE_URL` (pooler) em runtime.
-- **Cliente Prisma gerado** em `src/generated/prisma`, fora do Git, recriado pelo
-  `postinstall`.
+Somente o que está no código.
 
-### Modelo de dados
+### Equipes — `/admin/equipes`
 
-- **Migração `20260811014943_inicial`** aplicada, criando cinco tabelas —
-  `equipes`, `corretores`, `lancamentos`, `saldo_historico`, `usuarios` — e o enum
-  `tipo_lancamento` com sete valores: `VENDA`, `LOCACAO`, `CAPTACAO_VENDA`,
-  `CAPTACAO_EXCLUSIVA`, `CAPTACAO_LOCACAO`, `PROPOSTA`, `AVALIACAO_GOOGLE`.
-- **`metas` não existe** no banco, por decisão registrada no plano.
-- **Seed** (`prisma/seed.ts`) — três equipes e o usuário administrador, sem
-  corretores de exemplo. É idempotente e **não sobrescreve a senha** de um usuário
-  que já exista.
+Listar (ativas e inativas), criar, editar, definir ordem de exibição, ativar e
+desativar. **Não há hard delete**: corretores e lançamentos guardam a equipe do
+momento do registro. Nome é único no banco, e o conflito vira mensagem de domínio
+que distingue equipe ativa de desativada.
 
-### Autenticação e sessão
+### Corretores — `/admin/corretores`
 
-- **Login por e-mail e senha** — `src/lib/auth.ts`, com resposta de tempo constante
-  para não denunciar quais e-mails estão cadastrados.
-- **Senha em bcrypt custo 12** — `src/lib/senha.ts`, ponto único de geração e
-  conferência de hash, compartilhado com o seed e com o script de troca.
-- **Sessão em JWT HS256** assinado com `AUTH_SECRET` (`jose`), guardado em cookie
-  `httpOnly`, `sameSite=lax`, `secure` em produção, validade de 7 dias —
-  `src/lib/sessao.ts` e `src/lib/sessao-servidor.ts`.
-- **Proteção de `/admin`** pelo middleware `src/proxy.ts` (no Next 16 a convenção
-  passou a ser `proxy`), que redireciona para `/login` preservando o destino em
-  `proximo`, com proteção contra open redirect em `src/app/login/acoes.ts`.
+Listar com filtros por equipe e situação, criar, editar, mover de equipe, inativar e
+reativar. **Sem exclusão.** Criar ou transferir exige equipe ativa; permanecer na
+própria equipe vale mesmo se ela tiver sido desativada, senão corrigir um CRECI
+obrigaria a transferir quem ficou numa equipe encerrada.
 
-### Painel
+**Mover um corretor de equipe não reescreve lançamento nenhum** — o histórico
+permanece creditado onde foi registrado.
 
-- **Rota `/painel/[token]`** protegida por token na URL, comparado com
-  `timingSafeEqual`, respondendo **404** quando o token não confere — uma tela de
-  "acesso negado" já confirmaria a existência da rota.
-- **`noindex`** em duas camadas: cabeçalho `X-Robots-Tag` em `next.config.ts` e
-  `metadata.robots` na própria página.
-- O conteúdo é o texto "Painel em construção". **A página não consulta o banco.**
+### Lançamentos — `/admin/lancamentos`
 
-### Protótipo visual em `/preview`
+- **Criação rápida**, feita para lançar vários eventos em sequência: tipo e data
+  ficam, o resto é limpo a cada registro.
+- **Uma submissão é uma linha.** Nenhum evento derivado.
+- **A equipe é gravada no evento**, lida da equipe atual do corretor imediatamente
+  antes da criação. Não existe campo de equipe no formulário.
+- **A autoria** vem de `exigirAdministradorAtivo()`, nunca do cliente.
+- **Listagem** com filtros por data, corretor, equipe e tipo, e **paginação de 50**.
+  A equipe exibida é a do evento, não a lotação de hoje. Sem totalizador.
+- **Edição** e **exclusão individual** (hard delete, só na tela de edição).
+- **Dinheiro exato**: string decimal em todo o caminho; na leitura, `toFixed(2)`
+  antes de formatar, porque o `Decimal` do Prisma corta zeros à direita.
+- **Sete tipos**, com `CAPTACAO_VENDA` e `CAPTACAO_EXCLUSIVA` independentes
+  (DEC-003). Só `VENDA` e `LOCACAO` carregam valor; nos outros cinco ele é `null`.
 
-Tudo abaixo está no commit `22bf943` — seis arquivos, 785 linhas, nenhum arquivo
-preexistente tocado.
+### Saldo histórico — `/admin/saldo-historico`
 
-- **Rota `/preview`** (`src/app/preview/page.tsx`), sem token e sem login: é uma
-  tela de conferência de layout, não a tela da TV.
-- **`noindex`** por `metadata.robots` — `index: false`, `follow: false`,
-  `nocache: true`.
-- **Dados fictícios** em `src/lib/mock-painel.ts`. O módulo **não tem nenhum
-  import**: não toca Prisma, nem `src/lib/db.ts`, nem `process.env`. Os valores
-  chegam prontos — totais somados, rankings já ordenados e rótulo de período fixo.
-- **Três faixas**, como no protótipo: big numbers, VGV por período (anual,
-  trimestral e mensal) e a base com o quadro mensal geral à esquerda e os três
-  quadros de equipe à direita.
-- **Ciclo de oito métricas**, 20 s cada — volta completa de 2min40s. As três
-  equipes compartilham um único índice ativo e trocam em sincronia (ver DEC-033).
-- **Um único Client Component**, `quadros-equipe.tsx`, e só por causa da rotação.
-  As faixas de cima são componentes de servidor.
-- **CSS Module** (`painel.module.css`) com toda a escala em `cqw`. `.tv` é o query
-  container 16:9 — o maior retângulo 16:9 que cabe na viewport — e não carrega
-  padding, porque `cqw` resolve contra o *content box* e o padding encolheria a
-  própria referência; o respiro visual mora no filho `.conteudo`.
-- **Tipografia Jost** restrita a esta rota, servida pelo build, sem depender do
-  Google Fonts em runtime.
-- **`prefers-reduced-motion: reduce`** desliga a animação do marcador e a transição
-  da lista.
+Somente `VENDA` e `AVALIACAO_GOOGLE`, com **no máximo uma linha por tipo**, garantida
+por índice único. Criar, editar e excluir. `VENDA` exige quantidade e valor
+positivos; `AVALIACAO_GOOGLE` exige quantidade e grava `valorTotal = 0.00`. O tipo de
+um saldo cadastrado não muda.
 
-**A rota não consulta o banco e não substitui `/painel/[token]`.** Nada aqui é
-cálculo: `src/lib/metricas.ts` continua ausente.
+**Ausência é diferente de zero**: um tipo sem linha aparece como "Não cadastrado",
+nunca como `0`, e nenhuma linha zerada é criada automaticamente.
 
-### Rotas existentes
+## Equipe histórica na edição de lançamento (Q7)
 
-Cinco, ao todo: `/` (redireciona para `/admin`), `/login`, `/admin`,
-`/painel/[token]` e `/preview`.
+Aprovada pelo proprietário em 2026-08-12 e implementada. Registrada na DEC-034.
 
-### Operação
+- **Corretor inalterado** — a equipe armazenada é preservada **literalmente**,
+  qualquer que seja a equipe atual dele hoje. Corrigir valor, data ou observação
+  nunca reescreve crédito de equipe.
+- **Corretor trocado, equipe atual igual à armazenada** — preserva, sem perguntar.
+- **Corretor trocado, equipes diferentes** — o sistema exige decisão entre
+  **PRESERVAR** a equipe registrada ou **CORRIGIR** para a equipe atual do novo
+  corretor. **Nenhuma terceira equipe** é escolhível.
 
-- `scripts/trocar-senha-admin.ts` e o comando `npm run db:trocar-senha-admin`
-  (commit `c59be18`) — troca a senha de um usuário existente, exige que ele exista,
-  nunca cria conta e altera exclusivamente `senhaHash`.
+O motivo é que o sistema **não guarda** o histórico de qual corretor esteve em qual
+equipe em cada data; a equipe atual não prova qual era a verdadeira na data do
+evento.
+
+A equipe atual é **reconsultada no servidor** a cada submissão. Se ela mudar entre a
+pergunta e a confirmação, a resposta anterior é recusada, nada é gravado e o conflito
+é reapresentado com os dados atuais.
+
+## Saldo histórico (Q8)
+
+Aprovada pelo proprietário em 2026-08-12 e implementada. Registrada na DEC-035.
+
+Saldo histórico é **saldo de abertura**. Só `VENDA` e `AVALIACAO_GOOGLE`, uma linha
+por tipo. `VENDA` com quantidade > 0 e `valorTotal` > 0; `AVALIACAO_GOOGLE` com
+quantidade > 0 e `valorTotal` = `0.00`.
+
+Ele entra **somente nos big numbers acumulados** e **nunca** em recorte de período —
+mês, trimestre, ano, quadro mensal ou ranking. Essa regra de cálculo é da F3
+(DEC-004); nada na F2 soma saldo com lançamento.
+
+## Rotas existentes
+
+Dezessete páginas versionadas:
+
+| Área | Rotas |
+|---|---|
+| Pública / autenticação | `/` (redireciona para `/admin`), `/login` |
+| Administração | `/admin`, `/admin/equipes`, `/admin/equipes/novo`, `/admin/equipes/[id]/editar` |
+| | `/admin/corretores`, `/admin/corretores/novo`, `/admin/corretores/[id]/editar` |
+| | `/admin/lancamentos`, `/admin/lancamentos/novo`, `/admin/lancamentos/[id]/editar` |
+| | `/admin/saldo-historico`, `/admin/saldo-historico/novo`, `/admin/saldo-historico/[id]/editar` |
+| Painel | `/painel/[token]` (esqueleto), `/preview` (protótipo com dados fictícios) |
+
+Não existe `src/app/api/` — nenhuma Route Handler foi criada.
+
+## Migrations
+
+Duas migrations versionadas:
+
+1. `20260811014943_inicial` — cinco tabelas e o enum `tipo_lancamento`.
+2. `20260812120000_saldo_historico_tipo_unico` — troca o índice simples de
+   `saldo_historico.tipo` por um índice **único**. Estrutural: nenhuma coluna,
+   tabela, trigger ou dado.
+
+> **A segunda migration foi testada e aplicada somente no `casalouzada_test`.** Ela
+> está versionada no Git, e publicar no Git **não é** aplicar em produção. Antes de
+> ativar em produção a versão correspondente, ela precisa ser aplicada lá com gate
+> apropriado. Ver Pendências.
+
+## Testes
+
+Baseline **verificado no gate de publicação da F2.5** — são as contagens daquele
+momento, não uma promessa de estabilidade futura:
+
+| Comando | Resultado verificado |
+|---|---|
+| `npm test` | 168 testes, 44 suítes, 0 falhas |
+| `npm run test:fusos` | 504 aprovações (3 × 168), 0 falhas |
+| `npm run test:integracao` | 88 testes, 33 suítes, 0 falhas |
+
+`npm test` é rápido e não toca banco. `test:fusos` roda a suíte unitária em `UTC`,
+`America/Sao_Paulo` e `Asia/Tokyo`, para provar que nenhum teste depende do relógio
+da máquina. `test:integracao` roda contra o banco local.
+
+## Banco de teste
+
+- PostgreSQL 17 **local**, database `casalouzada_test`, role `casalouzada_test` com
+  **`NOCREATEDB`**.
+- A connection string vive só em `.env.test.local`, ignorado pelo Git.
+- `tests/helpers/banco-teste.ts` exige, antes de conectar: protocolo PostgreSQL, host
+  local, database e role esperados. Erro de leitura nunca repassa o valor lido.
+- Toda operação destrutiva de teste roda exclusivamente ali.
+- Como a role não pode criar shadow database, `prisma migrate dev` não funciona. A
+  migration da F2.5 foi gerada por `prisma migrate diff` e aplicada com
+  `prisma migrate deploy`. **Foi decisão manter a role restrita** em vez de conceder
+  `CREATEDB`.
+
+## Segurança e credenciais
+
+O histórico aqui tem duas partes, e a segunda não está encerrada.
+
+**Depois da F1**, todas as credenciais foram rotacionadas fora do Git — banco,
+`DATABASE_URL`, `DIRECT_URL`, `PAINEL_TOKEN`, `AUTH_SECRET` e a senha
+administrativa —, com cada revogação comprovada por teste.
+
+**Depois disso, durante a P1**, uma credencial do banco de produção foi **exposta
+acidentalmente em transcript** por um erro de tratamento de erro. Estado atual:
+
+- não há evidência de que essa credencial tenha sido versionada no Git em momento
+  algum;
+- **ela ainda não foi rotacionada**;
+- em 2026-08-12 o proprietário **aceitou explicitamente o risco** e autorizou seguir
+  com o desenvolvimento;
+- isso não bloqueia mais o trabalho, mas **continua sendo pendência operacional**.
+
+Não se pode dizer que a situação de credenciais esteja saneada hoje.
 
 ## O que ainda NÃO está implementado
 
-Verificado na árvore versionada, arquivo por arquivo — não presumido pelo plano.
+Verificado na árvore em `485ba36`, arquivo por arquivo.
 
 | Item | Estado | Fase |
 |---|---|---|
-| CRUD de equipes | ausente | F2 |
-| CRUD de corretores | ausente | F2 |
-| CRUD de lançamentos | ausente | F2 |
-| Saldo histórico na administração | ausente | F2 |
 | `src/lib/metricas.ts` | ausente | F3 |
-| `src/lib/datas.ts` | ausente | F3 |
-| Painel ligado ao banco | ausente | F3 |
-| Atualização do painel real a cada 60s | ausente | F3 |
-| `src/components/ui/` | ausente | F2 |
-| `src/app/api/` | ausente | F2/F3 |
-| `src/styles/`, `public/marca/` | ausentes | F4 |
+| Cálculo real do painel | ausente | F3 |
+| Big numbers reais | ausente | F3 |
+| Períodos reais (mês, trimestre, ano) | ausente | F3 |
+| Rankings ligados ao banco | ausente | F3 |
+| Troca do mock pela origem real | ausente — `/preview` ainda usa `src/lib/mock-painel.ts` | F3 |
+| Atualização automática do painel real | ausente | F3 |
+| Comportamento offline | ausente | F4 |
+| Modo quiosque | ausente | F4 |
 | Identidade aplicada ao painel real | ausente | F4 |
-| Modo TV: comportamento offline e quiosque | ausente | F4 |
+| `src/app/api/`, `src/components/ui/`, `src/styles/`, `public/marca/` | ausentes | F3/F4 |
+| Tela de troca de senha | ausente — o mecanismo é `npm run db:trocar-senha-admin` | futura |
 | Metas | ausente por decisão | fora da v1 |
 
-Verificado nesta data: `src/lib/metricas.ts`, `src/lib/datas.ts`, `src/app/api/`,
-`src/components/ui/`, `src/styles/` e `public/marca/` continuam sem existir na
-árvore. O que existe em `src/components/` é exclusivamente `src/components/painel/`,
-com os quatro arquivos do protótipo.
+`/painel/[token]` continua exibindo "Painel em construção" e **não consulta o banco**.
 
-Os tokens de cor da seção 6 do plano **já existem** em `src/app/globals.css`
-(`--color-fundo`, `--color-superficie`, `--color-texto`, `--color-texto-secundario`,
-`--color-destaque`, `--color-positivo`, `--color-negativo`), desde a F1.
+## Próxima fase — F3, Painel
 
-**A F4 não começou.** O protótipo comprovou, numa tela isolada, que a tipografia
-Jost, a paleta e a escala 4K funcionam — a `/preview` atinge os quatro mínimos da
-seção 6 do plano num painel de 3840px (big numbers 220,03px; VGV 110,21px; nomes
-44,16px; rótulos 32,26px). Mas isso é evidência colhida no protótipo, não entrega de
-F4: aplicar a identidade e o modo TV ao **painel real**, com comportamento offline e
-quiosque, continua sendo F4 e depende da F3.
+Não iniciada e **ainda não planejada em detalhe**. O que já está congelado por
+decisão, e vale como restrição de qualquer plano futuro:
 
-## Saneamento pós-F1
+- criar a camada única `src/lib/metricas.ts`; nenhum componente calcula por conta
+  própria (DEC-013);
+- períodos civis em `America/Sao_Paulo` (DEC-005);
+- saldo histórico somente nos acumulados, nunca em período (DEC-004, DEC-035);
+- `CAPTACAO_VENDA` e `CAPTACAO_EXCLUSIVA` permanecem independentes (DEC-003);
+- equipe sempre por `Lancamento.equipeId`, nunca pela lotação atual do corretor
+  (DEC-002);
+- zero real é diferente de ausência de lançamento (DEC-014);
+- conectar o painel real aos dados, trocando o mock pela origem real;
+- preservar o contrato visual do protótipo onde ele se aplicar.
 
-Três pendências foram tratadas depois da F1, nesta ordem:
-
-1. **Publicação no GitHub.** Uma auditoria constatou que a F1 nunca havia sido
-   enviada: o repositório remoto existia e estava vazio, e o clone local não tinha
-   `origin`. Um gate de segurança inspecionou os 37 arquivos versionados antes do
-   push e não encontrou segredo real. `b463e86` foi publicado.
-2. **Mecanismo de troca de senha.** O seed preserva de propósito a senha de quem já
-   existe, então mudar `SEED_ADMIN_SENHA` e rodar o seed de novo não troca senha
-   nenhuma. Faltava um caminho explícito para rotacionar a senha de login — daí o
-   `c59be18`.
-3. **Rotação de credenciais.** Concluída fora do Git, no ambiente local: senha do
-   banco PostgreSQL/Supabase, `DATABASE_URL`, `DIRECT_URL`, `PAINEL_TOKEN`,
-   `AUTH_SECRET`, senha administrativa e `SEED_ADMIN_SENHA`. Cada revogação foi
-   comprovada por teste — credencial antiga do banco recusada, senha antiga do admin
-   recusada, token antigo do painel em 404, e JWT assinado com o segredo anterior
-   rejeitado pelo novo.
-
-Para a rotação foi usado temporariamente um Personal Access Token do Supabase,
-exclusivamente contra a Management API. Esse PAT foi removido do `.env` ao final e
-**revogado manualmente pelo proprietário da conta no Dashboard do Supabase** — ação
-externa à árvore Git, confirmada pelo proprietário, sem evidência no repositório.
-
-**Nenhum valor secreto foi versionado em momento algum.** O `.env` local contém as
-credenciais deste ambiente de desenvolvimento e permanece ignorado pelo Git
-(`.gitignore`, regra `.env*` com exceção para `.env.example`). Outros ambientes ou
-máquinas não foram auditados nesta etapa. Quando existirem ambientes de deploy, suas
-credenciais devem viver no mecanismo de environment/secrets do provedor e nunca em
-arquivos versionados.
-
-Se as credenciais estiverem replicadas em algum ambiente de deploy (Vercel, CI, outra
-máquina), esses lugares apontam para valores antigos e precisam ser atualizados. Só o
-`.env` local foi tocado.
-
-## Estado Git
-
-| Commit | Mensagem | Conteúdo |
-|---|---|---|
-| `b463e86` | `Fase 1: fundação do projeto` | toda a F1 |
-| `c59be18` | `chore: adiciona troca segura de senha do admin` | script de troca, comando no `package.json`, variáveis no `.env.example` |
-| `f4b5463`, `2ea03fd` | `docs: …` | handoff e decisões |
-| `22bf943` | `feat: porta protótipo visual para preview` | port visual: `/preview`, mock fictício e os componentes do painel |
-
-A rotação de credenciais **não gerou commit**: ela ocorreu somente no ambiente não
-versionado, e é assim que deve ser.
-
-## Protótipo visual
-
-- O **HTML de referência permanece fora do repositório**, como fonte de consulta.
-  Fica em `Downloads/prototipo-painel.html` na máquina do proprietário, com
-  SHA-256 `9b6b875093b3f4940c698d7bf9af9905835fe9841d847350ff096d53b9d5bd10`
-  (calculado em 2026-08-12). Não é versionado e não é dependência de build.
-- Ele **foi auditado regra a regra antes da implementação** — cores, grid, paddings,
-  tracking, réguas, marcadores e temporização. O desenho foi **portado, não
-  recriado** (DEC-027).
-- O port está em **`22bf943`** e implementa a rota `/preview`.
-- `/preview` é **implementação visual com dados fictícios**: não consulta o banco e
-  **não substitui `/painel/[token]`**, que continua sendo a tela da TV.
-- Divergências deliberadas em relação ao HTML original, todas registradas na
-  auditoria: nome de corretor maior (`1.15cqw` em vez de `1.02cqw`, para alcançar os
-  44px da seção 6); período fixo no mock em vez de derivado do relógio; marcadores
-  não clicáveis; ciclo de 20 s exatos por métrica com o fade dentro da janela; e
-  ancoragem à viewport com letterbox, no lugar do `max-width: 1600px` do original.
-- **A F3 reaproveita o desenho e troca a origem dos dados** — os componentes passam
-  a receber valores calculados em `src/lib/metricas.ts`, no lugar do mock.
+A F3 será planejada e revisada antes de qualquer execução.
 
 ## Pendências
 
-Após este commit documental, na ordem:
-
-1. **F2 — Administração** — CRUD de equipes, corretores e lançamentos, saldo
-   histórico.
-2. **F3 — Painel** — depende da F2 e do protótipo, que já está pronto.
-3. **F4 — Identidade e modo TV** — depende da F3.
+1. **Rotacionar a credencial de produção exposta na P1.** Risco aceito pelo
+   proprietário, mas não resolvido.
+2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
+   antes de ativar lá a versão correspondente, com gate apropriado.
+3. **F3 — Painel**: planejar e executar.
+4. **F4 — Identidade e modo TV**: depende da F3.
 
 Pendências de informação herdadas do plano, nenhuma bloqueante: número máximo de
 corretores por equipe (dimensiona a altura dos quadros), valores iniciais do saldo
 histórico e arquivos da marca em alta resolução.
 
-## Divergências entre o repositório e o PLANO.md
-
-Registradas aqui, sem alterar o `PLANO.md`:
-
-1. **`PLANO.md`, linha 3** — "Nenhuma linha de código foi escrita ainda". Desatualizado:
-   a F1 está implementada e publicada.
-2. **`PLANO.md`, seção 3 (`usuarios`)** e **`README.md`** — dizem que "a senha se troca
-   pela própria área administrativa". Essa tela não existe. O mecanismo real hoje é o
-   script `npm run db:trocar-senha-admin`. Uma tela de troca de senha continua sendo
-   um item legítimo de F2.
-3. **`PLANO.md`, seção 8** — da estrutura prevista, `src/components/painel/` já
-   existe, criado pelo port. Continuam ausentes `src/components/ui/`,
-   `src/lib/metricas.ts`, `src/lib/datas.ts`, `src/app/api/`, `src/styles/` e
-   `public/marca/`. Esperado: são fases posteriores.
-4. **`PLANO.md`, seção 6** — pede tipografia Jost ou Outfit. Hoje convivem as duas
-   coisas: o layout raiz, o `/admin` e o `/login` seguem com Geist, o padrão do
-   template, enquanto `/preview` usa Jost, restrita àquela rota. Aplicar a
-   identidade ao painel real continua sendo F4.
-5. **`PLANO.md`, seção 7** — cita `github.com/<usuário>/dashboard-casalouzada`; o
-   repositório hoje é concreto e público.
-6. **`PLANO.md`, seção 5.2** — o texto diz "Ciclo de 7 métricas × 20 segundos =
-   2min20s", mas a própria frase seguinte enumera **oito** métricas: vendidos, VGV,
-   locados, captação de venda, exclusividades, captação de locação, propostas e
-   avaliações. O HTML de referência e o port implementado usam **oito métricas ×
-   20 s = 2min40s**. Resolvido pela DEC-033; o `PLANO.md` não foi alterado.
-
 ## Bloqueios
 
 Nenhum bloqueio estrutural conhecido.
 
-## Próximo passo
+## Divergências entre o repositório e o PLANO.md
 
-**Iniciar a F2 — Administração:** CRUD de equipes, corretores e lançamentos, e a
-administração do saldo histórico. Ao fim dela o sistema pode ser alimentado de
-verdade, mesmo sem o painel real pronto.
+O `PLANO.md` foi anotado onde divergia do código, sem ser reescrito:
 
-A F2 **não** foi planejada nem iniciada nesta entrega.
+1. **§3, `saldo_historico`** — o plano não restringia tipos; a Q8 restringiu a dois,
+   com uma linha por tipo.
+2. **§3, `usuarios`** — diz que a senha se troca pela área administrativa. Essa tela
+   nunca existiu; o mecanismo real é `npm run db:trocar-senha-admin`.
+3. **§5.2** — diz "7 métricas × 20 segundos" mas enumera oito. O protótipo e o port
+   usam oito × 20s = 2min40s (DEC-033).
+4. **§6** — pede Jost ou Outfit. O layout raiz, `/admin` e `/login` seguem com Geist;
+   `/preview` usa Jost, restrita àquela rota. Aplicar ao painel real é F4.
+5. **§8** — da estrutura prevista, `src/components/painel/`, `src/lib/metricas.ts` e
+   `src/lib/datas.ts` eram citados: os dois primeiros agora existem parcialmente
+   (`painel/` sim, `metricas.ts` não) e `datas.ts` existe. Continuam ausentes
+   `src/components/ui/`, `src/app/api/`, `src/styles/` e `public/marca/`.
+6. **§7** — cita `github.com/<usuário>/dashboard-casalouzada`; o repositório hoje é
+   concreto e público.
 
-## Observação processual
+## Observações processuais
 
-Durante a entrega de `c59be18` houve um `git commit --amend` local antes do primeiro
-push, embora a política daquela execução o proibisse. O remoto nunca recebeu o commit
-intermediário, e não houve force push nem reescrita de histórico remoto. Nenhuma
-correção Git é necessária.
+Registradas para quem auditar o histórico:
 
-Na entrega de `22bf943` a mensagem do primeiro commit saiu corrompida por erro de
-sintaxe de shell — um `@` espúrio no assunto e outro no fim do corpo. A correção foi
-feita por um `git commit --amend` explicitamente autorizado para esse fim, antes de
-qualquer push, com prova de que a *tree* (`3799b371…`) e o *parent* (`2ea03fdd…`)
-permaneceram idênticos e o diff entre os dois commits era vazio. O remoto nunca
-recebeu o commit defeituoso e não houve force push.
+1. Durante a entrega de `c59be18` houve um `git commit --amend` local antes do
+   primeiro push, embora a política daquela execução o proibisse. O remoto nunca
+   recebeu o commit intermediário e não houve force push.
+2. Na entrega de `22bf943` a mensagem do primeiro commit saiu corrompida por erro de
+   sintaxe de shell. A correção foi um `git commit --amend` explicitamente
+   autorizado, antes de qualquer push, com prova de que a *tree* e o *parent*
+   permaneceram idênticos.
+3. A F2.1 tinha um teste de integração que comparava contagens **globais** de
+   corretores e lançamentos. Com quatro suítes concorrentes no mesmo banco, fixtures
+   de outra suíte o faziam falhar sem que a operação sob teste tivesse tocado nada.
+   Corrigido em `caa151f`: o teste passou a criar as próprias fixtures e a provar por
+   releitura de cada id que `atualizadoEm` não mudou — afirmação mais forte do que o
+   total ter permanecido igual.

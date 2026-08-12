@@ -1,6 +1,13 @@
 # Dashboard Casa Louzada — plano do projeto
 
-Documento de planejamento. Nenhuma linha de código foi escrita ainda.
+Documento de planejamento e referência arquitetural. O texto abaixo descreve o
+desenho pretendido; o estado real do que está construído fica em
+`docs/HANDOFF_ATUAL.md`, e as decisões em `docs/DECISOES.md`.
+
+**Situação em 2026-08-12:** Fase 1, protótipo visual e Fase 2 — Administração
+concluídos e publicados. A próxima fase é a **F3 — Painel**, ainda não
+iniciada: não existe camada de cálculo, e a tela da TV continua desligada do
+banco.
 
 ---
 
@@ -85,6 +92,10 @@ Evita cadastrar retroativamente centenas de vendas antigas.
 
 Entra apenas nos big numbers acumulados. Nunca nos períodos.
 
+> Restringido depois pela Q8, já implementado: só `VENDA` e `AVALIACAO_GOOGLE`
+> recebem saldo, e existe no máximo uma linha por tipo, garantida por índice
+> único. Ver DEC-035.
+
 ### `metas` — não entra na v1
 
 Desenhada aqui apenas para registro. Nenhuma tabela ou tela depende dela, então criar depois
@@ -104,6 +115,9 @@ id, nome, email, senha_hash, ativo.
 Apenas um registro na primeira versão. A tabela existe mesmo assim para que adicionar
 um segundo acesso no futuro não exija migração. Não há tela de gestão de usuários na v1 —
 o registro inicial vem pelo seed e a senha se troca pela própria área administrativa.
+
+> A tela de troca de senha nunca foi construída. O mecanismo real é o comando
+> `npm run db:trocar-senha-admin`. Continua sendo um item legítimo para o futuro.
 
 ---
 
@@ -150,6 +164,9 @@ e resolve de uma vez o autostart, a suspensão de tela e a compatibilidade.
 
 Ciclo de 7 métricas × 20 segundos = 2min20s por volta completa. Ordem sugerida:
 vendidos → VGV → locados → captação de venda → exclusividades → captação de locação → propostas → avaliações.
+
+> A contagem acima está errada: a própria lista enumera **oito** métricas. O
+> protótipo e o port usam oito × 20s = 2min40s. Resolvido pela DEC-033.
 
 O título do quadro mostra a métrica ativa, com pequenos marcadores de posição no ciclo.
 Transição por fade curto — nada de movimento chamativo, cansa em tela permanente.
@@ -244,24 +261,31 @@ dashboard-casalouzada/
 
 ## 9. Fases
 
-**Fase 1 — Fundação**
+**Fase 1 — Fundação** · *concluída*
 Projeto Next.js, Tailwind, conexão com o banco, schema Prisma, migrações, seed com as três
 equipes e o usuário administrador, login funcionando. Sem corretores de exemplo — você
 cadastra os reais na Fase 2.
 
-**Fase 2 — Administração**
+**Protótipo visual** · *concluído*
+Não estava previsto como fase própria: o desenho do painel foi portado do HTML de
+referência para a rota `/preview`, com dados fictícios. Serve de contrato visual para a F3.
+
+**Fase 2 — Administração** · *concluída*
 CRUD de equipes, corretores e lançamentos. Saldo histórico. Ao final desta fase você
 já consegue alimentar o sistema de verdade, mesmo sem o painel pronto.
 
-**Fase 3 — Painel**
+**Fase 3 — Painel** · *próxima, não iniciada*
 Camada de cálculo, as três faixas do layout, atualização automática, rotação de métricas,
-proteção por token na URL.
+proteção por token na URL. Hoje `/painel/[token]` existe protegida por token, mas não
+consulta o banco.
 
-**Fase 4 — Identidade e modo TV**
+**Fase 4 — Identidade e modo TV** · *depende da F3*
 Cores, tipografia, marca, ajuste fino para 3840×2160, transições, comportamento offline,
-configuração do mini PC em modo quiosque.
+configuração do mini PC em modo quiosque. Os tokens de cor já existem desde a F1, e o
+protótipo comprovou tipografia e escala numa tela isolada — aplicar isso ao painel real
+continua sendo F4.
 
-**Fase 5 — Refinamentos**
+**Fase 5 — Refinamentos** · *futura*
 Metas com barra de progresso, destaque do mês, comparativo com o mês anterior, fotos dos
 corretores, exportação.
 

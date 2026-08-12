@@ -87,14 +87,13 @@ não é o do navegador nem o da máquina de deploy.
 **Motivo.** Excluir apagaria o histórico de lançamentos da pessoa e distorceria os
 acumulados da empresa.
 
-**Impacto.** O suporte estrutural já existe: o campo `Corretor.ativo` e as FKs
-`Restrict` da DEC-007, que impedem apagar quem tem histórico. O que ainda será
-construído: o fluxo administrativo que inativa em vez de excluir (F2) e o filtro por
-`ativo` nas listagens do painel (F3) — inativo deverá sumir da TV e manter o
-histórico.
+**Impacto.** O fluxo administrativo existe: a área de corretores inativa e reativa,
+e não há action nem botão de exclusão. Continua futuro o filtro por `ativo` nas
+listagens do **painel** (F3) — inativo deve sumir da TV sem perder o histórico.
 
-**Fonte.** `prisma/schema.prisma`, campo `ativo` de `Corretor`; `PLANO.md` §3.
-**invariante futura** — o suporte estrutural já existe no schema
+**Fonte.** `prisma/schema.prisma`, campo `ativo` de `Corretor`;
+`src/app/admin/corretores/acoes.ts`; commit `fa49528`.
+**implementada na administração** — o filtro do painel continua sendo F3
 
 ### DEC-007 — Histórico protegido por foreign keys `Restrict`
 
@@ -172,10 +171,12 @@ tela, não em pixels fixos.
 o resultado é conferido, sem manter duas versões.
 
 **Impacto.** Os tamanhos mínimos de leitura do plano (big numbers 220px, VGV 110px,
-nomes 44px, rótulos 32px) são alvos **em pixels de 4K real**, a serem expressos em
-unidades relativas.
+nomes 44px, rótulos 32px) são alvos **em pixels de 4K real**, expressos em `cqw`.
+No protótipo os quatro foram medidos e atendidos num painel de 3840px. Aplicar o
+mesmo dimensionamento ao painel **real** continua sendo F3/F4.
 
-**Fonte.** `PLANO.md` §5.1 e §6. **invariante futura**
+**Fonte.** `PLANO.md` §5.1 e §6; `src/components/painel/painel.module.css`;
+commit `22bf943`. **implementada no protótipo**
 
 ### DEC-013 — Todo cálculo do painel converge para `src/lib/metricas.ts`
 
@@ -396,9 +397,11 @@ como referência de consulta.
 **Motivo.** Sem CRUD não há como alimentar o sistema de verdade, e o painel ficaria
 sendo validado contra dados inventados.
 
-**Impacto.** Ao fim da F2 é possível operar o sistema mesmo sem painel pronto.
+**Impacto.** Ao fim da F2 é possível operar o sistema mesmo sem painel pronto — e é
+exatamente onde o projeto está: equipes, corretores, lançamentos e saldo histórico
+podem ser alimentados, com o painel ainda desligado do banco.
 
-**Fonte.** `PLANO.md` §9. **invariante futura**
+**Fonte.** `PLANO.md` §9; commits `bee7df7` a `485ba36`. **cumprida**
 
 ### DEC-029 — F3 depende da F2 e do protótipo
 
@@ -408,9 +411,12 @@ portado.
 **Motivo.** A F3 junta duas coisas que precisam já existir: dados reais e o layout
 aprovado.
 
-**Impacto.** O port do protótipo pode usar dados fictícios; o painel de F3, não.
+**Impacto.** O port do protótipo pode usar dados fictícios; o painel de F3, não. As
+duas pré-condições estão satisfeitas — administração pronta e protótipo portado —,
+então a F3 está liberada para começar. Ela própria continua não iniciada.
 
-**Fonte.** `PLANO.md` §9. **invariante futura**
+**Fonte.** `PLANO.md` §9; commits `22bf943` e `485ba36`.
+**invariante futura** — pré-condições cumpridas, F3 ainda não começou
 
 ### DEC-030 — F4 depende da F3
 
@@ -476,3 +482,65 @@ linhas — ali o VGV não entra, porque tem faixa própria.
 **Fonte.** HTML de referência auditado; `src/lib/mock-painel.ts`;
 `src/components/painel/quadros-equipe.tsx`; commit `22bf943`.
 **implementada no protótipo**
+
+### DEC-034 — Editar um lançamento não recalcula a equipe histórica
+
+**Decisão.** Ao editar um lançamento, a equipe gravada nele só muda por decisão
+explícita do operador, e apenas entre duas opções:
+
+- **corretor inalterado** — a equipe armazenada é preservada literalmente,
+  qualquer que seja a equipe atual dele hoje;
+- **corretor trocado, equipe atual igual à armazenada** — preserva, sem perguntar;
+- **corretor trocado, equipes diferentes** — o sistema pergunta: *preservar* a
+  equipe registrada ou *corrigir* para a equipe atual do novo corretor.
+
+Não existe terceira equipe escolhível, e nenhum campo de equipe é enviado pelo
+formulário.
+
+**Motivo.** O sistema não guarda o histórico de qual corretor esteve em qual equipe
+em cada data. Logo, a equipe atual de um corretor **não prova** qual era a equipe
+verdadeira na data do evento. Recalcular sozinho seria adivinhar, e adivinhar move
+crédito de produção entre equipes.
+
+**Impacto.** Corrigir um valor, uma data ou uma observação nunca reescreve crédito
+de equipe. A equipe resultante sai sempre da função pura sobre o que o banco diz no
+momento do submit; o campo escondido que acompanha a escolha serve só para detectar
+que a situação mudou desde a pergunta — se mudou, a resposta antiga é recusada e o
+conflito é reapresentado com os dados atuais.
+
+**Fonte.** Q7, aprovada pelo proprietário em 2026-08-12 (Recomendação C);
+`src/lib/lancamento-equipe.ts`; `src/app/admin/lancamentos/acoes.ts`;
+`tests/lancamento-equipe.test.ts`;
+`tests/integracao/lancamentos-edicao.integracao.test.ts`; commit `caa151f`.
+**implementada**
+
+### DEC-035 — Saldo histórico só existe para vendas e avaliações, uma linha por tipo
+
+**Decisão.** `saldo_historico` é o saldo de **abertura** dos big numbers. Na v1 ele
+existe apenas para `VENDA` e `AVALIACAO_GOOGLE`, com no máximo **uma linha por
+tipo**, garantida por índice único no banco.
+
+- `VENDA` — quantidade > 0 e `valorTotal` > 0;
+- `AVALIACAO_GOOGLE` — quantidade > 0 e `valorTotal` sempre `0.00`;
+- `dataCorte` obrigatória, como data civil;
+- o tipo de um saldo cadastrado **não muda**.
+
+**Motivo.** Os outros cinco tipos do enum não têm acumulado anterior a registrar
+nesta versão. A unicidade vive no banco porque conferir antes de inserir abriria
+corrida entre o `SELECT` e o `INSERT`. Avaliação é contagem, não dinheiro — guardar
+valor ali convidaria a somá-lo depois.
+
+**Impacto administrativo.** A área administrativa cria, edita e remove o saldo.
+Ausência é diferente de zero: um tipo sem linha aparece como "Não cadastrado", nunca
+como `0`, e nenhuma linha zerada é criada automaticamente. A exclusão existe
+justamente por isso — sem ela, um saldo criado por engano só poderia ser zerado, o
+que afirmaria um acumulado que ninguém apurou.
+
+**Impacto no cálculo — ainda futuro.** Como o saldo entra nos acumulados e nunca em
+recortes de período, isso é responsabilidade da F3 (ver DEC-004). Nada na F2 soma
+saldo com lançamento.
+
+**Fonte.** Q8, aprovada pelo proprietário em 2026-08-12; `prisma/schema.prisma`;
+`prisma/migrations/20260812120000_saldo_historico_tipo_unico/`;
+`src/lib/validacao/saldo-historico.ts`; commit `485ba36`.
+**implementada na administração** — o uso nos cálculos continua sendo F3
