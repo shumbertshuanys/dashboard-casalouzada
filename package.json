@@ -12,6 +12,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:seed": "prisma db seed",
+    "db:trocar-senha-admin": "tsx scripts/trocar-senha-admin.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {
