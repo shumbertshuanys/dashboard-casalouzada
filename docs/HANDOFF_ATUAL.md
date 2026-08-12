@@ -22,9 +22,12 @@ A **Fase 2 — Administração está concluída**. Equipes, corretores, lançame
 saldo histórico podem ser gerenciados pela área administrativa, e o sistema já pode
 ser alimentado de verdade.
 
-A próxima fase é a **F3 — Painel**, que **não foi iniciada**: `src/lib/metricas.ts`
-não existe, e `/painel/[token]` continua respondendo "Painel em construção" sem
-consultar o banco.
+Da **F3 — Painel**, só a fatia **F3.0 — decisões e contratos** está concluída: as
+regras foram aprovadas pelo proprietário em 2026-08-12 e registradas nas DEC-036 a
+DEC-042. **Nenhum código de F3 foi escrito.** `src/lib/metricas.ts` não existe, e
+`/painel/[token]` continua respondendo "Painel em construção" sem consultar o banco.
+
+A próxima fatia é a **F3.1 — janelas civis**, ainda não iniciada.
 
 ## Fases
 
@@ -39,7 +42,13 @@ consultar o banco.
 | F2.4 — Lançamentos (edição e exclusão) | **Concluída** | `caa151f` |
 | F2.5 — Saldo histórico | **Concluída** | `485ba36` |
 | **F2 — Administração** | **Concluída** | — |
-| F3 — Painel | **Não iniciada** — próxima | `src/lib/metricas.ts` ausente |
+| F3.0 — Decisões e contratos do painel | **Concluída** | DEC-036 a DEC-042; sem código |
+| F3.1 — Janelas civis | **Não iniciada** — próxima | — |
+| F3.2 — Núcleo puro de métricas | **Não iniciada** | — |
+| F3.3 — Leitura Prisma | **Não iniciada** | — |
+| F3.4 — Shape de apresentação | **Não iniciada** | — |
+| F3.5 — Painel real | **Não iniciada** | `/painel/[token]` sem banco |
+| F3.6 — Atualização automática | **Não iniciada** | — |
 | F4 — Identidade e modo TV | **Não iniciada** | depende da F3 |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
@@ -239,23 +248,104 @@ Verificado na árvore em `485ba36`, arquivo por arquivo.
 
 `/painel/[token]` continua exibindo "Painel em construção" e **não consulta o banco**.
 
-## Próxima fase — F3, Painel
+## F3 — Painel
 
-Não iniciada e **ainda não planejada em detalhe**. O que já está congelado por
-decisão, e vale como restrição de qualquer plano futuro:
+### F3.0 — decisões e contratos · concluída
 
-- criar a camada única `src/lib/metricas.ts`; nenhum componente calcula por conta
-  própria (DEC-013);
-- períodos civis em `America/Sao_Paulo` (DEC-005);
-- saldo histórico somente nos acumulados, nunca em período (DEC-004, DEC-035);
-- `CAPTACAO_VENDA` e `CAPTACAO_EXCLUSIVA` permanecem independentes (DEC-003);
-- equipe sempre por `Lancamento.equipeId`, nunca pela lotação atual do corretor
-  (DEC-002);
-- zero real é diferente de ausência de lançamento (DEC-014);
-- conectar o painel real aos dados, trocando o mock pela origem real;
-- preservar o contrato visual do protótipo onde ele se aplicar.
+Aprovadas pelo proprietário em 2026-08-12 e registradas nas **DEC-036 a DEC-042**.
+**Nenhuma linha de código de F3 foi escrita.** O que ficou congelado:
 
-A F3 será planejada e revisada antes de qualquer execução.
+**Acumulados e `dataCorte` (DEC-036).** Cada linha de `saldo_historico` é a fonte do
+acumulado daquele tipo **até o próprio `dataCorte`, inclusive**:
+
+```
+acumulado(tipo) = saldo(tipo) + lançamentos(tipo) com dataReferencia > dataCorte(tipo)
+```
+
+O saldo `VENDA` alimenta imóveis vendidos **e** VGV acumulado, com o corte da linha
+`VENDA`; o saldo `AVALIACAO_GOOGLE` alimenta a contagem de avaliações, com o corte
+dele. Um lançamento anterior ao corte continua existindo e pode aparecer num recorte
+por período — só não é somado de novo no acumulado. Isso **supera** a fórmula antiga
+do `PLANO.md` §4, já corrigida lá.
+
+**Saldo ausente (DEC-037).** Sem linha de saldo para o tipo, o big number é
+**indisponível** (`—`), nunca zero e nunca "só os lançamentos". Vale apenas para os
+acumulados.
+
+**Ranking e transferência (DEC-038).** Crédito sempre por `Lancamento.equipeId`. O
+elenco mensal de uma equipe é a união dos corretores ativos lotados nela hoje com os
+corretores ativos que tenham lançamento do mês creditado a ela. Um corretor
+transferido no meio do mês **aparece nos dois quadros**, cada um com a produção
+daquele contexto — não há duplicação de evento. Inativo não aparece em ranking, mas
+seus eventos continuam nos totais.
+
+**Ausência mensal (DEC-039).** Mês sem **nenhum** lançamento → `SEM_DADOS`, e a
+apresentação usa `—` em vez de afirmar zero. Com pelo menos um lançamento, a janela é
+`OK` e zeros dentro dela são zeros reais. É regra conservadora de apresentação, não
+inferência estatística.
+
+> **Limitação conhecida e aceita:** o sistema **não distingue alimentação parcial**.
+> Propostas cadastradas e nenhuma avaliação pode ser zero real ou avaliação ainda não
+> lançada. O schema não tem "mês fechado" nem status de preenchimento, e isso não
+> será inventado.
+
+**Três equipes ativas (DEC-040).** O painel v1 exige **exatamente três**. Fora disso,
+a área dos quadros entra em `CONFIGURACAO_INVALIDA` — sem escolher as três primeiras,
+sem descartar equipe, sem redistribuir grid. Big numbers e VGV por período continuam
+sendo exibidos se suas leituras forem válidas.
+
+**Cliente Prisma injetado (DEC-041).** A camada recebe o `PrismaClient` por
+parâmetro — `obterMetricasPainel(prisma, agora?)` — em vez de importar o singleton de
+`src/lib/db.ts`, que aponta para produção. Assim a integração exercita a mesma camada
+com `criarPrismaTeste()`.
+
+**Estados separados (DEC-042).** Quatro dimensões independentes, não um enum único:
+leitura (`OK` / `INDISPONIVEL`), período (`OK` / `SEM_DADOS`), acumulado (`OK` /
+`SEM_SALDO_HISTORICO`) e área de equipes (`OK` / `CONFIGURACAO_INVALIDA`). Cada uma
+afeta só o seu escopo: `INDISPONIVEL` nunca vira zero, faltar saldo de `VENDA` não
+invalida avaliações, `SEM_DADOS` mensal não apaga big numbers, e
+`CONFIGURACAO_INVALIDA` não apaga o que puder ser calculado corretamente.
+
+### Contratos de cálculo já fixados
+
+**VGV por período** — mensal, trimestral e anual usam **somente**
+`Lancamento.tipo = VENDA` e `sum(Lancamento.valor)` dentro da janela civil. Saldo
+histórico e `dataCorte`: participação **zero**.
+
+**Quadro mensal** — sete linhas, na ordem: `VENDA`, `LOCACAO`, `CAPTACAO_VENDA`,
+`CAPTACAO_EXCLUSIVA`, `CAPTACAO_LOCACAO`, `PROPOSTA`, `AVALIACAO_GOOGLE`. VGV **não**
+aparece aqui, e as duas captações seguem independentes (DEC-003).
+
+**Rankings** — oito métricas, na ordem do protótipo: vendidos, VGV, locados, captação
+de venda, exclusivas, captação de locação, propostas, avaliações (DEC-033). Fonte: os
+lançamentos do mês, agrupados por `Lancamento.equipeId`. Sete usam `count`; VGV usa
+`sum(valor)`. Ordenação por resultado decrescente, desempate por `nomeExibicao` em
+pt-BR crescente e, persistindo, por `id` crescente — para a ordem ser determinística
+entre atualizações.
+
+### Sem migration
+
+As decisões da F3.0 são implementáveis sobre o schema atual. **A F3, no desenho
+atual, não exige migration.** (A migration da F2.5 continua pendente de aplicação em
+produção, mas isso é outro gate — ver Pendências.)
+
+### F3.1 — janelas civis · próxima, não iniciada
+
+Objetivo: janelas civis de mês, trimestre e ano correntes em `America/Sao_Paulo`, com
+intervalos semiabertos `[inicio, fimExclusivo)`. Deve alterar `src/lib/datas.ts` e
+seus testes. **Nada disso existe hoje.**
+
+### Fatias seguintes
+
+`F3.2` núcleo puro de métricas · `F3.3` leitura Prisma · `F3.4` shape de apresentação
+e tipos fora do mock · `F3.5` painel real ligado aos dados · `F3.6` atualização
+automática. Nenhuma iniciada.
+
+### Fora da F3
+
+O aviso administrativo para lançamento anterior ao corte, cogitado no planejamento
+técnico, **não é requisito da F3**. Fica como possível **F2.6 futura e opcional**;
+não bloqueia a F3 e não reabre a F2 agora.
 
 ## Pendências
 
@@ -263,8 +353,9 @@ A F3 será planejada e revisada antes de qualquer execução.
    proprietário, mas não resolvido.
 2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
    antes de ativar lá a versão correspondente, com gate apropriado.
-3. **F3 — Painel**: planejar e executar.
+3. **F3.1 — janelas civis**: próxima fatia de implementação.
 4. **F4 — Identidade e modo TV**: depende da F3.
+5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
 
 Pendências de informação herdadas do plano, nenhuma bloqueante: número máximo de
 corretores por equipe (dimensiona a altura dos quadros), valores iniciais do saldo

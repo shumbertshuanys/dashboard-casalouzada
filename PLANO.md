@@ -123,7 +123,10 @@ o registro inicial vem pelo seed e a senha se troca pela própria área administ
 
 ## 4. Regras de cálculo
 
-- **Big numbers** = `saldo_historico` + soma de todos os lançamentos, sem recorte de data.
+- **Big numbers** = saldo histórico do tipo **+** os lançamentos daquele tipo com
+  `dataReferencia` **estritamente posterior** ao `dataCorte` daquele saldo. Cada linha de
+  `saldo_historico` é a fonte do acumulado até o próprio corte, inclusive; somar também os
+  lançamentos anteriores contaria a mesma produção duas vezes. Ver DEC-036.
 - **VGV mensal** = soma de `valor` das vendas do mês civil corrente.
 - **VGV trimestral** = trimestre civil corrente (jan–mar, abr–jun, jul–set, out–dez).
 - **VGV anual** = ano civil corrente.
@@ -131,6 +134,10 @@ o registro inicial vem pelo seed e a senha se troca pela própria área administ
 - **Quadros de equipe** = mês civil corrente, corretores ordenados do maior para o menor na
   métrica que estiver ativa no momento.
 - Fuso horário fixo em `America/Sao_Paulo` para o corte de mês não errar.
+
+> **O saldo histórico nunca participa de mês, trimestre ou ano.** Ele só entra nos
+> acumulados dos big numbers. Os recortes por período usam exclusivamente lançamentos,
+> e ignoram `dataCorte` (DEC-004, DEC-040).
 
 ---
 
@@ -274,10 +281,24 @@ referência para a rota `/preview`, com dados fictícios. Serve de contrato visu
 CRUD de equipes, corretores e lançamentos. Saldo histórico. Ao final desta fase você
 já consegue alimentar o sistema de verdade, mesmo sem o painel pronto.
 
-**Fase 3 — Painel** · *próxima, não iniciada*
+**Fase 3 — Painel** · *em curso: F3.0 concluída, F3.1 é a próxima*
 Camada de cálculo, as três faixas do layout, atualização automática, rotação de métricas,
-proteção por token na URL. Hoje `/painel/[token]` existe protegida por token, mas não
-consulta o banco.
+proteção por token na URL. Hoje `/painel/[token]` existe protegida por token, mas **não
+consulta o banco** — nenhum código de F3 foi escrito.
+
+A fase foi fatiada assim:
+
+| Fatia | Escopo | Estado |
+|---|---|---|
+| F3.0 | decisões e contratos | **concluída** — DEC-036 a DEC-042 |
+| F3.1 | janelas civis (mês, trimestre, ano) em `America/Sao_Paulo` | **próxima, não iniciada** |
+| F3.2 | núcleo puro de métricas | não iniciada |
+| F3.3 | leitura Prisma | não iniciada |
+| F3.4 | shape de apresentação e tipos fora do mock | não iniciada |
+| F3.5 | painel real ligado aos dados | não iniciada |
+| F3.6 | atualização automática | não iniciada |
+
+As decisões da F3.0 são implementáveis sobre o schema atual: **a F3 não exige migration**.
 
 **Fase 4 — Identidade e modo TV** · *depende da F3*
 Cores, tipografia, marca, ajuste fino para 3840×2160, transições, comportamento offline,

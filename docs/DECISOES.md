@@ -544,3 +544,182 @@ saldo com lançamento.
 `prisma/migrations/20260812120000_saldo_historico_tipo_unico/`;
 `src/lib/validacao/saldo-historico.ts`; commit `485ba36`.
 **implementada na administração** — o uso nos cálculos continua sendo F3
+
+---
+
+## Painel — decisões da F3.0
+
+Aprovadas pelo proprietário em 2026-08-12, antes de qualquer código de F3. Elas
+restringem a camada de cálculo que ainda será construída.
+
+### DEC-036 — `dataCorte` é inclusivo, e o acumulado soma só o que veio depois
+
+**Decisão.** Cada linha de `saldo_historico` é a fonte autoritativa do acumulado
+daquele tipo **até o seu próprio `dataCorte`, inclusive**. Portanto:
+
+```
+acumulado(tipo) = saldo(tipo) + lançamentos(tipo) com dataReferencia > dataCorte(tipo)
+```
+
+- `dataReferencia <= dataCorte` — aquela faixa **já está representada** pelo saldo;
+- `dataReferencia > dataCorte` — entra individualmente no acumulado.
+
+Cada tipo usa o `dataCorte` da **sua própria** linha. O saldo `VENDA` alimenta dois
+números — quantidade de imóveis vendidos e VGV acumulado — ambos com o corte da linha
+`VENDA`. O saldo `AVALIACAO_GOOGLE` alimenta a contagem de avaliações, com o corte
+dele.
+
+**Motivo.** Somar saldo com *todos* os lançamentos contaria duas vezes a produção do
+período que o saldo já resume. O `dataCorte` existe justamente para marcar onde o
+resumo termina e os eventos individuais começam.
+
+**Impacto.** Supera a fórmula antiga do `PLANO.md` §4 ("saldo + todos os lançamentos,
+sem recorte"), corrigida no próprio plano. **Não** supera a DEC-004: saldo continua
+entrando somente em acumulados. Esta decisão define *como* ele entra.
+
+Um lançamento anterior ao corte **continua existindo e continua válido** — pode
+inclusive aparecer num recorte por período. Ele apenas não é somado de novo no
+acumulado. Nada disso vira validação cruzada entre lançamento e saldo, nem proibição
+de lançamento retroativo, nem "data de início da operação".
+
+**Fonte.** Q-F3, aprovada em 2026-08-12; `PLANO.md` §4.
+**invariante futura** — a camada de cálculo ainda não existe
+
+### DEC-037 — Sem saldo histórico, o acumulado é indisponível, não zero
+
+**Decisão.** Se não existir linha de `saldo_historico` para o tipo, o big number
+correspondente é **indisponível** (`—`), nunca zero e nunca "só os lançamentos".
+
+- sem saldo `VENDA` → imóveis vendidos acumulados **e** VGV acumulado indisponíveis;
+- sem saldo `AVALIACAO_GOOGLE` → avaliações acumuladas indisponíveis.
+
+**Motivo.** Mostrar apenas os lançamentos sob o rótulo de acumulado produziria um
+número plausível e errado — parcial, sem nada na tela indicando que é parcial. É pior
+do que não mostrar.
+
+**Impacto.** Vale **somente** para os big numbers acumulados. Os recortes por período
+não dependem de saldo e seguem normalmente. É a aplicação da DEC-014 a este caso, e o
+mesmo princípio que a administração já usa ao exibir "Não cadastrado" em vez de `0`.
+
+**Fonte.** Q-F3, aprovada em 2026-08-12; DEC-014; DEC-035. **invariante futura**
+
+### DEC-038 — Corretor transferido aparece nos dois quadros, sem duplicar produção
+
+**Decisão.** O crédito de um evento é sempre `Lancamento.equipeId`, nunca
+`Corretor.equipeId` atual (DEC-002). O elenco mensal de uma equipe ativa é a união
+de:
+
+- **A** — corretores **ativos** atualmente lotados naquela equipe;
+- **B** — corretores **ativos** com pelo menos um lançamento do mês creditado
+  historicamente àquela equipe.
+
+**Consequência deliberada.** Um corretor transferido no meio do mês pode aparecer em
+**dois** quadros: na equipe A com a produção cujo `equipeId` é A, e na equipe B com a
+produção cujo `equipeId` é B.
+
+Isso **não é duplicação de produção**: nenhum evento é contado duas vezes. É a mesma
+pessoa aparecendo em dois contextos históricos distintos.
+
+**Corretor inativo** não aparece como linha em ranking nenhum, mas seus eventos
+continuam contando nos totais da empresa e continuam pertencendo à equipe gravada.
+
+**Motivo.** A alternativa seria reescrever ou esconder histórico para deixar a TV
+visualmente mais simples, e isso falsearia o desempenho das duas equipes.
+
+**Fonte.** Q-F3, aprovada em 2026-08-12; DEC-002; DEC-006. **invariante futura**
+
+### DEC-039 — Mês sem nenhum lançamento não afirma desempenho zero
+
+**Decisão.** Regra conservadora de apresentação para o mês corrente:
+
+- **nenhum** lançamento no mês → a janela mensal fica em `SEM_DADOS`; o quadro mensal
+  e os rankings **não afirmam** desempenho zero, e a apresentação usará `—`;
+- **pelo menos um** lançamento no mês → a janela fica `OK`. Dentro de uma janela `OK`,
+  uma métrica sem lançamento é **zero real** e exibível, e um corretor ativo sem evento
+  naquela métrica também aparece com zero real.
+
+**Isto não é inferência estatística.** Não se afirma que zero lançamentos indica
+ausência "com alta certeza": é uma regra conservadora de apresentação — sem nenhum
+lançamento no mês, não se afirma zero.
+
+**Limitação conhecida e aceita.** O sistema **não distingue alimentação parcial**. Se
+há propostas cadastradas mas nenhuma avaliação, isso tanto pode ser zero avaliações
+reais quanto avaliações ainda não lançadas. O schema não tem "mês fechado", "dados
+conferidos" nem status de preenchimento, e essa informação **não será inventada**.
+Resolver isso exigiria modelagem operacional nova, fora da F3 atual e da v1.
+
+**Fonte.** Q-F3, aprovada em 2026-08-12; DEC-014. **invariante futura**
+
+### DEC-040 — O painel v1 exige exatamente três equipes ativas
+
+**Decisão.** O desenho do painel tem quatro colunas fixas: quadro mensal geral mais
+três quadros de equipe. A v1 exige, portanto, **exatamente três equipes ativas**.
+
+Se `equipesAtivas.length !== 3`, a área dos quadros de equipe entra em
+`CONFIGURACAO_INVALIDA`. É proibido: escolher as três primeiras, descartar equipe
+silenciosamente, redistribuir o grid por conta própria ou tratar a diferença como
+produção zero.
+
+Os números que não dependem da cardinalidade visual — big numbers e VGV por período —
+continuam sendo exibidos, desde que suas leituras sejam válidas.
+
+**Motivo.** Qualquer acomodação automática mentiria: ou esconderia uma equipe, ou
+inventaria um layout que ninguém aprovou.
+
+**Impacto.** Nenhuma alteração de CSS agora. A implementação é de fatia posterior.
+
+**Fonte.** Q-F3, aprovada em 2026-08-12; `src/components/painel/painel.module.css`.
+**invariante futura**
+
+### DEC-041 — A camada de métricas recebe o cliente Prisma por parâmetro
+
+**Decisão.** A leitura de métricas aceita explicitamente um `PrismaClient`:
+
+```
+obterMetricasPainel(prisma, agora?)
+```
+
+e **não** importa o singleton de `src/lib/db.ts` por dentro.
+
+**Motivo.** `src/lib/db.ts` lê `DATABASE_URL` do ambiente da aplicação — a de
+produção. Os testes de integração têm um cliente próprio, criado por
+`tests/helpers/banco-teste.ts`, que só conecta depois de exigir protocolo PostgreSQL,
+host local, database `casalouzada_test` e role `casalouzada_test`. Com injeção
+explícita, a integração exercita **a mesma camada**, passando `criarPrismaTeste()`.
+
+**Impacto.** Não se cria DAL genérica nem interface abstrata de banco. Passar o
+cliente por parâmetro é suficiente.
+
+**Fonte.** Q-F3, aprovada em 2026-08-12; `src/lib/db.ts`;
+`tests/helpers/banco-teste.ts`. **invariante futura**
+
+### DEC-042 — Os estados do painel são dimensões separadas, não um enum único
+
+**Decisão.** Não existe um `EstadoJanela` global juntando `OK`, `SEM_DADOS`,
+`INDISPONIVEL` e `SEM_SALDO_HISTORICO`: são perguntas diferentes sobre coisas
+diferentes. As dimensões são quatro:
+
+| Dimensão | Valores |
+|---|---|
+| Estado de leitura | `OK`, `INDISPONIVEL` |
+| Estado de período | `OK`, `SEM_DADOS` |
+| Estado de acumulado | `OK`, `SEM_SALDO_HISTORICO` |
+| Estado da área de equipes | `OK`, `CONFIGURACAO_INVALIDA` |
+
+**Propagação.** Cada estado afeta só o que lhe diz respeito:
+
+- `INDISPONIVEL` — falha de leitura ou de banco. **Nunca** vira zero.
+- `SEM_SALDO_HISTORICO` — afeta apenas o big number do tipo sem saldo. Faltar o saldo
+  de `VENDA` não invalida avaliações se o saldo de avaliações existe.
+- `SEM_DADOS` mensal — afeta a janela mensal: quadro mensal e rankings. **Não**
+  transforma big numbers em `SEM_DADOS`.
+- `CONFIGURACAO_INVALIDA` — afeta a área de equipes. **Não** apaga big numbers, VGV
+  por período nem o quadro mensal geral, se esses puderem ser calculados corretamente.
+
+**Motivo.** Um enum único obrigaria a escolher um estado por tela e faria uma falha
+localizada apagar dado correto.
+
+**Impacto.** Os nomes acima são semânticos, não assinaturas TypeScript congeladas. A
+separação conceitual, essa sim, é obrigatória.
+
+**Fonte.** Q-F3, aprovada em 2026-08-12. **invariante futura**
