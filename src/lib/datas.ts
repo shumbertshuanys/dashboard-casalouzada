@@ -10,7 +10,9 @@
  * O único ponto que conhece `America/Sao_Paulo` é `hojeEmSaoPaulo`, porque ali a
  * pergunta é outra: que dia é hoje para quem opera o sistema.
  *
- * Recortes de período — mês, trimestre, ano — são da Fase 3 e não moram aqui.
+ * Recortes de período — mês, trimestre, ano — moram aqui desde a F3.1, como
+ * janelas civis. Só os limites: o que se conta dentro deles é das fatias
+ * seguintes.
  */
 
 /** Fuso do negócio. O corte de dia segue o escritório, não o servidor. */
@@ -84,4 +86,78 @@ export function hojeEmSaoPaulo(agora: Date = new Date()): string {
     partes.find((parte) => parte.type === tipo)?.value ?? "";
 
   return `${pegar("year")}-${pegar("month")}-${pegar("day")}`;
+}
+
+/**
+ * Recorte de período como intervalo **semiaberto**: `[inicio, fimExclusivo)`.
+ *
+ * O fim é exclusivo de propósito. "Último instante do mês" é uma data que
+ * depende da precisão escolhida — 23:59:59, 23:59:59.999, ou o microssegundo
+ * que o banco guarda —, e cada escolha erra em algum ponto. Com fim exclusivo o
+ * critério é sempre o mesmo: `data >= inicio && data < fimExclusivo`, que não
+ * perde nem duplica nada na virada.
+ *
+ * Ambos os limites são datas civis: meia-noite UTC do dia, como o resto do
+ * módulo.
+ */
+export type JanelaCivil = {
+  inicio: Date;
+  fimExclusivo: Date;
+};
+
+/**
+ * Ano e mês civis correntes em São Paulo, o mês em base zero.
+ *
+ * Passa por `hojeEmSaoPaulo` de propósito: ali é o único lugar do módulo que
+ * conhece o fuso do negócio. Daqui para frente tudo volta a ser data civil UTC,
+ * e o fuso da máquina deixa de influir.
+ */
+function mesCivilCorrente(agora: Date): { ano: number; mes: number } {
+  const hoje = paraDataCivil(hojeEmSaoPaulo(agora));
+  return { ano: hoje.getUTCFullYear(), mes: hoje.getUTCMonth() };
+}
+
+/**
+ * Meia-noite UTC do primeiro dia de um mês, com `mes` em base zero.
+ *
+ * Aceita `mes` igual a 12: `Date.UTC` rola para janeiro do ano seguinte, que é
+ * exatamente o fim exclusivo de dezembro e do Q4 — daí não haver aritmética de
+ * virada espalhada pelas três funções. O ano vem sempre de uma data civil já
+ * validada por `paraDataCivil`, então o mapeamento de 0–99 para 1900+ que o
+ * `Date.UTC` faz não alcança este ponto.
+ */
+function inicioDoMesUTC(ano: number, mes: number): Date {
+  return new Date(Date.UTC(ano, mes, 1));
+}
+
+/** Mês civil corrente em São Paulo. Agosto/2026 → `[2026-08-01, 2026-09-01)`. */
+export function mesCorrente(agora: Date = new Date()): JanelaCivil {
+  const { ano, mes } = mesCivilCorrente(agora);
+  return {
+    inicio: inicioDoMesUTC(ano, mes),
+    fimExclusivo: inicioDoMesUTC(ano, mes + 1),
+  };
+}
+
+/**
+ * Trimestre civil corrente em São Paulo — Q1 jan–mar, Q2 abr–jun, Q3 jul–set,
+ * Q4 out–dez. Fixo no calendário: não é trimestre móvel nem "últimos três
+ * meses". Setembro/2026 → `[2026-07-01, 2026-10-01)`.
+ */
+export function trimestreCorrente(agora: Date = new Date()): JanelaCivil {
+  const { ano, mes } = mesCivilCorrente(agora);
+  const primeiroMesDoTrimestre = Math.floor(mes / 3) * 3;
+  return {
+    inicio: inicioDoMesUTC(ano, primeiroMesDoTrimestre),
+    fimExclusivo: inicioDoMesUTC(ano, primeiroMesDoTrimestre + 3),
+  };
+}
+
+/** Ano civil corrente em São Paulo. 2026 → `[2026-01-01, 2027-01-01)`. */
+export function anoCorrente(agora: Date = new Date()): JanelaCivil {
+  const { ano } = mesCivilCorrente(agora);
+  return {
+    inicio: inicioDoMesUTC(ano, 0),
+    fimExclusivo: inicioDoMesUTC(ano + 1, 0),
+  };
 }
