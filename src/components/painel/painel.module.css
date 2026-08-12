@@ -1,0 +1,289 @@
+/* Estilo do painel, portado do protótipo HTML de referência.
+   As cores reusam os tokens de `globals.css`; só a moldura é local a esta tela.
+
+   Toda a escala interna é em `cqw` — 1cqw é 1% da largura do próprio painel, que
+   por sua vez é derivada da viewport (ver `.tv`).
+
+   `cqw` resolve contra o *content box* do query container, então o container não
+   pode carregar o padding da composição: o padding sairia da própria referência e
+   encolheria toda a tipografia. Por isso `.tv` é só o retângulo 16:9, sem padding,
+   e o respiro visual mora em `.conteudo`. Com isso 1cqw é 1% da largura nominal do
+   painel — 38.4px numa TV de 3840px.
+
+   Dois tamanhos saem do protótipo por calibração, não por gosto: os rótulos vão de
+   0.83cqw para 0.84cqw e o VGV de 2.86cqw para 2.87cqw. Nos valores originais eles
+   dariam 31.9px e 109.8px a 3840px, logo abaixo dos mínimos de 32px e 110px da
+   seção 6 do PLANO. */
+
+/* Fundo atrás do painel, visível só quando a viewport não é 16:9. Fica aqui, e não
+   em `globals.css`, porque é decisão desta tela e não do sistema. */
+.moldura {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #3e382e;
+  overflow: hidden;
+}
+
+/* Só o retângulo 16:9 e a referência de `cqw`. Sem padding, de propósito. */
+.tv {
+  container-type: inline-size;
+  /* Maior retângulo 16:9 que cabe na viewport. Em 3840×2160 dá 3840×2160 exatos:
+     o painel ocupa a TV inteira, sem moldura roubando escala. */
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  background: var(--color-fundo);
+  color: var(--color-texto);
+  /* Números de mesma largura: o valor não dança quando atualiza. */
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+
+/* O respiro visual do protótipo, agora dentro do container em vez de em volta
+   dele. Os valores em `cqw` são os mesmos do HTML de referência. */
+.conteudo {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 1.6cqw 2cqw 2cqw;
+  gap: 1.1cqw;
+}
+
+.topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.marca {
+  font-size: 1.15cqw;
+  font-weight: 400;
+  letter-spacing: 0.42em;
+  color: var(--color-texto);
+}
+.periodo {
+  font-size: 0.84cqw;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-texto-secundario);
+}
+
+.faixaBig {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.1cqw;
+  flex-shrink: 0;
+}
+.big {
+  background: var(--color-superficie);
+  padding: 1.5cqw 1.8cqw 1.7cqw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5cqw;
+}
+.big .rot {
+  font-size: 0.84cqw;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-texto-secundario);
+}
+.big .num {
+  font-size: 5.73cqw;
+  font-weight: 300;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+}
+.big .num .pre {
+  font-size: 2.6cqw;
+  font-weight: 300;
+  color: var(--color-texto-secundario);
+  margin-right: 0.15em;
+  letter-spacing: 0;
+}
+.big .num .suf {
+  font-size: 2.2cqw;
+  color: var(--color-texto-secundario);
+  margin-left: 0.12em;
+}
+
+.faixaVgv {
+  background: var(--color-superficie);
+  padding: 1.2cqw 1.8cqw;
+  display: grid;
+  grid-template-columns: auto repeat(3, 1fr);
+  align-items: center;
+  gap: 2cqw;
+  flex-shrink: 0;
+}
+.faixaVgv .titulo {
+  font-size: 0.84cqw;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-texto-secundario);
+  max-width: 7cqw;
+  line-height: 1.5;
+}
+.vgvItem {
+  border-left: 1px solid rgb(241 239 234 / 0.14);
+  padding-left: 1.8cqw;
+}
+.vgvItem .rot {
+  font-size: 0.84cqw;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-texto-secundario);
+  display: block;
+  margin-bottom: 0.35cqw;
+}
+.vgvItem .val {
+  font-size: 2.87cqw;
+  font-weight: 300;
+  color: var(--color-destaque);
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.vgvItem .val .pre {
+  font-size: 1.4cqw;
+  color: var(--color-destaque);
+  opacity: 0.7;
+  margin-right: 0.15em;
+}
+.vgvItem .val .suf {
+  font-size: 1.3cqw;
+  opacity: 0.7;
+  margin-left: 0.1em;
+}
+
+/* O quadro mensal é de propósito 5% mais largo que os das equipes. */
+.faixaBase {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr 1fr 1fr;
+  gap: 1.1cqw;
+  flex: 1;
+  min-height: 0;
+}
+.quadro {
+  background: var(--color-superficie);
+  padding: 1.2cqw 1.4cqw;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.quadro h2 {
+  font-size: 1.02cqw;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.quadro .sub {
+  font-size: 0.84cqw;
+  color: var(--color-texto-secundario);
+  letter-spacing: 0.06em;
+  margin-top: 0.2cqw;
+}
+
+.linhas {
+  margin-top: 1cqw;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 1;
+}
+.linha {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6cqw;
+  font-size: 1.15cqw;
+  font-weight: 300;
+}
+/* 1.15cqw em vez dos 1.02cqw do protótipo: num painel de 3840px isso leva o nome do
+   corretor de 39.2px para 44.2px, acima dos 44px de leitura a 6 metros da seção 6
+   do PLANO. */
+.linha .lab {
+  color: var(--color-texto-secundario);
+  font-size: 1.15cqw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.linha .val {
+  font-weight: 400;
+  font-size: 1.25cqw;
+  flex-shrink: 0;
+}
+/* Régua pontilhada preenchendo o vão entre rótulo e valor. */
+.linha .rule {
+  flex: 1;
+  border-bottom: 1px dotted rgb(241 239 234 / 0.16);
+  transform: translateY(-0.25cqw);
+}
+
+.metrica {
+  margin-top: 0.55cqw;
+  font-size: 0.84cqw;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-destaque);
+  min-height: 1.2cqw;
+}
+
+.marcadores {
+  display: flex;
+  gap: 0.28cqw;
+  margin-top: 0.55cqw;
+}
+.marcadores i {
+  flex: 1;
+  height: 0.14cqw;
+  background: rgb(241 239 234 / 0.18);
+  position: relative;
+}
+.marcadores i span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--color-destaque);
+}
+.marcadores i.feito span {
+  width: 100%;
+  background: rgb(201 169 106 / 0.42);
+}
+.marcadores i.agora span {
+  animation: preencher 20s linear forwards;
+}
+@keyframes preencher {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.lista {
+  margin-top: 0.9cqw;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 1;
+  transition: opacity 0.45s ease;
+}
+.lista.trocando {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marcadores i.agora span {
+    animation: none;
+    width: 100%;
+  }
+  .lista {
+    transition: none;
+  }
+  /* Sem transição, esconder a lista viraria um piscar seco a cada troca. */
+  .lista.trocando {
+    opacity: 1;
+  }
+}
