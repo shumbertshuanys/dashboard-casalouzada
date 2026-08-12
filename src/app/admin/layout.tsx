@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { NaoAutorizadoError, exigirAdministradorAtivo } from "@/lib/admin/guarda";
 import { sair } from "@/app/login/acoes";
@@ -30,14 +31,26 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
           <h1 className="text-xl font-semibold text-texto">Área administrativa</h1>
           <p className="text-sm text-texto-secundario">{administrador.nome}</p>
         </div>
-        <form action={sair}>
-          <button
-            type="submit"
-            className="rounded-md border border-white/15 px-3 py-2 text-sm text-texto-secundario hover:text-texto"
-          >
-            Sair
-          </button>
-        </form>
+        <div className="flex items-center gap-6">
+          {/* Só entra link de rota que existe. Corretores, lançamentos e saldo
+              histórico chegam nos próximos slices. */}
+          <nav>
+            <Link
+              href="/admin/equipes"
+              className="text-sm text-texto-secundario underline-offset-4 hover:text-texto hover:underline"
+            >
+              Equipes
+            </Link>
+          </nav>
+          <form action={sair}>
+            <button
+              type="submit"
+              className="rounded-md border border-white/15 px-3 py-2 text-sm text-texto-secundario hover:text-texto"
+            >
+              Sair
+            </button>
+          </form>
+        </div>
       </header>
 
       <main className="flex-1 p-8">{children}</main>

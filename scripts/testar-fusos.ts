@@ -21,7 +21,9 @@ const ARGUMENTOS = [
   // é a mesma que o Next usa nos Server Components.
   "--conditions=react-server",
   "--test",
-  "tests/**/*.test.ts",
+  // Só a suíte unitária: a de integração depende do banco local e tem script
+  // próprio, `test:integracao`.
+  "tests/*.test.ts",
 ];
 
 let houveFalha = false;
