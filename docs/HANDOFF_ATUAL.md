@@ -7,7 +7,7 @@
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
 | Commit de referência | `c59be18` — `chore: adiciona troca segura de senha do admin` |
-| Data do handoff | 2026-08-12 |
+| Data do handoff | 2026-08-11 |
 
 ## Estado executivo
 
@@ -144,14 +144,16 @@ exclusivamente contra a Management API. Esse PAT foi removido do `.env` ao final
 **revogado manualmente pelo proprietário da conta no Dashboard do Supabase** — ação
 externa à árvore Git, confirmada pelo proprietário, sem evidência no repositório.
 
-**Nenhum valor secreto foi versionado em momento algum.** O `.env` é a única cópia
-das credenciais e continua ignorado pelo Git (`.gitignore`, regra `.env*` com
-exceção para `.env.example`). Não existe segunda cópia em lugar nenhum: perder esse
-arquivo custa uma nova rotação inteira.
+**Nenhum valor secreto foi versionado em momento algum.** O `.env` local contém as
+credenciais deste ambiente de desenvolvimento e permanece ignorado pelo Git
+(`.gitignore`, regra `.env*` com exceção para `.env.example`). Outros ambientes ou
+máquinas não foram auditados nesta etapa. Quando existirem ambientes de deploy, suas
+credenciais devem viver no mecanismo de environment/secrets do provedor e nunca em
+arquivos versionados.
 
-Se as credenciais estiverem replicadas em algum ambiente de deploy (Vercel, CI,
-outra máquina), esses lugares apontam para valores antigos e precisam ser
-atualizados. Só o `.env` local foi tocado.
+Se as credenciais estiverem replicadas em algum ambiente de deploy (Vercel, CI, outra
+máquina), esses lugares apontam para valores antigos e precisam ser atualizados. Só o
+`.env` local foi tocado.
 
 ## Estado Git
 

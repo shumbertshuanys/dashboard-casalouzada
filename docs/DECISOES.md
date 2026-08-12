@@ -61,10 +61,12 @@ recortes por período — mensal, trimestral ou anual.
 **Motivo.** Existem para evitar cadastrar retroativamente centenas de vendas antigas.
 Não têm data de fato, só data de corte.
 
-**Impacto.** Qualquer cálculo por período ignora `saldo_historico`. Confundir isso
-duplicaria valores no VGV do mês.
+**Impacto.** Qualquer cálculo por período deverá ignorar `saldo_historico`. Confundir
+isso duplicaria valores no VGV do mês.
 
-**Fonte.** `prisma/schema.prisma` (modelo `SaldoHistorico`); `PLANO.md` §3 e §4. **implementada**
+**Fonte.** `prisma/schema.prisma` (modelo `SaldoHistorico`); `PLANO.md` §3 e §4.
+**invariante futura** — o modelo `SaldoHistorico` já está implementado; a aplicação da
+regra de cálculo entra na F3, junto com a DEC-013
 
 ### DEC-005 — Períodos civis no fuso `America/Sao_Paulo`
 
@@ -85,10 +87,14 @@ não é o do navegador nem o da máquina de deploy.
 **Motivo.** Excluir apagaria o histórico de lançamentos da pessoa e distorceria os
 acumulados da empresa.
 
-**Impacto.** Inativo some do painel e mantém o histórico. Toda listagem do painel
-filtra por `ativo`.
+**Impacto.** O suporte estrutural já existe: o campo `Corretor.ativo` e as FKs
+`Restrict` da DEC-007, que impedem apagar quem tem histórico. O que ainda será
+construído: o fluxo administrativo que inativa em vez de excluir (F2) e o filtro por
+`ativo` nas listagens do painel (F3) — inativo deverá sumir da TV e manter o
+histórico.
 
-**Fonte.** `prisma/schema.prisma`, campo `ativo` de `Corretor`; `PLANO.md` §3. **implementada**
+**Fonte.** `prisma/schema.prisma`, campo `ativo` de `Corretor`; `PLANO.md` §3.
+**invariante futura** — o suporte estrutural já existe no schema
 
 ### DEC-007 — Histórico protegido por foreign keys `Restrict`
 
@@ -284,14 +290,17 @@ distraída não reinstalar um valor antigo.
 
 ### DEC-021 — Segredos nunca entram no Git
 
-**Decisão.** Credenciais vivem só no `.env`, ignorado pelo Git. O repositório versiona
-apenas `.env.example`, com placeholders.
+**Decisão.** Nenhum segredo real entra no Git. O repositório versiona apenas
+`.env.example`, com placeholders.
 
 **Motivo.** O repositório é público. Segredo commitado fica exposto no instante do
 push e não some com um commit de remoção.
 
 **Impacto.** Todo segredo é lido de `process.env`; nenhum valor real aparece em
-arquivo versionado. O `.env` é a única cópia — não há backup em lugar nenhum.
+arquivo versionado. No desenvolvimento local isso significa um `.env` ignorado pelo
+Git. Em ambientes de deploy, as credenciais devem viver no mecanismo de
+environment/secrets do provedor — nunca em arquivo do repositório. O `.env.example`
+serve só para documentar os nomes das variáveis.
 
 **Fonte.** `.gitignore` (regra `.env*` com exceção `!.env.example`); `.env.example`. **implementada**
 
