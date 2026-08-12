@@ -55,6 +55,13 @@ export function interpretarTipo(valor: unknown): TipoLancamento | null {
   return TIPOS.includes(valor as TipoLancamento) ? (valor as TipoLancamento) : null;
 }
 
+/** Mesmo formato canônico dos demais ids; helper próprio para o lançamento. */
+const UUID_CANONICO = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function ehIdLancamentoValido(valor: unknown): valor is string {
+  return typeof valor === "string" && UUID_CANONICO.test(valor);
+}
+
 export type DadosLancamento = {
   tipo: TipoLancamento;
   corretorId: string;

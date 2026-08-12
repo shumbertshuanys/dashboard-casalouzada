@@ -137,7 +137,8 @@ export default async function PaginaLancamentos({
                 <th className="py-2 pr-4 font-medium">Equipe</th>
                 <th className="py-2 pr-4 font-medium">Valor</th>
                 <th className="py-2 pr-4 font-medium">Imóvel</th>
-                <th className="py-2 font-medium">Observação</th>
+                <th className="py-2 pr-4 font-medium">Observação</th>
+                <th className="py-2 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -164,8 +165,18 @@ export default async function PaginaLancamentos({
                   <td className="py-3 pr-4 text-texto-secundario">
                     {lancamento.imovelRef ?? "—"}
                   </td>
-                  <td className="py-3 max-w-xs truncate text-texto-secundario">
+                  <td className="py-3 pr-4 max-w-xs truncate text-texto-secundario">
                     {lancamento.observacao ?? "—"}
+                  </td>
+                  <td className="py-3">
+                    {/* Só editar. Excluir vive na tela de edição: apagar um
+                        evento não pode ser um clique de passagem na lista. */}
+                    <Link
+                      href={`/admin/lancamentos/${lancamento.id}/editar`}
+                      className="text-texto-secundario underline-offset-4 hover:text-texto hover:underline"
+                    >
+                      Editar
+                    </Link>
                   </td>
                 </tr>
               ))}

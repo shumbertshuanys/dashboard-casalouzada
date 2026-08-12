@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { PREFIXO_FIXTURE, criarPrismaTeste, limparFixtures } from "../helpers/banco-teste";
+import { deDataCivil, paraDataCivil } from "@/lib/datas";
 import { decidirAcesso } from "@/lib/admin/guarda";
 import { ehNomeDuplicado } from "@/lib/validacao/equipe";
 
@@ -177,16 +178,72 @@ describe("equipe — desativar e reativar", () => {
   });
 
   it("desativar não mexe em corretor nem lançamento", async () => {
-    const antesCorretores = await prisma.corretor.count();
-    const antesLancamentos = await prisma.lancamento.count();
-
-    const criada = await prisma.equipe.create({
+    // Fixtures próprias, e a prova é por identidade: reler cada registro pelo
+    // id e comparar campo a campo. Contagem global mediria também o que as
+    // outras suítes de integração criam em paralelo no mesmo banco, e o teste
+    // falharia por causa delas em vez de por causa da desativação.
+    const equipe = await prisma.equipe.create({
       data: { nome: nome("sem_efeito"), gerenteNome: "G", ordemExibicao: 42 },
     });
-    await prisma.equipe.update({ where: { id: criada.id }, data: { ativa: false } });
 
-    assert.equal(await prisma.corretor.count(), antesCorretores);
-    assert.equal(await prisma.lancamento.count(), antesLancamentos);
+    let corretorId: string | null = null;
+    let lancamentoId: string | null = null;
+
+    try {
+      const corretor = await prisma.corretor.create({
+        data: {
+          nomeCompleto: nome("sem_efeito_corretor"),
+          nomeExibicao: "Sem Efeito",
+          equipeId: equipe.id,
+        },
+      });
+      corretorId = corretor.id;
+
+      const lancamento = await prisma.lancamento.create({
+        data: {
+          tipo: "PROPOSTA",
+          corretorId: corretor.id,
+          equipeId: equipe.id,
+          dataReferencia: paraDataCivil("2026-08-12"),
+        },
+      });
+      lancamentoId = lancamento.id;
+
+      // A única operação sob teste.
+      await prisma.equipe.update({ where: { id: equipe.id }, data: { ativa: false } });
+
+      const corretorDepois = await prisma.corretor.findUnique({ where: { id: corretor.id } });
+      assert.ok(corretorDepois, "o corretor continua existindo");
+      assert.equal(corretorDepois.equipeId, equipe.id);
+      assert.equal(corretorDepois.ativo, corretor.ativo);
+      assert.equal(corretorDepois.nomeCompleto, corretor.nomeCompleto);
+      // `atualizadoEm` intacto é o que prova que nenhum UPDATE passou por ele.
+      assert.equal(
+        corretorDepois.atualizadoEm.toISOString(),
+        corretor.atualizadoEm.toISOString(),
+      );
+
+      const lancamentoDepois = await prisma.lancamento.findUnique({
+        where: { id: lancamento.id },
+      });
+      assert.ok(lancamentoDepois, "o lançamento continua existindo");
+      assert.equal(lancamentoDepois.corretorId, corretor.id);
+      assert.equal(lancamentoDepois.equipeId, equipe.id);
+      assert.equal(lancamentoDepois.tipo, "PROPOSTA");
+      assert.equal(deDataCivil(lancamentoDepois.dataReferencia), "2026-08-12");
+      assert.equal(lancamentoDepois.valor, null);
+      assert.equal(
+        lancamentoDepois.atualizadoEm.toISOString(),
+        lancamento.atualizadoEm.toISOString(),
+      );
+    } finally {
+      // Ordem obrigatória pelas FKs `Restrict`, e por id: o helper geral só
+      // limpa equipes. Tolera falha no meio do teste, quando parte das
+      // fixtures pode não ter chegado a existir.
+      if (lancamentoId) await prisma.lancamento.delete({ where: { id: lancamentoId } });
+      if (corretorId) await prisma.corretor.delete({ where: { id: corretorId } });
+      await prisma.equipe.delete({ where: { id: equipe.id } });
+    }
   });
 
   it("a listagem traz ativas e inativas, com as contagens", async () => {
