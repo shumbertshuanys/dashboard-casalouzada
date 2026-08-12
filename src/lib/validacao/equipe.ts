@@ -4,8 +4,8 @@
  * Roda no servidor, sobre o `FormData` cru: o que o navegador impede é
  * conveniência, não garantia. Nada aqui checa unicidade de nome — quem garante
  * isso é o índice `equipes_nome_key`, e duplicar a checagem em código criaria
- * uma corrida entre o `SELECT` e o `INSERT`. O conflito é tratado em
- * `traduzirErroEquipe`.
+ * uma corrida entre o `SELECT` e o `INSERT`. O conflito é reconhecido por
+ * `ehNomeDuplicado` e traduzido por `mensagemNomeDuplicado`.
  */
 
 export type DadosEquipe = {
@@ -23,6 +23,13 @@ export type ResultadoEquipe =
 
 /** Só dígitos: recusa decimal, sinal, notação científica e texto de uma vez. */
 const INTEIRO_POSITIVO = /^\d+$/;
+
+/**
+ * Teto do `Int` do Prisma sobre `integer` do PostgreSQL. Não é limite de
+ * negócio — é o que o campo comporta. Sem isso, um valor acima da faixa passa
+ * pela validação e estoura lá no banco, virando erro 500 em vez de mensagem.
+ */
+export const MAX_ORDEM_EXIBICAO = 2_147_483_647;
 
 function texto(valor: FormDataEntryValue | null): string {
   return typeof valor === "string" ? valor.trim() : "";
@@ -46,12 +53,47 @@ export function validarEquipe(form: FormData): ResultadoEquipe {
   } else {
     ordemExibicao = Number(ordemBruta);
     // A ordem é posição no painel: a primeira é 1, não 0.
-    if (ordemExibicao < 1) erros.ordemExibicao = "A ordem começa em 1.";
+    if (ordemExibicao < 1) {
+      erros.ordemExibicao = "A ordem começa em 1.";
+    } else if (ordemExibicao > MAX_ORDEM_EXIBICAO) {
+      // Sem citar `integer` nem `int4`: o limite é técnico, mas a frase é para
+      // quem está preenchendo o formulário.
+      erros.ordemExibicao = "A ordem informada é grande demais.";
+    }
   }
 
   if (Object.keys(erros).length > 0) return { ok: false, erros };
 
   return { ok: true, dados: { nome, gerenteNome, ordemExibicao } };
+}
+
+/**
+ * Lê o estado desejado de ativação a partir do formulário.
+ *
+ * Devolve `null` para qualquer coisa que não seja exatamente `"true"` ou
+ * `"false"`. A comparação ingênua `valor === "true"` transformava campo
+ * ausente, string vazia, `"1"` e lixo qualquer em `false` — ou seja, em
+ * desativação silenciosa. Um payload manipulado não pode virar comando.
+ */
+export function interpretarEstadoAtivoEquipe(valor: FormDataEntryValue | null): boolean | null {
+  // `File` também cai aqui: só string interessa.
+  if (typeof valor !== "string") return null;
+  if (valor === "true") return true;
+  if (valor === "false") return false;
+  return null;
+}
+
+/**
+ * UUID canônico, no formato que o `@default(uuid())` do Prisma gera e que a
+ * coluna `@db.Uuid` aceita.
+ *
+ * Serve para não mandar texto arbitrário a uma coluna `uuid`: o Postgres
+ * recusaria com erro de conversão, que viraria 500 em vez de "não existe".
+ */
+const UUID_CANONICO = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function ehIdEquipeValido(valor: unknown): valor is string {
+  return typeof valor === "string" && UUID_CANONICO.test(valor);
 }
 
 /**

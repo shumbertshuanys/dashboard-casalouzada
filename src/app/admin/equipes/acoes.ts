@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { exigirAdministradorAtivo } from "@/lib/admin/guarda";
 import { prisma } from "@/lib/db";
 import {
+  ehIdEquipeValido,
   ehNomeDuplicado,
+  interpretarEstadoAtivoEquipe,
   mensagemNomeDuplicado,
   validarEquipe,
   type ErrosEquipe,
@@ -87,6 +89,10 @@ export async function editarEquipe(
 ): Promise<EstadoEquipe> {
   await exigirAdministradorAtivo();
 
+  // Defensivo: hoje o `id` vem por closure da página, que já validou. Vale a
+  // checagem mesmo assim — a action é um endpoint e pode ganhar outra origem.
+  if (!ehIdEquipeValido(id)) return { mensagem: "Esta equipe não existe mais." };
+
   const validado = validarEquipe(form);
   if (!validado.ok) return { erros: validado.erros, valores: valoresEnviados(form) };
 
@@ -114,13 +120,19 @@ export async function editarEquipe(
  *
  * Escreve exclusivamente em `Equipe.ativa`: nenhum corretor, lançamento ou FK
  * é tocado.
+ *
+ * Entrada malformada sai antes de tocar o banco: um `id` que não é UUID iria
+ * para uma coluna `uuid` e viraria erro de conversão, e um estado que não seja
+ * `"true"`/`"false"` não pode ser interpretado como desativação.
  */
 export async function alterarEstadoEquipe(form: FormData): Promise<void> {
   await exigirAdministradorAtivo();
 
-  const id = String(form.get("id") ?? "");
-  const ativa = form.get("ativa") === "true";
-  if (id === "") return;
+  const id = form.get("id");
+  if (!ehIdEquipeValido(id)) return;
+
+  const ativa = interpretarEstadoAtivoEquipe(form.get("ativa"));
+  if (ativa === null) return;
 
   const existente = await prisma.equipe.findUnique({ where: { id }, select: { id: true } });
   if (!existente) return;

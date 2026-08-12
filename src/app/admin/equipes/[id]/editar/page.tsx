@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { exigirAdministradorAtivo } from "@/lib/admin/guarda";
 import { prisma } from "@/lib/db";
+import { ehIdEquipeValido } from "@/lib/validacao/equipe";
 import { editarEquipe, type EstadoEquipe } from "../../acoes";
 import { FormularioEquipe } from "../../formulario";
 
@@ -15,6 +16,11 @@ export default async function PaginaEditarEquipe({ params }: PageProps<"/admin/e
   await exigirAdministradorAtivo();
 
   const { id } = await params;
+
+  // O segmento da URL é entrada externa. Sem UUID válido não há consulta: a
+  // coluna é `uuid` e um texto qualquer viraria erro de conversão — 500 no
+  // lugar do 404 que a rota deve dar.
+  if (!ehIdEquipeValido(id)) notFound();
 
   const equipe = await prisma.equipe.findUnique({
     where: { id },
