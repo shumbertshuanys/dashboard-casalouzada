@@ -6,8 +6,8 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `8ec6cbc` — `feat: adiciona métricas de equipes e rankings` |
-| Data do handoff | 2026-08-12 |
+| Commit de referência | `9ec8439` — `feat: adiciona leitura Prisma das métricas` |
+| Data do handoff | 2026-08-13 |
 
 ## Estado executivo
 
@@ -22,24 +22,30 @@ A **Fase 2 — Administração está concluída**. Equipes, corretores, lançame
 saldo histórico podem ser gerenciados pela área administrativa, e o sistema já pode
 ser alimentado de verdade.
 
-Da **F3 — Painel**, três fatias estão concluídas. A **F3.0 — decisões e contratos**
+Da **F3 — Painel**, quatro fatias estão concluídas. A **F3.0 — decisões e contratos**
 registrou nas DEC-036 a DEC-042 as regras aprovadas pelo proprietário em 2026-08-12. A
 **F3.1 — janelas civis** (`592df35`) entregou `JanelaCivil`, `mesCorrente`,
 `trimestreCorrente` e `anoCorrente` em `src/lib/datas.ts`. A **F3.2 — núcleo puro de
 métricas** foi publicada em dois commits: `6cf0627` (empresa) e `8ec6cbc` (equipes e
-rankings).
+rankings). A **F3.3 — leitura Prisma** foi publicada em `9ec8439`.
 
 `src/lib/metricas.ts` existe e tem duas entradas —
 `calcularMetricasEmpresa(lancamentos, saldos, agora?)` e
 `calcularMetricasEquipes(lancamentos, corretores, equipes, agora?)`. As duas consomem
-as janelas da F3.1 e são **puras**: recebem os dados já lidos e não conhecem Prisma,
-banco nem ambiente.
+as janelas da F3.1 e **continuam puras**: recebem os dados já lidos e não conhecem
+Prisma, banco nem ambiente. A F3.3 não alterou uma linha delas.
 
-O que a F3.2 **não** fez foi integração. Ninguém lê o banco por essa camada,
-`/painel/[token]` continua respondendo "Painel em construção" sem dados reais, e
-`/preview` segue desenhando a partir de `src/lib/mock-painel.ts`.
+`src/lib/metricas-prisma.ts` é a fronteira banco → domínio, entregue pela F3.3. Ela
+lê as quatro tabelas, converte cada linha para os tipos da F3.2 e chama as duas
+entradas puras — sem duplicar nenhum cálculo. A entrada é
+`obterMetricasPainel(prisma, agora?)`.
 
-A próxima fatia é a **F3.3 — leitura Prisma**, não iniciada.
+O que a F3.3 **não** fez foi ligar a tela. `/painel/[token]` continua respondendo
+"Painel em construção" e **não consome** `obterMetricasPainel`, e `/preview` segue
+desenhando a partir de `src/lib/mock-painel.ts`.
+
+A próxima fatia é a **F3.4 — shape de apresentação**, não iniciada. Ligar a rota aos
+dados reais é a F3.5.
 
 ## Fases
 
@@ -57,8 +63,8 @@ A próxima fatia é a **F3.3 — leitura Prisma**, não iniciada.
 | F3.0 — Decisões e contratos do painel | **Concluída** | DEC-036 a DEC-042; sem código |
 | F3.1 — Janelas civis | **Concluída** | `592df35` |
 | F3.2 — Núcleo puro de métricas | **Concluída** | `6cf0627` + `8ec6cbc` |
-| F3.3 — Leitura Prisma | **Não iniciada** — próxima | `obterMetricasPainel` não existe |
-| F3.4 — Shape de apresentação | **Não iniciada** | — |
+| F3.3 — Leitura Prisma | **Concluída** | `9ec8439` |
+| F3.4 — Shape de apresentação | **Não iniciada** — próxima | — |
 | F3.5 — Painel real | **Não iniciada** | `/painel/[token]` sem banco |
 | F3.6 — Atualização automática | **Não iniciada** | — |
 | F4 — Identidade e modo TV | **Não iniciada** | depende da F3 |
@@ -84,6 +90,10 @@ A próxima fatia é a **F3.3 — leitura Prisma**, não iniciada.
   ponto flutuante em nenhum caminho de persistência).
 - **Núcleo de cálculo**: `src/lib/metricas.ts`, desde a F3.2. Puro — recebe os dados
   por parâmetro, sem Prisma nem ambiente.
+- **Fronteira de leitura**: `src/lib/metricas-prisma.ts`, desde a F3.3. `server-only`,
+  com o `PrismaClient` injetado por parâmetro (DEC-041). Faz quatro leituras Prisma,
+  converte `Decimal` em string decimal canônica por `toFixed(2)` e chama o núcleo puro.
+  Não repete nenhum cálculo: não há soma, contagem, `groupBy` nem `aggregate` ali.
 
 ## Administração implementada
 
@@ -196,7 +206,8 @@ Duas migrations versionadas:
 ## Testes
 
 Cada baseline é o snapshot de uma entrega: vale como registro do que foi medido
-naquele gate, e não como promessa de estabilidade futura. Ficam os três, em sequência.
+naquele gate, e não como promessa de estabilidade futura. Ficam os quatro, em
+sequência.
 
 ### Baseline do fechamento da F2.5
 
@@ -259,9 +270,38 @@ a árvore final foram executados apenas:
 A bateria completa **não** foi repetida depois da microcorreção; o que consta acima é
 o que de fato rodou.
 
+### Baseline da entrega da F3.3
+
+Bateria completa executada sobre a árvore que veio a ser publicada em `9ec8439`,
+**antes** do commit. Ela **não** foi repetida depois do commit — o commit não alterou
+nenhum byte da árvore medida, o que os blobs staged comprovaram:
+
+| Comando | Resultado verificado |
+|---|---|
+| `npm test` | 289 testes, 82 suítes, 289 aprovados, 0 falhas, 0 pulados |
+| `npm run test:fusos` | 289/289 em `UTC`, 289/289 em `America/Sao_Paulo`, 289/289 em `Asia/Tokyo` |
+| `npm run test:integracao` | 88 testes, 33 suítes, 88 aprovados, 0 falhas |
+| `npm run test:integracao:painel` | 15 testes, 6 suítes, 15 aprovados, 0 falhas, 0 pulados |
+| `tests/metricas-prisma.test.ts` isolado | 23 testes, 12 suítes, 23 aprovados, 0 falhas, 0 pulados |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `npm run build` | 18 rotas, exit 0 |
+| `git diff --check` | exit 0 |
+
+Os 23 testes e 12 suítes que separam este baseline do da F3.2 são os de
+`tests/metricas-prisma.test.ts`. A integração existente permaneceu em 88/33: a F3.3
+não tocou em nenhuma suíte anterior.
+
 `npm test` é rápido e não toca banco. `test:fusos` roda a suíte unitária em `UTC`,
 `America/Sao_Paulo` e `Asia/Tokyo`, para provar que nenhum teste depende do relógio
 da máquina. `test:integracao` roda contra o banco local.
+
+`test:integracao:painel` é separado de propósito, num diretório próprio que os globs
+existentes não alcançam: `obterMetricasPainel` lê as tabelas **inteiras**, então
+fixture de outra suíte entraria nas contas. A suíte exige o banco em repouso antes de
+começar e falha alto se não estiver, em vez de limpar dado que não é seu. **As duas
+suítes de integração nunca devem rodar em paralelo.** Destino local validado nas duas:
+`127.0.0.1:5432/casalouzada_test`.
 
 ## Banco de teste
 
@@ -298,27 +338,33 @@ Não se pode dizer que a situação de credenciais esteja saneada hoje.
 
 ## O que ainda NÃO está implementado
 
-Verificado na árvore em `8ec6cbc`, arquivo por arquivo.
+Verificado na árvore em `9ec8439`, arquivo por arquivo.
 
-**"F3.2 concluída" não significa "painel pronto".** O que ainda não existe:
+**"F3.3 concluída" não significa "painel pronto".** A leitura existe, mas nada dela
+chega à tela ainda. O que continua não existindo:
 
-- leitura Prisma das métricas — nada consulta o banco por essa camada;
-- `obterMetricasPainel(prisma, agora?)` (DEC-041);
-- `EstadoLeitura` / `INDISPONIVEL`, que só faz sentido havendo leitura (DEC-042);
 - shape de apresentação — formatação de moeda, `—`, `mi`/`bi`, rótulos;
+- tradução visual dos estados: `INDISPONIVEL`, `SEM_DADOS`, `SEM_SALDO_HISTORICO` e
+  `CONFIGURACAO_INVALIDA` existem como domínio, mas nada os transforma em `—` ou em
+  mensagem na tela;
+- ligação de `/painel/[token]` aos dados reais;
 - substituição do mock pela origem real;
-- painel real conectado;
-- atualização automática de verdade.
+- refresh automático real;
+- retenção do último valor conhecido em queda de rede;
+- comportamento offline / modo TV.
 
 | Item | Estado | Fase |
 |---|---|---|
 | `src/lib/metricas.ts` | **existe** — núcleo puro, sem leitura | F3.2 feita |
-| Cálculo real do painel | existe como núcleo puro; sem dados do banco | F3.3 |
-| Big numbers reais | calculados pelo núcleo, mas sem origem real | F3.3 |
-| Períodos reais (mês, trimestre, ano) | janelas da F3.1 consumidas pelo núcleo da F3.2 | F3.3 |
-| Rankings ligados ao banco | calculados pelo núcleo; ligação ao banco ausente | F3.3 |
-| Troca do mock pela origem real | ausente — `/preview` ainda usa `src/lib/mock-painel.ts` | F3 |
-| Atualização automática do painel real | ausente | F3 |
+| `src/lib/metricas-prisma.ts` | **existe** — leitura Prisma e conversão para domínio | F3.3 feita |
+| `obterMetricasPainel(prisma, agora?)` | **existe** (DEC-041) | F3.3 feita |
+| `EstadoLeitura` / `INDISPONIVEL` | **existe** no contrato de leitura (DEC-042) | F3.3 feita |
+| Big numbers reais | calculados a partir do banco; sem apresentação | F3.4/F3.5 |
+| Períodos reais (mês, trimestre, ano) | calculados a partir do banco; sem apresentação | F3.4/F3.5 |
+| Rankings ligados ao banco | calculados a partir do banco; sem apresentação | F3.4/F3.5 |
+| Shape de apresentação | ausente | F3.4 |
+| Troca do mock pela origem real | ausente — `/preview` ainda usa `src/lib/mock-painel.ts` | F3.5 |
+| Atualização automática do painel real | ausente | F3.6 |
 | Comportamento offline | ausente | F4 |
 | Modo quiosque | ausente | F4 |
 | Identidade aplicada ao painel real | ausente | F4 |
@@ -326,7 +372,8 @@ Verificado na árvore em `8ec6cbc`, arquivo por arquivo.
 | Tela de troca de senha | ausente — o mecanismo é `npm run db:trocar-senha-admin` | futura |
 | Metas | ausente por decisão | fora da v1 |
 
-`/painel/[token]` continua exibindo "Painel em construção" e **não consulta o banco**.
+`/painel/[token]` continua exibindo "Painel em construção" e **não consulta o banco**:
+a fronteira existe, mas a rota não a chama.
 
 ## F3 — Painel
 
@@ -464,11 +511,38 @@ linha de Prisma, banco, `process.env` ou React.
 - desempate determinístico: resultado decrescente, `nomeExibicao` em pt-BR crescente,
   `id` crescente.
 
+### F3.3 — leitura Prisma · concluída
+
+Publicada em `9ec8439`, criando `src/lib/metricas-prisma.ts` e duas suítes, e
+alterando de `package.json` apenas o script `test:integracao:painel`. **Nenhuma linha
+de `src/lib/metricas.ts` foi tocada** — a fronteira vive fora do núcleo (DEC-013).
+
+- entrada única: `obterMetricasPainel(prisma, agora?)`, com o `PrismaClient` por
+  parâmetro (DEC-041) — o singleton de `src/lib/db.ts` não é importado;
+- `EstadoLeitura` (`OK` / `INDISPONIVEL`) — a quarta dimensão da DEC-042;
+- o resultado tem três blocos independentes: `empresa.periodos`,
+  `empresa.acumulados` e `equipes`. No ramo `INDISPONIVEL` a propriedade `dados`
+  **não existe**, em vez de vir nula;
+- quatro `findMany` sob `Promise.allSettled` — não transaction, não `Promise.all` —,
+  porque conhecer sucesso e falha de cada leitura é o que permite sucesso parcial;
+- dependências: períodos ← lançamentos; acumulados ← lançamentos + saldo histórico;
+  equipes ← lançamentos + corretores + equipes;
+- **falha de saldo histórico não apaga os períodos**: o VGV mensal, trimestral e anual
+  e o quadro mensal continuam corretos e exibíveis;
+- erro de domínio **propaga**: uma `VENDA` relevante sem valor lança do núcleo e a
+  exceção escapa, em vez de virar `INDISPONIVEL` — falha de leitura e dado corrompido
+  não podem ter a mesma cara na tela;
+- dinheiro atravessa por `toFixed(2)`, como string decimal canônica; nada de `Number`,
+  `parseFloat` ou `toNumber`;
+- a leitura de saldo é restrita a `VENDA` e `AVALIACAO_GOOGLE` (DEC-035);
+- um único `agora`, congelado antes das leituras e passado às duas funções puras;
+- sem `groupBy`, `aggregate`, transaction ou `orderBy`: toda matemática e toda ordem
+  determinística continuam no núcleo.
+
 ### Fatias seguintes
 
-`F3.3` leitura Prisma — **próxima** · `F3.4` shape de apresentação e tipos fora do
-mock · `F3.5` painel real ligado aos dados · `F3.6` atualização automática. Nenhuma
-iniciada.
+`F3.4` shape de apresentação e tipos fora do mock — **próxima** · `F3.5` painel real
+ligado aos dados · `F3.6` atualização automática. Nenhuma iniciada.
 
 ### Fora da F3
 
@@ -482,7 +556,8 @@ não bloqueia a F3 e não reabre a F2 agora.
    proprietário, mas não resolvido.
 2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
    antes de ativar lá a versão correspondente, com gate apropriado.
-3. **F3.3 — leitura Prisma**: próxima fatia de implementação.
+3. **F3.4 — shape de apresentação**: próxima fatia de implementação. A ligação de
+   `/painel/[token]` aos dados reais vem depois, na F3.5.
 4. **F4 — Identidade e modo TV**: depende da F3.
 5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
 
