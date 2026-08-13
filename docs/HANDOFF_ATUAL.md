@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `a9fe849` — `feat: adiciona shape de apresentação do painel` |
+| Commit de referência | `8684f1d` — `feat: liga painel aos dados reais` |
 | Data do handoff | 2026-08-13 |
 
 ## Estado executivo
@@ -22,13 +22,14 @@ A **Fase 2 — Administração está concluída**. Equipes, corretores, lançame
 saldo histórico podem ser gerenciados pela área administrativa, e o sistema já pode
 ser alimentado de verdade.
 
-Da **F3 — Painel**, cinco fatias estão concluídas. A **F3.0 — decisões e contratos**
+Da **F3 — Painel**, seis fatias estão concluídas. A **F3.0 — decisões e contratos**
 registrou nas DEC-036 a DEC-042 as regras aprovadas pelo proprietário em 2026-08-12. A
 **F3.1 — janelas civis** (`592df35`) entregou `JanelaCivil`, `mesCorrente`,
 `trimestreCorrente` e `anoCorrente` em `src/lib/datas.ts`. A **F3.2 — núcleo puro de
 métricas** foi publicada em dois commits: `6cf0627` (empresa) e `8ec6cbc` (equipes e
-rankings). A **F3.3 — leitura Prisma** foi publicada em `9ec8439`, e a **F3.4 — shape
-de apresentação** em `a9fe849`.
+rankings). A **F3.3 — leitura Prisma** foi publicada em `9ec8439`, a **F3.4 — shape
+de apresentação** em `a9fe849` e a **F3.5 — painel real ligado aos dados** em
+`8684f1d`.
 
 `src/lib/metricas.ts` existe e tem duas entradas —
 `calcularMetricasEmpresa(lancamentos, saldos, agora?)` e
@@ -46,14 +47,32 @@ recebe o `ResultadoPainel` da leitura mais um `agora` e devolve `ApresentacaoPai
 rótulos, moeda compacta, contagens em pt-BR e `—` onde não há número a afirmar. A
 entrada é `criarApresentacaoPainel(resultado, agora)`.
 
-A cadeia é `Prisma → ResultadoPainel → ApresentacaoPainel`, e as três camadas existem
-— mas **isoladamente**. O que a F3.4 **não** fez foi ligar a tela: `/painel/[token]`
-continua respondendo "Painel em construção" e **não chama** `obterMetricasPainel` nem
-`criarApresentacaoPainel`, e `/preview` segue desenhando a partir de
-`src/lib/mock-painel.ts`.
+Desde a F3.5 a cadeia está **conectada na rota real**:
 
-A próxima fatia é a **F3.5 — painel real ligado aos dados**, não iniciada. É ela que
-vai compor as três camadas na rota, com um único `agora`.
+```
+prisma
+  → obterMetricasPainel(prisma, agora)   → ResultadoPainel
+  → criarApresentacaoPainel(resultado, agora) → ApresentacaoPainel
+  → PainelVisual
+```
+
+Três coisas valem registro sobre essa ligação. O **token é validado antes da
+leitura** — nenhuma consulta é disparada até o guard passar, e o `prisma` importado no
+topo é o Proxy preguiçoso de `src/lib/db.ts`. Um **único `agora`** alimenta leitura e
+apresentação, para o cabeçalho não anunciar um mês diferente daquele que produziu os
+números. E `page.tsx` só orquestra: não há query, soma, ordenação nem formatação ali.
+
+A F3.5 **não** adicionou `catch` genérico. `INDISPONIVEL`, `SEM_DADOS`,
+`SEM_SALDO_HISTORICO` e `CONFIGURACAO_INVALIDA` são dados e já chegam resolvidos; uma
+exceção que escape da leitura segue o mecanismo padrão do Next, sem virar estado de
+negócio na tela.
+
+`/preview` continua exclusivamente fictício — sem banco, sem env, `noindex/nocache` —,
+mas desenha pela **mesma** composição visual da rota real.
+
+A próxima fatia é a **F3.6 — atualização automática**, não iniciada. Hoje uma
+requisição é uma leitura: `force-dynamic` garante render a cada request, o que **não**
+é atualização automática — a aba parada não busca dado novo sozinha.
 
 ## Fases
 
@@ -73,8 +92,8 @@ vai compor as três camadas na rota, com um único `agora`.
 | F3.2 — Núcleo puro de métricas | **Concluída** | `6cf0627` + `8ec6cbc` |
 | F3.3 — Leitura Prisma | **Concluída** | `9ec8439` |
 | F3.4 — Shape de apresentação | **Concluída** | `a9fe849` |
-| F3.5 — Painel real | **Não iniciada** — próxima | `/painel/[token]` sem banco |
-| F3.6 — Atualização automática | **Não iniciada** | — |
+| F3.5 — Painel real | **Concluída** | `8684f1d` |
+| F3.6 — Atualização automática | **Não iniciada** — próxima | — |
 | F4 — Identidade e modo TV | **Não iniciada** | depende da F3 |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
@@ -107,6 +126,16 @@ vai compor as três camadas na rota, com um único `agora`.
   para o `server-only` do módulo de leitura não chegar ao runtime. `agora` é
   obrigatório, sem default. Produz `ApresentacaoPainel`, formatando valores e traduzindo
   estados; não recalcula métrica nenhuma.
+- **Composição visual**: `src/components/painel/painel-visual.tsx`, desde a F3.5.
+  Server Component, é a composição visual **única** do painel: `/preview` a alimenta
+  com o mock e `/painel/[token]` com os dados reais, e por ser uma só o protótipo
+  continua valendo como contrato visual da tela de verdade. Recebe `ApresentacaoPainel`
+  e contém a configuração do Jost. Não lê banco, não calcula, não formata e não conhece
+  o mock.
+- **Estados da área de equipes**: `src/components/painel/decidir-area-equipes.ts`,
+  desde a F3.5. Decisão pura, sem JSX, React, CSS ou banco, com `switch` exaustivo
+  guardado por `never` — um quinto estado quebra a compilação em vez de cair calado num
+  ramo qualquer.
 
 ## Administração implementada
 
@@ -198,7 +227,7 @@ Dezessete páginas versionadas:
 | | `/admin/corretores`, `/admin/corretores/novo`, `/admin/corretores/[id]/editar` |
 | | `/admin/lancamentos`, `/admin/lancamentos/novo`, `/admin/lancamentos/[id]/editar` |
 | | `/admin/saldo-historico`, `/admin/saldo-historico/novo`, `/admin/saldo-historico/[id]/editar` |
-| Painel | `/painel/[token]` (esqueleto), `/preview` (protótipo com dados fictícios) |
+| Painel | `/painel/[token]` (dados reais, desde a F3.5), `/preview` (protótipo com dados fictícios) |
 
 Não existe `src/app/api/` — nenhuma Route Handler foi criada.
 
@@ -219,7 +248,7 @@ Duas migrations versionadas:
 ## Testes
 
 Cada baseline é o snapshot de uma entrega: vale como registro do que foi medido
-naquele gate, e não como promessa de estabilidade futura. Ficam os cinco, em
+naquele gate, e não como promessa de estabilidade futura. Ficam os seis, em
 sequência.
 
 ### Baseline do fechamento da F2.5
@@ -331,6 +360,40 @@ Os 85 testes e 22 suítes que separam este baseline do da F3.3 são os de
 `tests/apresentacao-painel.test.ts`. As duas suítes de integração ficaram inalteradas:
 a F3.4 não toca banco.
 
+### Baseline da entrega da F3.5
+
+Bateria completa executada sobre os blobs que vieram a ser publicados em `8684f1d`.
+Na execução de publicação ela **não** foi repetida: o blob gate provou que a árvore
+publicada é idêntica à medida, byte a byte.
+
+| Comando | Resultado verificado |
+|---|---|
+| `npm test` | 381 testes, 106 suítes, 381 aprovados, 0 falhas |
+| `npm run test:fusos` | 381/381 em `UTC`, 381/381 em `America/Sao_Paulo`, 381/381 em `Asia/Tokyo` |
+| `npm run test:integracao` | 88 testes, 33 suítes, 88 aprovados, 0 falhas |
+| `npm run test:integracao:painel` | 21 testes, 7 suítes, 21 aprovados, 0 falhas |
+| `tests/decidir-area-equipes.test.ts` isolado | 7 testes, 2 suítes, 7 aprovados, 0 falhas, 0 pulados |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `npm run build` | 18 rotas, exit 0 |
+| `git diff --check` | exit 0 |
+
+Os 7 testes e 2 suítes que separam este baseline do da F3.4 são os de
+`tests/decidir-area-equipes.test.ts`; a integração do painel subiu de 15/6 para 21/7
+com os testes da cadeia banco → leitura → apresentação.
+
+**O `build` foi validado com `DATABASE_URL` e `DIRECT_URL` sentinelas locais**,
+definidas somente no processo e apontando para uma porta sem servidor — nenhum arquivo
+`.env*` foi tocado. Se a fiação disparasse consulta durante o build, a conexão recusada
+teria derrubado o gate; ele passou, e sem oportunidade de consultar produção.
+
+**Comparação visual automatizada: não executada** — o ambiente de execução não possuía
+ferramenta de browser. Isto não é um teste aprovado, e sim uma verificação que não
+aconteceu. A preservação visual foi sustentada por evidência estrutural: a composição
+passou a ser compartilhada, o markup foi extraído sem redesenho, os três componentes
+existentes e o mock ficaram byte a byte intactos, o CSS recebeu só a classe do estado
+de equipes, e o build ficou verde com as mesmas 18 rotas.
+
 `test:integracao:painel` é separado de propósito, num diretório próprio que os globs
 existentes não alcançam: `obterMetricasPainel` lê as tabelas **inteiras**, então
 fixture de outra suíte entraria nas contas. A suíte exige o banco em repouso antes de
@@ -373,23 +436,19 @@ Não se pode dizer que a situação de credenciais esteja saneada hoje.
 
 ## O que ainda NÃO está implementado
 
-Verificado na árvore em `a9fe849`, arquivo por arquivo.
+Verificado na árvore em `8684f1d`, arquivo por arquivo.
 
-**"F3.4 concluída" não significa "painel pronto".** As três camadas existem e já
-produzem texto pronto para desenhar, mas **nada disso é renderizado**: a rota real não
-as compõe. O que continua não existindo:
+**"F3.5 concluída" não significa "F3 pronta".** A TV já mostra os números reais, mas
+os mostra **uma vez por requisição**. O que continua não existindo:
 
-- a composição `Prisma → leitura → apresentação → componentes` na rota real;
-- ligação de `/painel/[token]` aos dados reais;
-- o que a **página** faz diante de `INDISPONIVEL` e de `CONFIGURACAO_INVALIDA` — o
-  shape já os distingue, mas nenhum componente ou layout reage a eles;
-- substituição do mock pela origem real;
-- refresh automático real;
-- retenção do último valor conhecido em queda de rede;
-- comportamento offline / modo TV.
-
-A distinção é fina e vale registrar: a F3.4 **produz** estados prontos para exibição;
-a F3.5 é que vai **renderizá-los**.
+- atualização automática dos dados — polling, refresh ou equivalente;
+- retenção do último valor conhecido quando uma atualização falha;
+- comportamento definido da tela durante falha de atualização;
+- `error.tsx` específico do painel: exceção que escape segue o mecanismo padrão do
+  Next, e não há fallback próprio. Isto é uma limitação registrada, não uma fatia
+  atribuída;
+- comportamento offline;
+- modo quiosque e refinamento 4K.
 
 | Item | Estado | Fase |
 |---|---|---|
@@ -401,13 +460,15 @@ a F3.5 é que vai **renderizá-los**.
 | `criarApresentacaoPainel(resultado, agora)` | **existe** | F3.4 feita |
 | Formatação de moeda `mi`/`bi` e contagens | **existe** no shape (DEC-043) | F3.4 feita |
 | Tradução dos estados para `—` | **existe** no shape | F3.4 feita |
-| Big numbers reais na tela | calculados e formatados; a rota não os renderiza | F3.5 |
-| Períodos reais na tela | calculados e formatados; a rota não os renderiza | F3.5 |
-| Rankings reais na tela | calculados e formatados; a rota não os renderiza | F3.5 |
-| Página reagindo a `INDISPONIVEL`/`CONFIGURACAO_INVALIDA` | ausente | F3.5 |
-| Troca do mock pela origem real | ausente — `/preview` ainda usa `src/lib/mock-painel.ts` | F3.5 |
+| `/painel/[token]` ligado aos dados reais | **existe** | F3.5 feita |
+| `PainelVisual` compartilhado com `/preview` | **existe** | F3.5 feita |
+| Big numbers, períodos e rankings reais na tela | **existem** | F3.5 feita |
+| Área de equipes reagindo a `INDISPONIVEL`/`CONFIGURACAO_INVALIDA` | **existe** | F3.5 feita |
 | Atualização automática do painel real | ausente | F3.6 |
 | Retenção do último valor conhecido | ausente | F3.6 |
+| Comportamento da tela em falha de atualização | ausente | F3.6 |
+| `error.tsx` específico do painel | ausente | limitação registrada |
+| Troca do mock pela origem real em `/preview` | não se aplica — o preview é fictício por desenho | — |
 | Comportamento offline | ausente | F4 |
 | Modo quiosque | ausente | F4 |
 | Identidade aplicada ao painel real | ausente | F4 |
@@ -415,8 +476,9 @@ a F3.5 é que vai **renderizá-los**.
 | Tela de troca de senha | ausente — o mecanismo é `npm run db:trocar-senha-admin` | futura |
 | Metas | ausente por decisão | fora da v1 |
 
-`/painel/[token]` continua exibindo "Painel em construção" e **não consulta o banco**:
-a leitura e a apresentação existem, mas a rota não chama nenhuma das duas.
+`/painel/[token]` consulta o banco e desenha os números reais. `force-dynamic` garante
+render a cada requisição — o que **não** é atualização automática: a aba parada não
+busca dado novo sozinha.
 
 ## F3 — Painel
 
@@ -637,10 +699,45 @@ pode haver promoção para a faixa seguinte (99,95 mi → `R$ 100 mi`; 999,5 mi 
 levaria a zero sai como `R$ < 0,1 mi`, para não ficar visualmente idêntico a quem não
 vendeu nada.
 
+### F3.5 — painel real ligado aos dados · concluída
+
+Publicada em `8684f1d`, criando `painel-visual.tsx`, `decidir-area-equipes.ts` e sua
+suíte, e alterando as duas páginas do painel, o CSS e a integração. **Nenhuma linha de
+`metricas.ts`, `metricas-prisma.ts`, `apresentacao-painel.ts` ou `mock-painel.ts` foi
+tocada**, e os três componentes existentes mudaram zero.
+
+A fatia é **fiação**: não criou cálculo, query, regra monetária, janela civil nem
+ranking. A rota apenas compõe o que já existia.
+
+- `/painel/[token]` recebe `params`, valida `PAINEL_TOKEN` com `timingSafeEqual` e
+  responde `notFound()` se errar. **Só depois** cria `agora`, chama
+  `obterMetricasPainel(prisma, agora)`, passa o resultado a
+  `criarApresentacaoPainel(resultado, agora)` e renderiza `PainelVisual`;
+- um **único** `const agora = new Date()` alimenta as duas camadas;
+- `dynamic = "force-dynamic"` e `robots: { index: false, follow: false, nocache: true }`
+  preservados; o token nunca é registrado em log;
+- `PainelVisual` é compartilhado entre as duas rotas — o preview continua fictício;
+- os estados da área de equipes ganharam representação real (abaixo);
+- **sem refresh automático**: uma requisição é uma leitura.
+
+#### Estados da área de equipes
+
+| Estado | O que a tela faz |
+|---|---|
+| `OK` | desenha os três `QuadrosEquipe` com os valores reais |
+| `SEM_DADOS` | desenha os mesmos quadros, com o elenco preservado — os valores já chegam como `—` |
+| `INDISPONIVEL` | "Dados das equipes indisponíveis" |
+| `CONFIGURACAO_INVALIDA` | "Configuração de equipes inválida" |
+
+Nos dois últimos **não se chama `QuadrosEquipe`** e não se passa lista vazia nem equipe
+fictícia: a área de estado ocupa as três colunas reservadas às equipes, e o quadro
+"Mensal geral" continua na primeira, com os números da empresa que seguem válidos. Os
+títulos vêm sozinhos — sem stack, nome de tabela ou instrução administrativa, porque a
+TV fica à vista de quem passa pelo escritório.
+
 ### Fatias seguintes
 
-`F3.5` painel real ligado aos dados — **próxima** · `F3.6` atualização automática.
-Nenhuma iniciada.
+`F3.6` atualização automática — **próxima**, não iniciada.
 
 ### Fora da F3
 
@@ -654,8 +751,8 @@ não bloqueia a F3 e não reabre a F2 agora.
    proprietário, mas não resolvido.
 2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
    antes de ativar lá a versão correspondente, com gate apropriado.
-3. **F3.5 — painel real ligado aos dados**: próxima fatia de implementação. É ela que
-   compõe leitura e apresentação na rota `/painel/[token]`.
+3. **F3.6 — atualização automática**: próxima fatia de implementação. Hoje a TV mostra
+   o dado do momento da requisição e não o atualiza sozinha.
 4. **F4 — Identidade e modo TV**: depende da F3.
 5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
 

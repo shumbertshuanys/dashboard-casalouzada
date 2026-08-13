@@ -231,21 +231,22 @@ mantém o último valor conhecido em vez de zerar.
 **Fonte.** `PLANO.md` §5.1; DEC-039; DEC-043; `src/lib/metricas.ts`;
 `tests/metricas.test.ts`; commits `6cf0627` e `8ec6cbc`;
 `src/lib/apresentacao-painel.ts`; `tests/apresentacao-painel.test.ts`; commit
-`a9fe849`.
-**parcialmente implementada — distinção e representação no shape concluídas; retenção
-do último valor ainda futura** — a distinção existe no núcleo: mês sem nenhum
-lançamento devolve `SEM_DADOS` em vez de afirmar desempenho zero, e dentro de um mês
-`OK` um corretor sem evento aparece com zero real (DEC-039). Ausência de saldo
+`a9fe849`; `src/app/painel/[token]/page.tsx`, commit `8684f1d`.
+**parcialmente implementada — distinção e representação no painel real concluídas;
+retenção do último valor ainda futura na F3.6** — a distinção existe no núcleo: mês sem
+nenhum lançamento devolve `SEM_DADOS` em vez de afirmar desempenho zero, e dentro de um
+mês `OK` um corretor sem evento aparece com zero real (DEC-039). Ausência de saldo
 histórico segue a mesma regra, como `SEM_SALDO_HISTORICO` com valor `null` (DEC-037).
 
-A **representação** foi resolvida na F3.4: o shape de apresentação traduz cada estado
-sem número em `—`, e zero real continua saindo como zero. A mesma disciplina alcançou o
-dinheiro — um valor positivo que a compactação levaria a zero sai como `R$ < 0,1 mi`, e
-não como `R$ 0,0 mi` (DEC-043). Isso vale no **shape**: a rota da TV ainda não renderiza
-nada disso, porque a F3.5 não existe.
+A **representação** foi resolvida na F3.4 e desde a F3.5 chega à tela: o shape traduz
+cada estado sem número em `—`, e `/painel/[token]` desenha isso de verdade. Zero real
+continua saindo como zero. A mesma disciplina alcançou o dinheiro — um valor positivo
+que a compactação levaria a zero sai como `R$ < 0,1 mi`, e não como `R$ 0,0 mi`
+(DEC-043).
 
 Continua futura a outra metade: **reter o último valor conhecido** em queda de leitura
-ou de conexão, em vez de zerar, que depende da atualização automática da F3.6.
+ou de conexão, em vez de zerar, que depende da atualização automática da F3.6. Hoje uma
+requisição é uma leitura, e não há retenção entre elas.
 
 ---
 
@@ -455,12 +456,12 @@ aprovado.
 
 **Impacto.** O port do protótipo pode usar dados fictícios; o painel de F3, não. As
 duas pré-condições foram satisfeitas — administração pronta e protótipo portado — e a
-F3 começou sobre elas. O cálculo, a leitura e a apresentação já existem; ligar as três
-à rota da TV é o que falta.
+F3 começou sobre elas. Cálculo, leitura e apresentação existem e estão ligados à rota
+da TV; o que falta é manter os números atualizados sozinhos.
 
 **Fonte.** `PLANO.md` §9; commits `22bf943` e `485ba36`.
-**cumprida** — pré-condições atendidas e a F3 começou na ordem prevista: F3.0, F3.1,
-F3.2, F3.3 e F3.4 concluídas, F3.5 é a próxima
+**cumprida** — pré-condições atendidas e a F3 começou na ordem prevista: F3.0 a F3.5
+concluídas, F3.6 é a próxima
 
 ### DEC-030 — F4 depende da F3
 
@@ -718,15 +719,17 @@ conferidos" nem status de preenchimento, e essa informação **não será invent
 Resolver isso exigiria modelagem operacional nova, fora da F3 atual e da v1.
 
 **Fonte.** Q-F3, aprovada em 2026-08-12; DEC-014; `src/lib/metricas.ts`; commits
-`6cf0627` e `8ec6cbc`; `src/lib/apresentacao-painel.ts`, commit `a9fe849`.
-**implementada no núcleo e no shape; painel real ainda não conectado** — `EstadoPeriodo`
-existe, mês sem nenhum lançamento devolve `SEM_DADOS`, e dentro de um mês `OK` os zeros
-são reais. Desde a F3.4 o shape traduz `SEM_DADOS` mensal em `—` nos três lugares que
-dependem do mês: VGV mensal, as sete linhas do quadro mensal e todos os valores dos
-rankings — nos rankings o elenco é preservado, porque quem produziu é conhecido mesmo
-sem produção a exibir. VGV trimestral e anual continuam com valor real: são janelas
-próprias, e um mês vazio não diz nada sobre elas. Num mês `OK`, zero segue sendo zero
-exibível. A rota da TV ainda não desenha nada disso.
+`6cf0627` e `8ec6cbc`; `src/lib/apresentacao-painel.ts`, commit `a9fe849`;
+`src/app/painel/[token]/page.tsx` e `src/components/painel/painel-visual.tsx`, commit
+`8684f1d`.
+**implementada do núcleo ao painel real** — `EstadoPeriodo` existe, mês sem nenhum
+lançamento devolve `SEM_DADOS`, e dentro de um mês `OK` os zeros são reais. O shape
+traduz `SEM_DADOS` mensal em `—` nos três lugares que dependem do mês, e desde a F3.5 a
+TV desenha isso: VGV mensal em `—`, as sete linhas do quadro mensal em `—` e todos os
+valores dos rankings em `—`, **com o elenco das equipes preservado** — quem produziu é
+conhecido mesmo sem produção a exibir, e esconder os quadros apagaria dado verdadeiro.
+VGV trimestral e anual continuam com valor real: são janelas próprias, e um mês vazio
+não diz nada sobre elas. Num mês `OK`, zero segue sendo zero exibível.
 
 ### DEC-040 — O painel v1 exige exatamente três equipes ativas
 
@@ -750,19 +753,27 @@ visual de `CONFIGURACAO_INVALIDA` fica para a apresentação do painel real.
 **Fonte.** Q-F3, aprovada em 2026-08-12; `src/components/painel/painel.module.css`;
 `src/lib/metricas.ts`; commit `8ec6cbc`; `src/lib/metricas-prisma.ts` e
 `tests/integracao-painel/painel.integracao.test.ts`, commit `9ec8439`;
-`src/lib/apresentacao-painel.ts`, commit `a9fe849`.
-**implementada no núcleo, na leitura e no shape; página ainda futura** — `EstadoEquipes`
-existe, e com número de equipes ativas diferente de três o resultado vem
-`CONFIGURACAO_INVALIDA` com a lista de equipes **vazia**, o que impede renderizar
-subconjunto. A F3.3 provou contra o banco real que uma quarta equipe ativa derruba
-apenas a área de equipes: os números da empresa continuam sendo entregues.
+`src/lib/apresentacao-painel.ts`, commit `a9fe849`;
+`src/components/painel/decidir-area-equipes.ts`,
+`src/components/painel/painel-visual.tsx` e
+`src/components/painel/painel.module.css`, commit `8684f1d`.
+**implementada do núcleo ao painel real** — `EstadoEquipes` existe, e com número de
+equipes ativas diferente de três o resultado vem `CONFIGURACAO_INVALIDA` com a lista de
+equipes **vazia**, o que impede renderizar subconjunto. A F3.3 provou contra o banco
+real que uma quarta equipe ativa derruba apenas a área de equipes: os números da
+empresa continuam sendo entregues.
 
 Na F3.4 o estado ganhou representação discriminada no shape — `{ estado:
 "CONFIGURACAO_INVALIDA" }`, **sem** a propriedade `equipes`, de modo que não há lista a
 renderizar por engano. Ele tem **precedência sobre `SEM_DADOS`**: com a lista vazia,
 anunciar "mês sem dados" descreveria o problema errado, que é de cadastro e não de
-produção. Que mensagem ou layout a página usa nesse estado continua sendo da F3.5 —
-nada disso existe ainda.
+produção.
+
+Na F3.5 isso chegou à tela. Nesse estado a rota **não** chama `QuadrosEquipe` e
+renderiza "Configuração de equipes inválida"; o estado irmão, `INDISPONIVEL`, renderiza
+"Dados das equipes indisponíveis". Em ambos a área ocupa as três colunas reservadas às
+equipes, sem lista vazia e sem equipe fictícia, e o quadro "Mensal geral" continua na
+primeira coluna com os números da empresa que seguem válidos.
 
 ### DEC-041 — A camada de métricas recebe o cliente Prisma por parâmetro
 
@@ -790,8 +801,11 @@ commit `9ec8439`.
 **implementada** — `obterMetricasPainel(prisma, agora?)` existe em
 `src/lib/metricas-prisma.ts`, com o cliente entrando por parâmetro; o módulo não
 importa `src/lib/db.ts` nem o singleton `prisma`. A suíte de integração passa
-`criarPrismaTeste()` para a mesma função que a aplicação usará, e nenhuma DAL ou
-interface abstrata de banco foi criada.
+`criarPrismaTeste()` para a mesma função que a aplicação usa, e nenhuma DAL ou
+interface abstrata de banco foi criada. Desde a F3.5 (`8684f1d`) a aplicação real
+fecha o par: `/painel/[token]` importa o cliente de `src/lib/db.ts` e o injeta na
+chamada — `obterMetricasPainel(prisma, agora)` —, de modo que rota e teste exercitam a
+mesma função com clientes diferentes.
 
 ### DEC-042 — Os estados do painel são dimensões separadas, não um enum único
 
@@ -824,8 +838,10 @@ separação conceitual, essa sim, é obrigatória.
 
 **Fonte.** Q-F3, aprovada em 2026-08-12; `src/lib/metricas.ts`; commits `6cf0627` e
 `8ec6cbc`; `src/lib/metricas-prisma.ts`, commit `9ec8439`;
-`src/lib/apresentacao-painel.ts`, commit `a9fe849`.
-**implementada do cálculo ao shape de apresentação; renderização ainda futura** — as
+`src/lib/apresentacao-painel.ts`, commit `a9fe849`; `src/app/painel/[token]/page.tsx`,
+`src/components/painel/painel-visual.tsx` e
+`src/components/painel/decidir-area-equipes.ts`, commit `8684f1d`.
+**implementada do cálculo até a rota real** — as
 quatro dimensões existem como tipos separados. Três no núcleo: `EstadoPeriodo` (`OK` /
 `SEM_DADOS`), `EstadoAcumulado` (`OK` / `SEM_SALDO_HISTORICO`) e `EstadoEquipes` (`OK` /
 `CONFIGURACAO_INVALIDA`). A quarta, `EstadoLeitura` (`OK` / `INDISPONIVEL`), passou a
@@ -840,16 +856,16 @@ falhar lançamentos derruba os três, porque os três dependem deles. No ramo
 `INDISPONIVEL` não existe a propriedade `dados`, então nenhuma falha de leitura chega
 adiante parecendo zero.
 
-Desde a F3.4 as quatro dimensões atravessam a terceira camada. No shape de
-apresentação, `INDISPONIVEL`, `SEM_DADOS` e `SEM_SALDO_HISTORICO` viram `—` — sem
-prefixo de moeda —, e `CONFIGURACAO_INVALIDA` vira um estado sem lista de equipes.
-**Nenhum deles colapsa em zero**, e cada bloco só admite os estados que podem
+Desde a F3.4 as quatro dimensões atravessam a terceira camada, e desde a F3.5 chegam à
+**rota real**. Na tela: `INDISPONIVEL` de big number ou de VGV chega como `—`;
+`SEM_DADOS` mensal chega como `—` no VGV mensal, no quadro mensal e nos rankings;
+`SEM_SALDO_HISTORICO` chega como `—` no big number do tipo sem saldo; e
+`CONFIGURACAO_INVALIDA` tem tratamento próprio da área de equipes, com título em vez de
+quadros. O `—` sai sempre sem prefixo de moeda.
+
+**Nenhuma delas colapsa em zero**, e cada bloco só admite os estados que podem
 alcançá-lo: um big number nunca fica `SEM_DADOS`, e o VGV por período nunca fica
 `SEM_SALDO_HISTORICO`.
-
-O que **ainda não existe** é como a rota reage a esses estados: mensagem, layout e
-comportamento da página diante de `INDISPONIVEL` ou `CONFIGURACAO_INVALIDA` são da
-F3.5.
 
 ---
 
@@ -896,5 +912,7 @@ algoritmo privado — não há dois caminhos que possam divergir. Ausência cont
 real pequeno demais para a escala.
 
 **Fonte.** `src/lib/apresentacao-painel.ts`; `tests/apresentacao-painel.test.ts`;
-commit `a9fe849`.
-**implementada no shape de apresentação; consumo pela rota real ainda é F3.5**
+commit `a9fe849`; `src/app/painel/[token]/page.tsx`, commit `8684f1d`.
+**implementada no shape de apresentação e consumida pela rota real** — a política não
+mudou na F3.5; o que mudou é que `/painel/[token]` passou a desenhar o shape que a
+implementa, então os valores compactos chegam à parede do escritório.

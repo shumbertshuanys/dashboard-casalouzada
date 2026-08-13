@@ -5,15 +5,16 @@ desenho pretendido; o estado real do que está construído fica em
 `docs/HANDOFF_ATUAL.md`, e as decisões em `docs/DECISOES.md`.
 
 **Situação em 2026-08-13:** Fase 1, protótipo visual e Fase 2 — Administração
-concluídos e publicados. A **F3 — Painel** está em curso: F3.0, F3.1, F3.2, F3.3 e
-F3.4 concluídas. As três camadas do painel existem: `src/lib/metricas.ts` calcula
-(núcleo **puro**), `src/lib/metricas-prisma.ts` lê o banco e alimenta esse núcleo, e
+concluídos e publicados. A **F3 — Painel** está em curso: F3.0 a F3.5 concluídas. As
+três camadas do painel existem: `src/lib/metricas.ts` calcula (núcleo **puro**),
+`src/lib/metricas-prisma.ts` lê o banco e alimenta esse núcleo, e
 `src/lib/apresentacao-painel.ts` traduz o resultado no que a tela desenha. A próxima
-fatia é a **F3.5, painel real ligado aos dados**.
+fatia é a **F3.6, atualização automática**.
 
-A tela da TV continua desligada: as camadas existem **isoladamente**, e
-`/painel/[token]` ainda **não** compõe nenhuma delas — não chama a leitura nem a
-apresentação. `/preview` segue desenhando com dados fictícios.
+Desde a F3.5 a tela da TV está ligada: `/painel/[token]` valida o token e, só então,
+compõe `prisma → obterMetricasPainel → criarApresentacaoPainel → PainelVisual`, com um
+único `agora` atravessando leitura e apresentação. `/preview` continua com dados
+fictícios, mas desenha pela **mesma** composição visual da rota real.
 
 ---
 
@@ -169,9 +170,14 @@ formatados — moeda compacta (`R$ 4,2 bi`), contagens em pt-BR e `—` para cad
 que não afirma número. Também ali não se calcula nada: a regra continua inteira no
 núcleo.
 
-A cadeia, portanto, é `Prisma → ResultadoPainel → ApresentacaoPainel`. As três
-camadas existem, mas **isoladamente**: compor as três na rota da TV, com um único
-`agora`, é a F3.5, que ainda não foi iniciada.
+A cadeia, portanto, é `Prisma → ResultadoPainel → ApresentacaoPainel`, e desde a F3.5
+ela está **composta na rota da TV**: `/painel/[token]` cria um `agora` só — depois de
+validar o token — e o passa às duas camadas, para o cabeçalho não anunciar um mês
+diferente daquele que produziu os números.
+
+O que falta na F3 é a **atualização**: hoje uma requisição é uma leitura, e a aba
+parada não busca dado novo sozinha. Manter os números frescos na parede, e decidir o
+que a TV mostra quando uma atualização falha, é a F3.6.
 
 ---
 
@@ -315,12 +321,12 @@ referência para a rota `/preview`, com dados fictícios. Serve de contrato visu
 CRUD de equipes, corretores e lançamentos. Saldo histórico. Ao final desta fase você
 já consegue alimentar o sistema de verdade, mesmo sem o painel pronto.
 
-**Fase 3 — Painel** · *em curso: F3.0 a F3.4 concluídas, F3.5 é a próxima*
+**Fase 3 — Painel** · *em curso: F3.0 a F3.5 concluídas, F3.6 é a próxima*
 Camada de cálculo, as três faixas do layout, atualização automática, rotação de métricas,
 proteção por token na URL. `src/lib/metricas.ts` calcula, `src/lib/metricas-prisma.ts`
-lê o banco e `src/lib/apresentacao-painel.ts` formata para a tela. Falta compor:
-`/painel/[token]`, embora protegida por token, **continua sem dados reais** — ela não
-chama a leitura nem a apresentação.
+lê o banco, `src/lib/apresentacao-painel.ts` formata para a tela e `/painel/[token]`
+compõe as três desde a F3.5 — **com dados reais**. Falta a atualização automática: uma
+requisição é uma leitura, e a aba parada não busca dado novo sozinha.
 
 A fase foi fatiada assim:
 
@@ -331,8 +337,8 @@ A fase foi fatiada assim:
 | F3.2 | núcleo puro de métricas | **concluída** — `6cf0627` (empresa) e `8ec6cbc` (equipes) |
 | F3.3 | leitura Prisma | **concluída** — commit `9ec8439` |
 | F3.4 | shape de apresentação e tipos fora do mock | **concluída** — commit `a9fe849` |
-| F3.5 | painel real ligado aos dados | **próxima, não iniciada** |
-| F3.6 | atualização automática | não iniciada |
+| F3.5 | painel real ligado aos dados | **concluída** — commit `8684f1d` |
+| F3.6 | atualização automática | **próxima, não iniciada** |
 
 As decisões da F3.0 são implementáveis sobre o schema atual: **a F3 não exige migration**.
 
