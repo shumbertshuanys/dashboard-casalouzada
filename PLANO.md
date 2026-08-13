@@ -5,12 +5,15 @@ desenho pretendido; o estado real do que está construído fica em
 `docs/HANDOFF_ATUAL.md`, e as decisões em `docs/DECISOES.md`.
 
 **Situação em 2026-08-13:** Fase 1, protótipo visual e Fase 2 — Administração
-concluídos e publicados. A **F3 — Painel** está em curso: F3.0, F3.1, F3.2 e F3.3
-concluídas. `src/lib/metricas.ts` calcula empresa e equipes e segue um núcleo
-**puro**; `src/lib/metricas-prisma.ts`, entregue na F3.3, é a fronteira que lê o
-banco e alimenta esse núcleo. A próxima fatia é a **F3.4, shape de apresentação**.
-A tela da TV continua desligada: `/painel/[token]` ainda **não** consome a
-fronteira, e ligar a rota é a F3.5.
+concluídos e publicados. A **F3 — Painel** está em curso: F3.0, F3.1, F3.2, F3.3 e
+F3.4 concluídas. As três camadas do painel existem: `src/lib/metricas.ts` calcula
+(núcleo **puro**), `src/lib/metricas-prisma.ts` lê o banco e alimenta esse núcleo, e
+`src/lib/apresentacao-painel.ts` traduz o resultado no que a tela desenha. A próxima
+fatia é a **F3.5, painel real ligado aos dados**.
+
+A tela da TV continua desligada: as camadas existem **isoladamente**, e
+`/painel/[token]` ainda **não** compõe nenhuma delas — não chama a leitura nem a
+apresentação. `/preview` segue desenhando com dados fictícios.
 
 ---
 
@@ -160,8 +163,15 @@ saldo histórico) e `equipes` (lançamentos, corretores e equipes). Uma leitura 
 falha derruba só quem dependia dela — falhar o saldo não apaga o VGV do mês
 (DEC-040, DEC-042).
 
-O que ainda não existe é a **apresentação** desses números, que é a F3.4, e a
-ligação da rota da TV aos dados, que é a F3.5.
+A **apresentação** foi implementada na F3.4, em `src/lib/apresentacao-painel.ts`:
+ela recebe o resultado da leitura e um `agora`, e devolve rótulos e valores já
+formatados — moeda compacta (`R$ 4,2 bi`), contagens em pt-BR e `—` para cada estado
+que não afirma número. Também ali não se calcula nada: a regra continua inteira no
+núcleo.
+
+A cadeia, portanto, é `Prisma → ResultadoPainel → ApresentacaoPainel`. As três
+camadas existem, mas **isoladamente**: compor as três na rota da TV, com um único
+`agora`, é a F3.5, que ainda não foi iniciada.
 
 ---
 
@@ -305,12 +315,12 @@ referência para a rota `/preview`, com dados fictícios. Serve de contrato visu
 CRUD de equipes, corretores e lançamentos. Saldo histórico. Ao final desta fase você
 já consegue alimentar o sistema de verdade, mesmo sem o painel pronto.
 
-**Fase 3 — Painel** · *em curso: F3.0, F3.1, F3.2 e F3.3 concluídas, F3.4 é a próxima*
+**Fase 3 — Painel** · *em curso: F3.0 a F3.4 concluídas, F3.5 é a próxima*
 Camada de cálculo, as três faixas do layout, atualização automática, rotação de métricas,
-proteção por token na URL. `src/lib/metricas.ts` calcula empresa e equipes a partir de
-dados recebidos por parâmetro, e `src/lib/metricas-prisma.ts` já lê esses dados do banco.
-Falta a apresentação: `/painel/[token]`, embora protegida por token, **continua sem dados
-reais** — ela ainda não consome a fronteira.
+proteção por token na URL. `src/lib/metricas.ts` calcula, `src/lib/metricas-prisma.ts`
+lê o banco e `src/lib/apresentacao-painel.ts` formata para a tela. Falta compor:
+`/painel/[token]`, embora protegida por token, **continua sem dados reais** — ela não
+chama a leitura nem a apresentação.
 
 A fase foi fatiada assim:
 
@@ -320,8 +330,8 @@ A fase foi fatiada assim:
 | F3.1 | janelas civis (mês, trimestre, ano) em `America/Sao_Paulo` | **concluída** — commit `592df35` |
 | F3.2 | núcleo puro de métricas | **concluída** — `6cf0627` (empresa) e `8ec6cbc` (equipes) |
 | F3.3 | leitura Prisma | **concluída** — commit `9ec8439` |
-| F3.4 | shape de apresentação e tipos fora do mock | **próxima, não iniciada** |
-| F3.5 | painel real ligado aos dados | não iniciada |
+| F3.4 | shape de apresentação e tipos fora do mock | **concluída** — commit `a9fe849` |
+| F3.5 | painel real ligado aos dados | **próxima, não iniciada** |
 | F3.6 | atualização automática | não iniciada |
 
 As decisões da F3.0 são implementáveis sobre o schema atual: **a F3 não exige migration**.

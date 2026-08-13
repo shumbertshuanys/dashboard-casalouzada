@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `9ec8439` — `feat: adiciona leitura Prisma das métricas` |
+| Commit de referência | `a9fe849` — `feat: adiciona shape de apresentação do painel` |
 | Data do handoff | 2026-08-13 |
 
 ## Estado executivo
@@ -22,30 +22,38 @@ A **Fase 2 — Administração está concluída**. Equipes, corretores, lançame
 saldo histórico podem ser gerenciados pela área administrativa, e o sistema já pode
 ser alimentado de verdade.
 
-Da **F3 — Painel**, quatro fatias estão concluídas. A **F3.0 — decisões e contratos**
+Da **F3 — Painel**, cinco fatias estão concluídas. A **F3.0 — decisões e contratos**
 registrou nas DEC-036 a DEC-042 as regras aprovadas pelo proprietário em 2026-08-12. A
 **F3.1 — janelas civis** (`592df35`) entregou `JanelaCivil`, `mesCorrente`,
 `trimestreCorrente` e `anoCorrente` em `src/lib/datas.ts`. A **F3.2 — núcleo puro de
 métricas** foi publicada em dois commits: `6cf0627` (empresa) e `8ec6cbc` (equipes e
-rankings). A **F3.3 — leitura Prisma** foi publicada em `9ec8439`.
+rankings). A **F3.3 — leitura Prisma** foi publicada em `9ec8439`, e a **F3.4 — shape
+de apresentação** em `a9fe849`.
 
 `src/lib/metricas.ts` existe e tem duas entradas —
 `calcularMetricasEmpresa(lancamentos, saldos, agora?)` e
 `calcularMetricasEquipes(lancamentos, corretores, equipes, agora?)`. As duas consomem
 as janelas da F3.1 e **continuam puras**: recebem os dados já lidos e não conhecem
-Prisma, banco nem ambiente. A F3.3 não alterou uma linha delas.
+Prisma, banco nem ambiente. Nem a F3.3 nem a F3.4 alteraram uma linha delas.
 
 `src/lib/metricas-prisma.ts` é a fronteira banco → domínio, entregue pela F3.3. Ela
 lê as quatro tabelas, converte cada linha para os tipos da F3.2 e chama as duas
 entradas puras — sem duplicar nenhum cálculo. A entrada é
 `obterMetricasPainel(prisma, agora?)`.
 
-O que a F3.3 **não** fez foi ligar a tela. `/painel/[token]` continua respondendo
-"Painel em construção" e **não consome** `obterMetricasPainel`, e `/preview` segue
-desenhando a partir de `src/lib/mock-painel.ts`.
+`src/lib/apresentacao-painel.ts` é a camada de apresentação, entregue pela F3.4. Ela
+recebe o `ResultadoPainel` da leitura mais um `agora` e devolve `ApresentacaoPainel`:
+rótulos, moeda compacta, contagens em pt-BR e `—` onde não há número a afirmar. A
+entrada é `criarApresentacaoPainel(resultado, agora)`.
 
-A próxima fatia é a **F3.4 — shape de apresentação**, não iniciada. Ligar a rota aos
-dados reais é a F3.5.
+A cadeia é `Prisma → ResultadoPainel → ApresentacaoPainel`, e as três camadas existem
+— mas **isoladamente**. O que a F3.4 **não** fez foi ligar a tela: `/painel/[token]`
+continua respondendo "Painel em construção" e **não chama** `obterMetricasPainel` nem
+`criarApresentacaoPainel`, e `/preview` segue desenhando a partir de
+`src/lib/mock-painel.ts`.
+
+A próxima fatia é a **F3.5 — painel real ligado aos dados**, não iniciada. É ela que
+vai compor as três camadas na rota, com um único `agora`.
 
 ## Fases
 
@@ -64,8 +72,8 @@ dados reais é a F3.5.
 | F3.1 — Janelas civis | **Concluída** | `592df35` |
 | F3.2 — Núcleo puro de métricas | **Concluída** | `6cf0627` + `8ec6cbc` |
 | F3.3 — Leitura Prisma | **Concluída** | `9ec8439` |
-| F3.4 — Shape de apresentação | **Não iniciada** — próxima | — |
-| F3.5 — Painel real | **Não iniciada** | `/painel/[token]` sem banco |
+| F3.4 — Shape de apresentação | **Concluída** | `a9fe849` |
+| F3.5 — Painel real | **Não iniciada** — próxima | `/painel/[token]` sem banco |
 | F3.6 — Atualização automática | **Não iniciada** | — |
 | F4 — Identidade e modo TV | **Não iniciada** | depende da F3 |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
@@ -94,6 +102,11 @@ dados reais é a F3.5.
   com o `PrismaClient` injetado por parâmetro (DEC-041). Faz quatro leituras Prisma,
   converte `Decimal` em string decimal canônica por `toFixed(2)` e chama o núcleo puro.
   Não repete nenhum cálculo: não há soma, contagem, `groupBy` nem `aggregate` ali.
+- **Camada de apresentação**: `src/lib/apresentacao-painel.ts`, desde a F3.4. Módulo
+  puro e síncrono, sem Prisma e sem I/O — o `ResultadoPainel` entra como `import type`,
+  para o `server-only` do módulo de leitura não chegar ao runtime. `agora` é
+  obrigatório, sem default. Produz `ApresentacaoPainel`, formatando valores e traduzindo
+  estados; não recalcula métrica nenhuma.
 
 ## Administração implementada
 
@@ -206,7 +219,7 @@ Duas migrations versionadas:
 ## Testes
 
 Cada baseline é o snapshot de uma entrega: vale como registro do que foi medido
-naquele gate, e não como promessa de estabilidade futura. Ficam os quatro, em
+naquele gate, e não como promessa de estabilidade futura. Ficam os cinco, em
 sequência.
 
 ### Baseline do fechamento da F2.5
@@ -296,6 +309,28 @@ não tocou em nenhuma suíte anterior.
 `America/Sao_Paulo` e `Asia/Tokyo`, para provar que nenhum teste depende do relógio
 da máquina. `test:integracao` roda contra o banco local.
 
+### Baseline da entrega da F3.4
+
+Bateria completa executada sobre os blobs que vieram a ser publicados em `a9fe849`.
+Na execução de publicação ela **não** foi repetida: o blob gate provou que a árvore
+publicada é idêntica à medida, byte a byte.
+
+| Comando | Resultado verificado |
+|---|---|
+| `npm test` | 374 testes, 104 suítes, 374 aprovados, 0 falhas, 0 pulados |
+| `npm run test:fusos` | 374/374 em `UTC`, 374/374 em `America/Sao_Paulo`, 374/374 em `Asia/Tokyo` |
+| `npm run test:integracao` | 88 testes, 33 suítes, 88 aprovados, 0 falhas |
+| `npm run test:integracao:painel` | 15 testes, 6 suítes, 15 aprovados, 0 falhas |
+| `tests/apresentacao-painel.test.ts` isolado | 85 testes, 22 suítes, 85 aprovados, 0 falhas, 0 pulados |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `npm run build` | 18 rotas, exit 0 |
+| `git diff --check` | exit 0 |
+
+Os 85 testes e 22 suítes que separam este baseline do da F3.3 são os de
+`tests/apresentacao-painel.test.ts`. As duas suítes de integração ficaram inalteradas:
+a F3.4 não toca banco.
+
 `test:integracao:painel` é separado de propósito, num diretório próprio que os globs
 existentes não alcançam: `obterMetricasPainel` lê as tabelas **inteiras**, então
 fixture de outra suíte entraria nas contas. A suíte exige o banco em repouso antes de
@@ -338,20 +373,23 @@ Não se pode dizer que a situação de credenciais esteja saneada hoje.
 
 ## O que ainda NÃO está implementado
 
-Verificado na árvore em `9ec8439`, arquivo por arquivo.
+Verificado na árvore em `a9fe849`, arquivo por arquivo.
 
-**"F3.3 concluída" não significa "painel pronto".** A leitura existe, mas nada dela
-chega à tela ainda. O que continua não existindo:
+**"F3.4 concluída" não significa "painel pronto".** As três camadas existem e já
+produzem texto pronto para desenhar, mas **nada disso é renderizado**: a rota real não
+as compõe. O que continua não existindo:
 
-- shape de apresentação — formatação de moeda, `—`, `mi`/`bi`, rótulos;
-- tradução visual dos estados: `INDISPONIVEL`, `SEM_DADOS`, `SEM_SALDO_HISTORICO` e
-  `CONFIGURACAO_INVALIDA` existem como domínio, mas nada os transforma em `—` ou em
-  mensagem na tela;
+- a composição `Prisma → leitura → apresentação → componentes` na rota real;
 - ligação de `/painel/[token]` aos dados reais;
+- o que a **página** faz diante de `INDISPONIVEL` e de `CONFIGURACAO_INVALIDA` — o
+  shape já os distingue, mas nenhum componente ou layout reage a eles;
 - substituição do mock pela origem real;
 - refresh automático real;
 - retenção do último valor conhecido em queda de rede;
 - comportamento offline / modo TV.
+
+A distinção é fina e vale registrar: a F3.4 **produz** estados prontos para exibição;
+a F3.5 é que vai **renderizá-los**.
 
 | Item | Estado | Fase |
 |---|---|---|
@@ -359,12 +397,17 @@ chega à tela ainda. O que continua não existindo:
 | `src/lib/metricas-prisma.ts` | **existe** — leitura Prisma e conversão para domínio | F3.3 feita |
 | `obterMetricasPainel(prisma, agora?)` | **existe** (DEC-041) | F3.3 feita |
 | `EstadoLeitura` / `INDISPONIVEL` | **existe** no contrato de leitura (DEC-042) | F3.3 feita |
-| Big numbers reais | calculados a partir do banco; sem apresentação | F3.4/F3.5 |
-| Períodos reais (mês, trimestre, ano) | calculados a partir do banco; sem apresentação | F3.4/F3.5 |
-| Rankings ligados ao banco | calculados a partir do banco; sem apresentação | F3.4/F3.5 |
-| Shape de apresentação | ausente | F3.4 |
+| `src/lib/apresentacao-painel.ts` | **existe** — shape de apresentação | F3.4 feita |
+| `criarApresentacaoPainel(resultado, agora)` | **existe** | F3.4 feita |
+| Formatação de moeda `mi`/`bi` e contagens | **existe** no shape (DEC-043) | F3.4 feita |
+| Tradução dos estados para `—` | **existe** no shape | F3.4 feita |
+| Big numbers reais na tela | calculados e formatados; a rota não os renderiza | F3.5 |
+| Períodos reais na tela | calculados e formatados; a rota não os renderiza | F3.5 |
+| Rankings reais na tela | calculados e formatados; a rota não os renderiza | F3.5 |
+| Página reagindo a `INDISPONIVEL`/`CONFIGURACAO_INVALIDA` | ausente | F3.5 |
 | Troca do mock pela origem real | ausente — `/preview` ainda usa `src/lib/mock-painel.ts` | F3.5 |
 | Atualização automática do painel real | ausente | F3.6 |
+| Retenção do último valor conhecido | ausente | F3.6 |
 | Comportamento offline | ausente | F4 |
 | Modo quiosque | ausente | F4 |
 | Identidade aplicada ao painel real | ausente | F4 |
@@ -373,7 +416,7 @@ chega à tela ainda. O que continua não existindo:
 | Metas | ausente por decisão | fora da v1 |
 
 `/painel/[token]` continua exibindo "Painel em construção" e **não consulta o banco**:
-a fronteira existe, mas a rota não a chama.
+a leitura e a apresentação existem, mas a rota não chama nenhuma das duas.
 
 ## F3 — Painel
 
@@ -539,10 +582,65 @@ de `src/lib/metricas.ts` foi tocada** — a fronteira vive fora do núcleo (DEC-
 - sem `groupBy`, `aggregate`, transaction ou `orderBy`: toda matemática e toda ordem
   determinística continuam no núcleo.
 
+### F3.4 — shape de apresentação · concluída
+
+Publicada em `a9fe849`, criando `src/lib/apresentacao-painel.ts` e sua suíte, e
+alterando o mock e os três componentes do painel. **Nenhuma linha de
+`src/lib/metricas.ts` ou de `src/lib/metricas-prisma.ts` foi tocada.**
+
+- entrada única: `criarApresentacaoPainel(resultado, agora)`. O `agora` é
+  **obrigatório** — um default criaria um segundo relógio, e o cabeçalho poderia
+  anunciar um mês diferente daquele que produziu os números abaixo dele;
+- `ApresentacaoPainel` traz `periodo`, `bigNumbers`, `vgvPeriodos`, `quadroMensal`,
+  `metricas` e `equipes` em shape display-ready, com os valores de desempenho já
+  formatados onde aplicável — `totalCorretores` permanece numérico;
+- os tipos visuais (`BigNumber`, `VgvPeriodo`, `Equipe`, `Linha`, `Metrica`,
+  `ValorComposto`, `ChaveMetrica`) saíram do mock e passaram a morar aqui; o mock e os
+  três componentes agora importam desta camada. O mock **continua fictício**, e
+  nenhum componente recebe dado real;
+- a ordem não é redeclarada: as oito métricas saem de `CHAVES_RANKING` e as sete
+  linhas do quadro mensal de `TIPOS_EVENTO`, ambas do núcleo (DEC-033);
+- rótulo do período: mês civil corrente em São Paulo, por `mesCorrente` — "agosto de
+  2026";
+- contagens em pt-BR, com ponto de milhar e sem `Intl`;
+- dinheiro compacto e exato (DEC-043);
+- **nada disso chega à tela ainda**: a rota real não consome esta camada.
+
+#### Estados no shape
+
+| Bloco | Estado de domínio | O que o shape produz |
+|---|---|---|
+| Empresa | `INDISPONIVEL` | `—` |
+| Empresa | `SEM_SALDO_HISTORICO` | `—` no big number daquele tipo, só nele |
+| Empresa | `SEM_DADOS` mensal | `—` no VGV mensal e nas sete linhas do quadro |
+| Empresa | janela `OK` | zero real é exibido como zero |
+| Equipes | `INDISPONIVEL` | estado **sem** lista de equipes |
+| Equipes | `CONFIGURACAO_INVALIDA` | estado **sem** lista de equipes |
+| Equipes | `SEM_DADOS` | elenco preservado, valores dos rankings em `—` |
+| Equipes | `OK` | valores reais |
+
+VGV trimestral e anual continuam com valor real mesmo com o mês em `SEM_DADOS`: são
+janelas próprias, e um mês vazio não diz nada sobre elas.
+
+**Precedência:** `CONFIGURACAO_INVALIDA` vem antes de `SEM_DADOS`. Com número de
+equipes ativas diferente de três a lista chega vazia do núcleo, e devolver `SEM_DADOS`
+faria a tela anunciar "mês sem dados" para um problema que é de cadastro.
+
+#### Dinheiro compacto
+
+Política registrada na DEC-043: string decimal canônica na entrada, centavos em
+`bigint` e texto na saída — nunca `Number` nem ponto flutuante. A magnitude inicial usa
+`mi` abaixo de 1 bilhão e `bi` a partir de 1 bilhão; abaixo de 100 na unidade, uma casa
+decimal, e de 100 para cima, nenhuma. Depois do half-up a magnitude é **reavaliada**, e
+pode haver promoção para a faixa seguinte (99,95 mi → `R$ 100 mi`; 999,5 mi →
+`R$ 1,0 bi`). Zero exato é `R$ 0,0 mi`; um valor **positivo** que o arredondamento
+levaria a zero sai como `R$ < 0,1 mi`, para não ficar visualmente idêntico a quem não
+vendeu nada.
+
 ### Fatias seguintes
 
-`F3.4` shape de apresentação e tipos fora do mock — **próxima** · `F3.5` painel real
-ligado aos dados · `F3.6` atualização automática. Nenhuma iniciada.
+`F3.5` painel real ligado aos dados — **próxima** · `F3.6` atualização automática.
+Nenhuma iniciada.
 
 ### Fora da F3
 
@@ -556,8 +654,8 @@ não bloqueia a F3 e não reabre a F2 agora.
    proprietário, mas não resolvido.
 2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
    antes de ativar lá a versão correspondente, com gate apropriado.
-3. **F3.4 — shape de apresentação**: próxima fatia de implementação. A ligação de
-   `/painel/[token]` aos dados reais vem depois, na F3.5.
+3. **F3.5 — painel real ligado aos dados**: próxima fatia de implementação. É ela que
+   compõe leitura e apresentação na rota `/painel/[token]`.
 4. **F4 — Identidade e modo TV**: depende da F3.
 5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
 

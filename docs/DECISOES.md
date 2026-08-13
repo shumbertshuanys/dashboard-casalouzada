@@ -208,12 +208,14 @@ tela.
 aplicadas.
 
 **Fonte.** `PLANO.md` §8; `src/lib/metricas.ts`; commits `6cf0627` e `8ec6cbc`;
-`src/lib/metricas-prisma.ts`, commit `9ec8439`.
+`src/lib/metricas-prisma.ts`, commit `9ec8439`; `src/lib/apresentacao-painel.ts`,
+commit `a9fe849`.
 **implementada** — o arquivo existe e concentra o cálculo, com duas entradas puras:
 `calcularMetricasEmpresa` e `calcularMetricasEquipes`. A leitura dos dados e a
-apresentação (F3.4) ficam **fora** dele, por desenho. A F3.3 materializou essa
-separação: `src/lib/metricas-prisma.ts` lê o banco, converte para os tipos de domínio
-e chama as duas entradas, sem somar, contar nem agregar por conta própria.
+apresentação ficam **fora** dele, por desenho, e as três camadas hoje estão
+materializadas: `metricas-prisma.ts` lê o banco e converte para os tipos de domínio, e
+`apresentacao-painel.ts` formata e rotula o resultado. Nenhuma das duas soma, conta ou
+agrega por conta própria — a regra continua num lugar só.
 
 ### DEC-014 — Zero real é diferente de ausência de lançamento
 
@@ -226,18 +228,24 @@ informação falsa na parede do escritório.
 **Impacto.** Vale também para a queda de rede prevista no plano: em falha, o painel
 mantém o último valor conhecido em vez de zerar.
 
-**Fonte.** `PLANO.md` §5.1; DEC-039; `src/lib/metricas.ts`; `tests/metricas.test.ts`;
-commits `6cf0627` e `8ec6cbc`.
-**parcialmente implementada** — a distinção entre zero e ausência já existe no núcleo:
-mês sem nenhum lançamento devolve `SEM_DADOS` em vez de afirmar desempenho zero, e
-dentro de um mês `OK` um corretor sem evento aparece com zero real (DEC-039). Ausência
-de saldo histórico segue a mesma regra, como `SEM_SALDO_HISTORICO` com valor `null`
-(DEC-037).
+**Fonte.** `PLANO.md` §5.1; DEC-039; DEC-043; `src/lib/metricas.ts`;
+`tests/metricas.test.ts`; commits `6cf0627` e `8ec6cbc`;
+`src/lib/apresentacao-painel.ts`; `tests/apresentacao-painel.test.ts`; commit
+`a9fe849`.
+**parcialmente implementada — distinção e representação no shape concluídas; retenção
+do último valor ainda futura** — a distinção existe no núcleo: mês sem nenhum
+lançamento devolve `SEM_DADOS` em vez de afirmar desempenho zero, e dentro de um mês
+`OK` um corretor sem evento aparece com zero real (DEC-039). Ausência de saldo
+histórico segue a mesma regra, como `SEM_SALDO_HISTORICO` com valor `null` (DEC-037).
 
-Continuam futuras as duas metades que dependem da tela: **representar** esses estados
-visualmente, com `—` em vez de número, que é da F3.4 e da F3.5; e **reter o último
-valor conhecido** em queda de leitura ou de conexão, em vez de zerar, que depende da
-atualização automática da F3.6.
+A **representação** foi resolvida na F3.4: o shape de apresentação traduz cada estado
+sem número em `—`, e zero real continua saindo como zero. A mesma disciplina alcançou o
+dinheiro — um valor positivo que a compactação levaria a zero sai como `R$ < 0,1 mi`, e
+não como `R$ 0,0 mi` (DEC-043). Isso vale no **shape**: a rota da TV ainda não renderiza
+nada disso, porque a F3.5 não existe.
+
+Continua futura a outra metade: **reter o último valor conhecido** em queda de leitura
+ou de conexão, em vez de zerar, que depende da atualização automática da F3.6.
 
 ---
 
@@ -447,12 +455,12 @@ aprovado.
 
 **Impacto.** O port do protótipo pode usar dados fictícios; o painel de F3, não. As
 duas pré-condições foram satisfeitas — administração pronta e protótipo portado — e a
-F3 começou sobre elas. O cálculo e a leitura já existem; apresentar esses números e
-ligá-los à rota da TV é o que falta.
+F3 começou sobre elas. O cálculo, a leitura e a apresentação já existem; ligar as três
+à rota da TV é o que falta.
 
 **Fonte.** `PLANO.md` §9; commits `22bf943` e `485ba36`.
 **cumprida** — pré-condições atendidas e a F3 começou na ordem prevista: F3.0, F3.1,
-F3.2 e F3.3 concluídas, F3.4 é a próxima
+F3.2, F3.3 e F3.4 concluídas, F3.5 é a próxima
 
 ### DEC-030 — F4 depende da F3
 
@@ -516,8 +524,14 @@ continua sendo responsabilidade da DEC-013. O quadro "mensal geral" segue com se
 linhas — ali o VGV não entra, porque tem faixa própria.
 
 **Fonte.** HTML de referência auditado; `src/lib/mock-painel.ts`;
-`src/components/painel/quadros-equipe.tsx`; commit `22bf943`.
-**implementada no protótipo**
+`src/components/painel/quadros-equipe.tsx`; commit `22bf943`;
+`src/lib/apresentacao-painel.ts`, commit `a9fe849`.
+**implementada no protótipo e no shape de apresentação** — desde a F3.4 a ordem das
+oito métricas tem uma fonte só: `METRICAS_PAINEL` é derivada de `CHAVES_RANKING`, do
+núcleo, e o mock passou a consumi-la em vez de repetir a lista. A F3.4 **não** criou
+segunda ordem paralela — uma cópia divergente faria a TV mostrar o rótulo de uma
+métrica sobre os números de outra. Os 20 segundos por métrica e a volta de 160 s
+continuam como estavam.
 
 ### DEC-034 — Editar um lançamento não recalcula a equipe histórica
 
@@ -581,9 +595,10 @@ saldo com lançamento.
 `src/lib/validacao/saldo-historico.ts`; commit `485ba36`. O uso nos acumulados está em
 `src/lib/metricas.ts`, commit `6cf0627`, e a leitura em `src/lib/metricas-prisma.ts`,
 commit `9ec8439`.
-**implementada na administração, no cálculo e na leitura** — a fronteira da F3.3 lê
-`saldo_historico` restringindo o `where` a `VENDA` e `AVALIACAO_GOOGLE`, os dois únicos
-tipos com saldo de abertura na v1. O que falta é exibir esses números, que é da F3.4.
+**implementada na administração, no cálculo, na leitura e no shape** — a fronteira da
+F3.3 lê `saldo_historico` restringindo o `where` a `VENDA` e `AVALIACAO_GOOGLE`, os dois
+únicos tipos com saldo de abertura na v1, e o shape da F3.4 já formata os acumulados
+que saem dali. O que falta é a rota da TV desenhá-los, que é da F3.5.
 
 ---
 
@@ -646,10 +661,12 @@ não dependem de saldo e seguem normalmente. É a aplicação da DEC-014 a este 
 mesmo princípio que a administração já usa ao exibir "Não cadastrado" em vez de `0`.
 
 **Fonte.** Q-F3, aprovada em 2026-08-12; DEC-014; DEC-035; `src/lib/metricas.ts`;
-commit `6cf0627`.
-**implementada no núcleo de cálculo** — sem saldo do tipo, o acumulado sai como
-`SEM_SALDO_HISTORICO` com valor `null`. O `—` na tela é apresentação e ainda não
-existe.
+commit `6cf0627`; `src/lib/apresentacao-painel.ts`, commit `a9fe849`.
+**implementada no núcleo de cálculo e no shape de apresentação** — sem saldo do tipo, o
+acumulado sai do núcleo como `SEM_SALDO_HISTORICO` com valor `null`, e desde a F3.4 o
+shape o traduz em `—`, sem prefixo de moeda. Faltar o saldo de um tipo não contamina o
+outro: o big number correspondente é o único que perde o número. A **página** ainda não
+desenha isso — a rota real é da F3.5.
 
 ### DEC-038 — Corretor transferido aparece nos dois quadros, sem duplicar produção
 
@@ -701,11 +718,15 @@ conferidos" nem status de preenchimento, e essa informação **não será invent
 Resolver isso exigiria modelagem operacional nova, fora da F3 atual e da v1.
 
 **Fonte.** Q-F3, aprovada em 2026-08-12; DEC-014; `src/lib/metricas.ts`; commits
-`6cf0627` e `8ec6cbc`.
-**implementada no núcleo, pendente na apresentação** — `EstadoPeriodo` existe, mês sem
-nenhum lançamento devolve `SEM_DADOS`, e dentro de um mês `OK` os zeros são reais. O
-que ainda não existe é a outra metade: traduzir `SEM_DADOS` em `—` na tela, que é da
-F3.4.
+`6cf0627` e `8ec6cbc`; `src/lib/apresentacao-painel.ts`, commit `a9fe849`.
+**implementada no núcleo e no shape; painel real ainda não conectado** — `EstadoPeriodo`
+existe, mês sem nenhum lançamento devolve `SEM_DADOS`, e dentro de um mês `OK` os zeros
+são reais. Desde a F3.4 o shape traduz `SEM_DADOS` mensal em `—` nos três lugares que
+dependem do mês: VGV mensal, as sete linhas do quadro mensal e todos os valores dos
+rankings — nos rankings o elenco é preservado, porque quem produziu é conhecido mesmo
+sem produção a exibir. VGV trimestral e anual continuam com valor real: são janelas
+próprias, e um mês vazio não diz nada sobre elas. Num mês `OK`, zero segue sendo zero
+exibível. A rota da TV ainda não desenha nada disso.
 
 ### DEC-040 — O painel v1 exige exatamente três equipes ativas
 
@@ -728,13 +749,20 @@ visual de `CONFIGURACAO_INVALIDA` fica para a apresentação do painel real.
 
 **Fonte.** Q-F3, aprovada em 2026-08-12; `src/components/painel/painel.module.css`;
 `src/lib/metricas.ts`; commit `8ec6cbc`; `src/lib/metricas-prisma.ts` e
-`tests/integracao-painel/painel.integracao.test.ts`, commit `9ec8439`.
-**implementada no núcleo e na leitura, pendente na apresentação** — `EstadoEquipes`
+`tests/integracao-painel/painel.integracao.test.ts`, commit `9ec8439`;
+`src/lib/apresentacao-painel.ts`, commit `a9fe849`.
+**implementada no núcleo, na leitura e no shape; página ainda futura** — `EstadoEquipes`
 existe, e com número de equipes ativas diferente de três o resultado vem
 `CONFIGURACAO_INVALIDA` com a lista de equipes **vazia**, o que impede renderizar
 subconjunto. A F3.3 provou contra o banco real que uma quarta equipe ativa derruba
-apenas a área de equipes: os números da empresa continuam sendo entregues. Como a área
-se comporta visualmente nesse estado é da F3.5.
+apenas a área de equipes: os números da empresa continuam sendo entregues.
+
+Na F3.4 o estado ganhou representação discriminada no shape — `{ estado:
+"CONFIGURACAO_INVALIDA" }`, **sem** a propriedade `equipes`, de modo que não há lista a
+renderizar por engano. Ele tem **precedência sobre `SEM_DADOS`**: com a lista vazia,
+anunciar "mês sem dados" descreveria o problema errado, que é de cadastro e não de
+produção. Que mensagem ou layout a página usa nesse estado continua sendo da F3.5 —
+nada disso existe ainda.
 
 ### DEC-041 — A camada de métricas recebe o cliente Prisma por parâmetro
 
@@ -795,8 +823,9 @@ localizada apagar dado correto.
 separação conceitual, essa sim, é obrigatória.
 
 **Fonte.** Q-F3, aprovada em 2026-08-12; `src/lib/metricas.ts`; commits `6cf0627` e
-`8ec6cbc`; `src/lib/metricas-prisma.ts`, commit `9ec8439`.
-**implementada no contrato de leitura e cálculo; apresentação ainda futura** — as
+`8ec6cbc`; `src/lib/metricas-prisma.ts`, commit `9ec8439`;
+`src/lib/apresentacao-painel.ts`, commit `a9fe849`.
+**implementada do cálculo ao shape de apresentação; renderização ainda futura** — as
 quatro dimensões existem como tipos separados. Três no núcleo: `EstadoPeriodo` (`OK` /
 `SEM_DADOS`), `EstadoAcumulado` (`OK` / `SEM_SALDO_HISTORICO`) e `EstadoEquipes` (`OK` /
 `CONFIGURACAO_INVALIDA`). A quarta, `EstadoLeitura` (`OK` / `INDISPONIVEL`), passou a
@@ -811,6 +840,61 @@ falhar lançamentos derruba os três, porque os três dependem deles. No ramo
 `INDISPONIVEL` não existe a propriedade `dados`, então nenhuma falha de leitura chega
 adiante parecendo zero.
 
-O que **ainda não existe** é a representação visual desses estados: traduzir
-`INDISPONIVEL`, `SEM_DADOS`, `SEM_SALDO_HISTORICO` e `CONFIGURACAO_INVALIDA` em `—` ou
-mensagem na tela é da F3.4 e da F3.5.
+Desde a F3.4 as quatro dimensões atravessam a terceira camada. No shape de
+apresentação, `INDISPONIVEL`, `SEM_DADOS` e `SEM_SALDO_HISTORICO` viram `—` — sem
+prefixo de moeda —, e `CONFIGURACAO_INVALIDA` vira um estado sem lista de equipes.
+**Nenhum deles colapsa em zero**, e cada bloco só admite os estados que podem
+alcançá-lo: um big number nunca fica `SEM_DADOS`, e o VGV por período nunca fica
+`SEM_SALDO_HISTORICO`.
+
+O que **ainda não existe** é como a rota reage a esses estados: mensagem, layout e
+comportamento da página diante de `INDISPONIVEL` ou `CONFIGURACAO_INVALIDA` são da
+F3.5.
+
+---
+
+## Painel — decisões da F3.4
+
+### DEC-043 — Dinheiro compacto da TV preserva precisão e não colapsa positivo em zero
+
+**Decisão.** O dinheiro exibido no painel é compactado por uma política única, na
+camada de apresentação:
+
+1. a entrada é sempre **string decimal canônica** (`"1250000.00"`), como o resto do
+   caminho monetário do projeto;
+2. o valor **não passa** por `Number`, `parseFloat`, `parseInt` nem qualquer aritmética
+   de ponto flutuante — vira centavos em `bigint` e sai como texto;
+3. **magnitude inicial**: abaixo de 1 bilhão usa `mi`; a partir de 1 bilhão usa `bi`.
+   Valores abaixo de um milhão continuam em `mi` (`R$ 0,9 mi`). Depois do
+   arredondamento a magnitude é reavaliada, podendo haver promoção para a faixa
+   seguinte;
+4. **precisão**: abaixo de 100 na unidade escolhida, uma casa decimal; de 100 para
+   cima, nenhuma — `R$ 42,5 mi` e `R$ 431 mi`;
+5. **arredondamento** meio-para-cima, exato, feito só com `bigint`;
+6. depois de arredondar, a **magnitude é reavaliada**, porque o arredondamento pode
+   empurrar o número para a faixa seguinte: `99,95 mi` → `R$ 100 mi` e `999,5 mi` →
+   `R$ 1,0 bi`;
+7. **zero exato** é `R$ 0,0 mi`;
+8. um valor **positivo** que a compactação levaria a zero sai como `R$ < 0,1 mi`, e
+   **nunca** como `R$ 0,0 mi`.
+
+**Motivo.** Os dois últimos itens são o ponto. A validação aceita qualquer lançamento
+com valor maior que zero, e não existe piso: uma venda real de R$ 1.000 arredondaria
+para `0,0 mi` e ficaria, na parede do escritório, visualmente idêntica a "não vendeu
+nada". São fatos diferentes, e a tela não pode confundi-los — é a mesma disciplina da
+DEC-014 aplicada à resolução da escala.
+
+O corte não é limiar escolhido à mão: `R$ 50.000` é exatamente onde o arredondamento
+meio-para-cima em `mi` com uma casa deixa de produzir zero. A regra sai da própria
+aritmética, e não de uma constante mágica que precisaria ser mantida em sincronia.
+
+**Impacto.** Isto é **política de apresentação**, não regra de cálculo nem meta: o
+valor somado continua exato em centavos, e nada aqui altera o que a F3.2 calcula ou a
+F3.3 lê. `formatarDinheiroComposto` e `formatarDinheiroTexto` derivam do mesmo
+algoritmo privado — não há dois caminhos que possam divergir. Ausência continua sendo
+`—` sem moeda, e não se confunde com `< 0,1`: uma é falta de dado, a outra é um número
+real pequeno demais para a escala.
+
+**Fonte.** `src/lib/apresentacao-painel.ts`; `tests/apresentacao-painel.test.ts`;
+commit `a9fe849`.
+**implementada no shape de apresentação; consumo pela rota real ainda é F3.5**
