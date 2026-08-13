@@ -196,7 +196,7 @@ Duas migrations versionadas:
 ## Testes
 
 Cada baseline é o snapshot de uma entrega: vale como registro do que foi medido
-naquele gate, e não como promessa de estabilidade futura. Ficam os dois, lado a lado.
+naquele gate, e não como promessa de estabilidade futura. Ficam os três, em sequência.
 
 ### Baseline do fechamento da F2.5
 
@@ -333,7 +333,8 @@ Verificado na árvore em `8ec6cbc`, arquivo por arquivo.
 ### F3.0 — decisões e contratos · concluída
 
 Aprovadas pelo proprietário em 2026-08-12 e registradas nas **DEC-036 a DEC-042**.
-**Nenhuma linha de código de F3 foi escrita.** O que ficou congelado:
+**Durante aquela fatia, nenhuma linha de código de F3 foi escrita.** O que ficou
+congelado:
 
 **Acumulados e `dataCorte` (DEC-036).** Cada linha de `saldo_historico` é a fonte do
 acumulado daquele tipo **até o próprio `dataCorte`, inclusive**:

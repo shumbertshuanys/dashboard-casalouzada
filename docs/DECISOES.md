@@ -548,7 +548,7 @@ como `0`, e nenhuma linha zerada é criada automaticamente. A exclusão existe
 justamente por isso — sem ela, um saldo criado por engano só poderia ser zerado, o
 que afirmaria um acumulado que ninguém apurou.
 
-**Impacto no cálculo — ainda futuro.** Como o saldo entra nos acumulados e nunca em
+**Impacto no cálculo.** Como o saldo entra nos acumulados e nunca em
 recortes de período, isso é responsabilidade da F3 (ver DEC-004). Nada na F2 soma
 saldo com lançamento.
 
@@ -564,7 +564,7 @@ continua sendo F3.3
 ## Painel — decisões da F3.0
 
 Aprovadas pelo proprietário em 2026-08-12, antes de qualquer código de F3. Elas
-restringem a camada de cálculo que ainda será construída.
+restringiram como a camada de cálculo viria a ser construída nas fatias seguintes.
 
 ### DEC-036 — `dataCorte` é inclusivo, e o acumulado soma só o que veio depois
 
@@ -697,7 +697,8 @@ continuam sendo exibidos, desde que suas leituras sejam válidas.
 **Motivo.** Qualquer acomodação automática mentiria: ou esconderia uma equipe, ou
 inventaria um layout que ninguém aprovou.
 
-**Impacto.** Nenhuma alteração de CSS agora. A implementação é de fatia posterior.
+**Impacto.** A F3.2 não altera CSS. A validação existe no núcleo; o comportamento
+visual de `CONFIGURACAO_INVALIDA` fica para a apresentação do painel real.
 
 **Fonte.** Q-F3, aprovada em 2026-08-12; `src/components/painel/painel.module.css`;
 `src/lib/metricas.ts`; commit `8ec6cbc`.
