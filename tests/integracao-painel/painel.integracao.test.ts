@@ -18,6 +18,7 @@ import {
   type MetricasEmpresaPeriodicas,
   type ResultadoPainel,
 } from "@/lib/metricas-prisma";
+import { type ApresentacaoPainel, criarApresentacaoPainel } from "@/lib/apresentacao-painel";
 
 /**
  * A fronteira da F3.3 contra o PostgreSQL **local**.
@@ -114,6 +115,8 @@ let lancamentosEsperados: LancamentoMetrica[] = [];
 let saldosEsperados: SaldoHistoricoMetrica[] = [];
 
 let resultado: ResultadoPainel;
+/** O mesmo resultado atravessado pela camada de apresentação, com o mesmo `AGORA`. */
+let apresentacaoReal: ApresentacaoPainel;
 
 /** Estado de repouso, provado antes de escrever qualquer linha. */
 async function exigirRepouso(): Promise<void> {
@@ -237,6 +240,7 @@ before(async () => {
   await criarFixture();
 
   resultado = await obterMetricasPainel(prisma, AGORA);
+  apresentacaoReal = criarApresentacaoPainel(resultado, AGORA);
 });
 
 after(async () => {
@@ -451,6 +455,17 @@ describe("configuração inválida não contamina os números da empresa", () =>
         periodos: { estadoLeitura: "OK", dados: periodicasDe(esperado) },
         acumulados: { estadoLeitura: "OK", dados: esperado.acumulados },
       });
+
+      // E a mesma coisa vista pela ponta que a TV consome: a área de equipes
+      // acusa a configuração, sem lista, e os números da empresa continuam
+      // sendo entregues formatados.
+      const apresentacao = criarApresentacaoPainel(comQuatro, AGORA);
+
+      assert.equal(apresentacao.equipes.estado, "CONFIGURACAO_INVALIDA");
+      assert.equal("equipes" in apresentacao.equipes, false);
+      assert.ok(apresentacao.bigNumbers.every((big) => big.estado === "OK"));
+      assert.ok(apresentacao.vgvPeriodos.every((item) => item.estado === "OK"));
+      assert.equal(apresentacao.quadroMensal.estado, "OK");
     } finally {
       await prisma.equipe.delete({ where: { id: quarta.id } });
     }
@@ -460,5 +475,67 @@ describe("configuração inválida não contamina os números da empresa", () =>
     const voltou = await obterMetricasPainel(prisma, AGORA);
     assert.equal(dadosEquipes(voltou).estadoEquipes, "OK");
     assert.equal(dadosEquipes(voltou).equipes.length, 3);
+  });
+});
+
+/**
+ * A cadeia inteira, do banco ao que a tela desenha.
+ *
+ * Poucos asserts, escolhidos por serem discriminantes: o que se prova aqui é que
+ * banco → leitura → apresentação continua ligado e coerente, não os detalhes de
+ * formatação, que têm as 85 asserções da `tests/apresentacao-painel.test.ts`.
+ *
+ * Um instante só, o mesmo `AGORA` das duas camadas — como a rota faz.
+ */
+describe("banco → leitura → apresentação", () => {
+  it("o período sai do mesmo instante das métricas", () => {
+    assert.equal(apresentacaoReal.periodo, "agosto de 2026");
+  });
+
+  it("o VGV acumulado chega compacto e com moeda", () => {
+    // 5.000.000,00 do saldo mais as três vendas posteriores ao corte.
+    assert.deepEqual(apresentacaoReal.bigNumbers[1], {
+      rotulo: "VGV acumulado",
+      numero: { prefixo: "R$", valor: "8,2", sufixo: "mi" },
+      estado: "OK",
+    });
+  });
+
+  it("os imóveis vendidos acumulados somam saldo e eventos posteriores ao corte", () => {
+    assert.deepEqual(apresentacaoReal.bigNumbers[0], {
+      rotulo: "Imóveis vendidos",
+      numero: { valor: "103" },
+      estado: "OK",
+    });
+  });
+
+  it("as três equipes do seed chegam à tela", () => {
+    const area = apresentacaoReal.equipes;
+    assert.equal(area.estado, "OK");
+    if (area.estado !== "OK") return;
+
+    assert.deepEqual(
+      area.equipes.map((equipe) => equipe.nome),
+      [NOME_DA_EQUIPE.A, NOME_DA_EQUIPE.B, NOME_DA_EQUIPE.C],
+    );
+  });
+
+  it("o ranking de VGV distingue quem vendeu de quem não vendeu", () => {
+    const area = apresentacaoReal.equipes;
+    if (area.estado !== "OK") return;
+
+    // Fábio tem a venda de 1.000.000,00 creditada à equipe A; Ana e Bruno, não.
+    const [primeiro, ...resto] = area.equipes[0].rankings.vgv;
+    assert.deepEqual(primeiro, { rotulo: "Fábio", valor: "R$ 1,0 mi" });
+    assert.ok(
+      resto.every((linha) => linha.valor === "R$ 0,0 mi"),
+      "zero real continua sendo exibido como zero",
+    );
+  });
+
+  it("o quadro mensal chega com as sete linhas", () => {
+    assert.equal(apresentacaoReal.quadroMensal.estado, "OK");
+    assert.equal(apresentacaoReal.quadroMensal.linhas.length, 7);
+    assert.deepEqual(apresentacaoReal.quadroMensal.linhas[0], { rotulo: "Vendidos", valor: "2" });
   });
 });

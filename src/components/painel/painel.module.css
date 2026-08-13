@@ -183,6 +183,19 @@
   margin-top: 0.2cqw;
 }
 
+/* A área de equipes quando não há quadros a mostrar: ocupa as três colunas delas,
+   sem inventar equipe nenhuma para preencher o espaço. O quadro "Mensal geral"
+   segue na primeira coluna, com os números da empresa que continuam válidos. */
+.estadoEquipes {
+  grid-column: span 3;
+  align-items: center;
+  justify-content: center;
+}
+.estadoEquipes h2 {
+  color: var(--color-texto-secundario);
+  text-align: center;
+}
+
 .linhas {
   margin-top: 1cqw;
   display: flex;
