@@ -15,8 +15,9 @@
  *   `src/lib/datas.ts` (F3.1), e toda comparação de período é
  *   `inicio <= data < fimExclusivo`.
  *
- * Esta fatia (F3.2A) cobre só o nível empresa. Rankings, elenco de equipe e
- * `CONFIGURACAO_INVALIDA` são da F3.2B.
+ * São duas entradas independentes: `calcularMetricasEmpresa` para os números da
+ * empresa (F3.2A) e `calcularMetricasEquipes` para os quadros das equipes
+ * (F3.2B). Nenhuma das duas lê banco — a leitura é da F3.3.
  */
 
 import { anoCorrente, type JanelaCivil, mesCorrente, trimestreCorrente } from "@/lib/datas";
@@ -40,9 +41,8 @@ export type TipoSaldoMetrica = Extract<TipoEventoMetrica, "VENDA" | "AVALIACAO_G
 /**
  * O lançamento como o cálculo precisa dele — não o modelo Prisma inteiro.
  *
- * `corretorId` já serve ao diagnóstico de erro de venda sem valor. `equipeId` é o
- * único campo ainda sem lógica: fica carregado no formato de entrada para as
- * métricas por equipe da F3.2B, para o formato não mudar no meio.
+ * `equipeId` é a equipe **gravada no evento**, e é sempre ela que credita a
+ * produção — nunca a lotação atual do corretor (DEC-002).
  */
 export type LancamentoMetrica = {
   tipo: TipoEventoMetrica;
@@ -94,6 +94,106 @@ export type MetricasEmpresaPuras = {
     anual: string;
   };
   quadroMensal: QuadroMensal;
+};
+
+/** O corretor como o ranking precisa dele. Sem foto, CRECI ou datas. */
+export type CorretorMetrica = {
+  id: string;
+  /** Nome curto, o que vai para a TV. */
+  nomeExibicao: string;
+  /** Lotação **atual** — serve ao elenco e ao headcount, nunca ao crédito. */
+  equipeId: string;
+  ativo: boolean;
+};
+
+/** A equipe como o painel precisa dela. */
+export type EquipeMetrica = {
+  id: string;
+  nome: string;
+  gerenteNome: string;
+  ordemExibicao: number;
+  ativa: boolean;
+};
+
+/** A área dos quadros de equipe está utilizável ou não (DEC-040). */
+export type EstadoEquipes = "OK" | "CONFIGURACAO_INVALIDA";
+
+/** As oito métricas do ciclo de rotação, na ordem do protótipo (DEC-033). */
+export const CHAVES_RANKING = [
+  "vendidos",
+  "vgv",
+  "locados",
+  "capVenda",
+  "exclusivas",
+  "capLocacao",
+  "propostas",
+  "avaliacoes",
+] as const;
+
+export type ChaveRanking = (typeof CHAVES_RANKING)[number];
+
+/** As sete métricas de contagem — todas menos o VGV, que é dinheiro. */
+export type ChaveRankingContagem = Exclude<ChaveRanking, "vgv">;
+
+export type LinhaRankingContagem = {
+  corretorId: string;
+  nomeExibicao: string;
+  valor: number;
+};
+
+export type LinhaRankingVgv = {
+  corretorId: string;
+  nomeExibicao: string;
+  /** String decimal canônica, como todo dinheiro daqui. */
+  valor: string;
+};
+
+/**
+ * Os oito rankings, um por métrica do ciclo.
+ *
+ * Escrito chave a chave, e não como `Record<…> & { vgv }`: a interseção não é
+ * indexável por `ChaveRanking`, então quem percorre as oito métricas em ordem
+ * precisaria de cast.
+ */
+export type RankingsDaEquipe = {
+  vendidos: LinhaRankingContagem[];
+  vgv: LinhaRankingVgv[];
+  locados: LinhaRankingContagem[];
+  capVenda: LinhaRankingContagem[];
+  exclusivas: LinhaRankingContagem[];
+  capLocacao: LinhaRankingContagem[];
+  propostas: LinhaRankingContagem[];
+  avaliacoes: LinhaRankingContagem[];
+};
+
+export type MetricasDeEquipe = {
+  id: string;
+  nome: string;
+  gerenteNome: string;
+  /** Headcount ativo **atual**, não o tamanho do elenco do mês. */
+  totalCorretores: number;
+  rankings: RankingsDaEquipe;
+};
+
+export type MetricasEquipesPuras = {
+  estadoPeriodoMensal: EstadoPeriodo;
+  estadoEquipes: EstadoEquipes;
+  /** Vazio quando o estado não é `OK`: não se renderiza subconjunto arbitrário. */
+  equipes: MetricasDeEquipe[];
+};
+
+/** O painel v1 tem quatro colunas fixas: mensal geral mais três equipes (DEC-040). */
+export const EQUIPES_ATIVAS_ESPERADAS = 3;
+
+/** Qual tipo de evento alimenta cada ranking de contagem. */
+const TIPO_DA_CONTAGEM: Record<ChaveRankingContagem, TipoEventoMetrica> = {
+  vendidos: "VENDA",
+  locados: "LOCACAO",
+  capVenda: "CAPTACAO_VENDA",
+  exclusivas: "CAPTACAO_EXCLUSIVA",
+  capLocacao: "CAPTACAO_LOCACAO",
+  propostas: "PROPOSTA",
+  avaliacoes: "AVALIACAO_GOOGLE",
 };
 
 const VALOR_CANONICO = /^(\d+)\.(\d{2})$/;
@@ -180,6 +280,16 @@ function vgvDaJanela(
   return somar(vendas.map(valorDaVenda), origem);
 }
 
+/**
+ * Mês sem **nenhum** lançamento não afirma desempenho zero (DEC-039).
+ *
+ * A mesma regra vale para os números da empresa e para os quadros de equipe, e
+ * mora num lugar só para as duas entradas não divergirem.
+ */
+function estadoDoMes(lancamentosDoMes: readonly LancamentoMetrica[]): EstadoPeriodo {
+  return lancamentosDoMes.length === 0 ? "SEM_DADOS" : "OK";
+}
+
 /** As sete contagens. Cada tipo incrementa só a própria linha (DEC-003). */
 function contarPorTipo(lancamentos: readonly LancamentoMetrica[]): QuadroMensal {
   const quadro = Object.fromEntries(TIPOS_EVENTO.map((tipo) => [tipo, 0])) as QuadroMensal;
@@ -220,8 +330,7 @@ export function calcularMetricasEmpresa(
   const semSaldo = { estado: "SEM_SALDO_HISTORICO", valor: null } as const;
 
   return {
-    // Mês sem nenhum lançamento não afirma desempenho zero (DEC-039).
-    estadoPeriodoMensal: doMes.length === 0 ? "SEM_DADOS" : "OK",
+    estadoPeriodoMensal: estadoDoMes(doMes),
 
     acumulados: {
       vendidos: saldoVenda
@@ -249,5 +358,194 @@ export function calcularMetricasEmpresa(
     },
 
     quadroMensal: contarPorTipo(doMes),
+  };
+}
+
+/**
+ * Colação pt-BR para **nomes**, usada só no desempate dos rankings.
+ *
+ * `Intl` entra aqui só para colação textual: ordenar "Ávila" antes de "Bastos"
+ * exige conhecer a regra do idioma. Dinheiro não é formatado nesta camada, e sua
+ * aritmética continua exata, em centavos `bigint`.
+ */
+const COLACAO_PT_BR = new Intl.Collator("pt-BR");
+
+/** Comparação de string por ordem de código, para o desempate final por id. */
+function compararTexto(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+/**
+ * Ordena um ranking: resultado decrescente, depois `nomeExibicao` em pt-BR
+ * crescente, depois `id` crescente.
+ *
+ * Os dois desempates existem para a ordem ser **determinística** entre
+ * atualizações: sem eles, dois corretores empatados poderiam trocar de lugar a
+ * cada refresh da TV sem que nada tivesse mudado. Copia antes de ordenar — a
+ * entrada do chamador não é mexida.
+ */
+function ordenarRanking<T extends { corretorId: string; nomeExibicao: string }>(
+  linhas: readonly T[],
+  compararResultado: (a: T, b: T) => number,
+): T[] {
+  return [...linhas].sort((a, b) => {
+    const porResultado = compararResultado(a, b);
+    if (porResultado !== 0) return porResultado;
+
+    const porNome = COLACAO_PT_BR.compare(a.nomeExibicao, b.nomeExibicao);
+    if (porNome !== 0) return porNome;
+
+    return compararTexto(a.corretorId, b.corretorId);
+  });
+}
+
+/**
+ * Compara dois valores monetários canônicos, do maior para o menor.
+ *
+ * Pela mesma representação exata em centavos que o resto do núcleo monetário
+ * usa, para não abrir um segundo caminho baseado em ponto flutuante.
+ */
+function compararDinheiroDesc(a: string, b: string): number {
+  const centavosA = paraCentavos(a, "ranking de VGV");
+  const centavosB = paraCentavos(b, "ranking de VGV");
+  if (centavosA > centavosB) return -1;
+  if (centavosA < centavosB) return 1;
+  return 0;
+}
+
+/**
+ * O elenco mensal de uma equipe: a união dos corretores **ativos** lotados nela
+ * hoje com os corretores **ativos** que tenham lançamento do mês creditado a ela
+ * (DEC-038).
+ *
+ * A união é por `id`, e sai sem repetição porque cada corretor aparece uma vez
+ * na lista de entrada. Corretor inativo não entra em elenco nenhum (DEC-006) —
+ * seus eventos continuam contando nos totais da empresa, que são calculados dos
+ * lançamentos e não passam por aqui.
+ */
+function elencoDaEquipe(
+  equipe: EquipeMetrica,
+  corretores: readonly CorretorMetrica[],
+  lancamentosDaEquipeNoMes: readonly LancamentoMetrica[],
+): CorretorMetrica[] {
+  const produziramNoMes = new Set(
+    lancamentosDaEquipeNoMes.map((lancamento) => lancamento.corretorId),
+  );
+
+  return corretores.filter(
+    (corretor) =>
+      corretor.ativo && (corretor.equipeId === equipe.id || produziramNoMes.has(corretor.id)),
+  );
+}
+
+/** Os oito rankings de uma equipe, já ordenados. */
+function rankingsDaEquipe(
+  elenco: readonly CorretorMetrica[],
+  lancamentosDaEquipeNoMes: readonly LancamentoMetrica[],
+  nomeDaEquipe: string,
+): RankingsDaEquipe {
+  const porCorretor = new Map<string, LancamentoMetrica[]>();
+  for (const lancamento of lancamentosDaEquipeNoMes) {
+    const lista = porCorretor.get(lancamento.corretorId);
+    if (lista) lista.push(lancamento);
+    else porCorretor.set(lancamento.corretorId, [lancamento]);
+  }
+
+  // Corretor ativo sem evento aparece com zero real: o elenco inteiro é
+  // percorrido, não só quem produziu.
+  const contagem = (chave: ChaveRankingContagem): LinhaRankingContagem[] =>
+    ordenarRanking(
+      elenco.map((corretor) => ({
+        corretorId: corretor.id,
+        nomeExibicao: corretor.nomeExibicao,
+        valor: (porCorretor.get(corretor.id) ?? []).filter(
+          (lancamento) => lancamento.tipo === TIPO_DA_CONTAGEM[chave],
+        ).length,
+      })),
+      (a, b) => b.valor - a.valor,
+    );
+
+  const vgv = ordenarRanking(
+    elenco.map((corretor) => ({
+      corretorId: corretor.id,
+      nomeExibicao: corretor.nomeExibicao,
+      valor: somar(
+        (porCorretor.get(corretor.id) ?? [])
+          .filter((lancamento) => lancamento.tipo === "VENDA")
+          .map(valorDaVenda),
+        `ranking de VGV da equipe ${nomeDaEquipe}`,
+      ),
+    })),
+    (a, b) => compararDinheiroDesc(a.valor, b.valor),
+  );
+
+  return {
+    vendidos: contagem("vendidos"),
+    vgv,
+    locados: contagem("locados"),
+    capVenda: contagem("capVenda"),
+    exclusivas: contagem("exclusivas"),
+    capLocacao: contagem("capLocacao"),
+    propostas: contagem("propostas"),
+    avaliacoes: contagem("avaliacoes"),
+  };
+}
+
+/**
+ * Métricas dos quadros de equipe a partir dos dados já lidos.
+ *
+ * Recorte fixo: **mês corrente**. Rankings são produção do mês, e não tocam
+ * trimestre, ano, saldo histórico nem `dataCorte`.
+ *
+ * Se as equipes ativas não forem exatamente três, devolve
+ * `CONFIGURACAO_INVALIDA` com a lista **vazia**. Vazia de propósito: entregar um
+ * subconjunto deixaria a apresentação renderizar três equipes escolhidas por
+ * acaso e esconder a quarta, que é justamente o que a DEC-040 proíbe. Os números
+ * da empresa não são afetados — `calcularMetricasEmpresa` nem enxerga equipes.
+ */
+export function calcularMetricasEquipes(
+  lancamentos: readonly LancamentoMetrica[],
+  corretores: readonly CorretorMetrica[],
+  equipes: readonly EquipeMetrica[],
+  agora: Date = new Date(),
+): MetricasEquipesPuras {
+  const mes = mesCorrente(agora);
+  const doMes = lancamentos.filter((lancamento) =>
+    dentroDaJanela(mes, lancamento.dataReferencia),
+  );
+  const estadoPeriodoMensal = estadoDoMes(doMes);
+
+  const ativas = equipes.filter((equipe) => equipe.ativa);
+  if (ativas.length !== EQUIPES_ATIVAS_ESPERADAS) {
+    return { estadoPeriodoMensal, estadoEquipes: "CONFIGURACAO_INVALIDA", equipes: [] };
+  }
+
+  // A ordem da tela não pode depender da ordem em que os dados chegaram.
+  const ordenadas = [...ativas].sort(
+    (a, b) => a.ordemExibicao - b.ordemExibicao || compararTexto(a.id, b.id),
+  );
+
+  return {
+    estadoPeriodoMensal,
+    estadoEquipes: "OK",
+    equipes: ordenadas.map((equipe) => {
+      // O crédito é sempre por `Lancamento.equipeId` (DEC-002).
+      const daEquipe = doMes.filter((lancamento) => lancamento.equipeId === equipe.id);
+      const elenco = elencoDaEquipe(equipe, corretores, daEquipe);
+
+      return {
+        id: equipe.id,
+        nome: equipe.nome,
+        gerenteNome: equipe.gerenteNome,
+        // Headcount atual: o transferido conta na equipe de hoje, não na antiga
+        // onde ainda aparece por produção histórica.
+        totalCorretores: corretores.filter(
+          (corretor) => corretor.ativo && corretor.equipeId === equipe.id,
+        ).length,
+        rankings: rankingsDaEquipe(elenco, daEquipe, equipe.nome),
+      };
+    }),
   };
 }

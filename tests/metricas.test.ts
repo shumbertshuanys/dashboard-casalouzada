@@ -3,7 +3,13 @@ import { describe, it } from "node:test";
 import { paraDataCivil } from "@/lib/datas";
 import {
   calcularMetricasEmpresa,
+  calcularMetricasEquipes,
+  type ChaveRanking,
+  CHAVES_RANKING,
+  type CorretorMetrica,
+  type EquipeMetrica,
   type LancamentoMetrica,
+  type MetricasEquipesPuras,
   type SaldoHistoricoMetrica,
   type TipoEventoMetrica,
   type TipoSaldoMetrica,
@@ -557,5 +563,674 @@ describe("período corrente segue São Paulo, não UTC", () => {
 
     assert.equal(metricas.vgvPeriodos.anual, "10.00");
     assert.equal(metricas.vgvPeriodos.mensal, "10.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F3.2B — equipes e rankings
+// ---------------------------------------------------------------------------
+
+/** Lançamento com corretor e equipe explícitos: aqui os ids são o teste. */
+function evento(
+  tipo: TipoEventoMetrica,
+  diaCivil: string,
+  corretorId: string,
+  equipeId: string,
+  valor: string | null = null,
+): LancamentoMetrica {
+  return { tipo, corretorId, equipeId, dataReferencia: paraDataCivil(diaCivil), valor };
+}
+
+function corretor(
+  id: string,
+  nomeExibicao: string,
+  equipeId: string,
+  ativo = true,
+): CorretorMetrica {
+  return { id, nomeExibicao, equipeId, ativo };
+}
+
+function time(id: string, ordemExibicao: number, ativa = true): EquipeMetrica {
+  return { id, nome: `Equipe ${id}`, gerenteNome: `Gerente ${id}`, ordemExibicao, ativa };
+}
+
+/** As três ativas usadas na maioria dos casos. */
+const TRES_EQUIPES = [time("A", 1), time("B", 2), time("C", 3)];
+
+/** Acha a linha de um corretor num ranking, sem depender da posição. */
+function linha(
+  resultado: MetricasEquipesPuras,
+  equipeId: string,
+  chave: ChaveRanking,
+  corretorId: string,
+): { corretorId: string; nomeExibicao: string; valor: number | string } | undefined {
+  const equipe = resultado.equipes.find((e) => e.id === equipeId);
+  assert.ok(equipe, `equipe ${equipeId} deveria estar no resultado`);
+
+  // Contagem e VGV têm `valor` de tipos diferentes; aqui só interessa achar a
+  // linha, então os dois entram como leitura somente.
+  const linhas: readonly { corretorId: string; nomeExibicao: string; valor: number | string }[] =
+    equipe.rankings[chave];
+  return linhas.find((l) => l.corretorId === corretorId);
+}
+
+describe("exatamente três equipes ativas (DEC-040)", () => {
+  const corretores = [corretor("c1", "Um", "A")];
+
+  it("nenhuma equipe ativa é configuração inválida", () => {
+    const resultado = calcularMetricasEquipes([], corretores, [], AGORA);
+    assert.equal(resultado.estadoEquipes, "CONFIGURACAO_INVALIDA");
+    assert.deepEqual(resultado.equipes, []);
+  });
+
+  it("duas ativas é configuração inválida", () => {
+    const resultado = calcularMetricasEquipes([], corretores, [time("A", 1), time("B", 2)], AGORA);
+    assert.equal(resultado.estadoEquipes, "CONFIGURACAO_INVALIDA");
+    assert.deepEqual(resultado.equipes, []);
+  });
+
+  it("três ativas é OK", () => {
+    const resultado = calcularMetricasEquipes([], corretores, TRES_EQUIPES, AGORA);
+    assert.equal(resultado.estadoEquipes, "OK");
+    assert.equal(resultado.equipes.length, 3);
+  });
+
+  it("quatro ativas não devolve as três primeiras", () => {
+    const resultado = calcularMetricasEquipes(
+      [],
+      corretores,
+      [...TRES_EQUIPES, time("D", 4)],
+      AGORA,
+    );
+
+    assert.equal(resultado.estadoEquipes, "CONFIGURACAO_INVALIDA");
+    assert.equal(resultado.equipes.length, 0, "nada de subconjunto arbitrário");
+  });
+
+  it("equipes inativas não contam para os três", () => {
+    const resultado = calcularMetricasEquipes(
+      [],
+      corretores,
+      [...TRES_EQUIPES, time("D", 4, false), time("E", 5, false)],
+      AGORA,
+    );
+
+    assert.equal(resultado.estadoEquipes, "OK");
+    assert.deepEqual(
+      resultado.equipes.map((e) => e.id),
+      ["A", "B", "C"],
+    );
+  });
+
+  it("configuração inválida não impede o estado do mês de ser calculado", () => {
+    const resultado = calcularMetricasEquipes(
+      [evento("PROPOSTA", "2026-08-10", "c1", "A")],
+      corretores,
+      [time("A", 1)],
+      AGORA,
+    );
+
+    assert.equal(resultado.estadoEquipes, "CONFIGURACAO_INVALIDA");
+    assert.equal(resultado.estadoPeriodoMensal, "OK");
+  });
+});
+
+describe("ordem das equipes", () => {
+  it("ordena por ordemExibicao, não pela ordem de chegada", () => {
+    const resultado = calcularMetricasEquipes(
+      [],
+      [],
+      [time("X", 30), time("Y", 10), time("Z", 20)],
+      AGORA,
+    );
+
+    assert.deepEqual(
+      resultado.equipes.map((e) => e.id),
+      ["Y", "Z", "X"],
+    );
+  });
+
+  it("empate de ordemExibicao é resolvido por id", () => {
+    const resultado = calcularMetricasEquipes(
+      [],
+      [],
+      [time("zeta", 5), time("alfa", 5), time("meio", 5)],
+      AGORA,
+    );
+
+    assert.deepEqual(
+      resultado.equipes.map((e) => e.id),
+      ["alfa", "meio", "zeta"],
+    );
+  });
+});
+
+describe("elenco atual da equipe", () => {
+  it("corretor ativo sem evento aparece em todos os rankings, com zero", () => {
+    const corretores = [corretor("a1", "Sem Evento", "A"), corretor("a2", "Com Evento", "A")];
+    const resultado = calcularMetricasEquipes(
+      [evento("VENDA", "2026-08-10", "a2", "A", "1000.00")],
+      corretores,
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    for (const chave of CHAVES_RANKING) {
+      assert.equal(
+        resultado.equipes[0].rankings[chave].length,
+        2,
+        `${chave} deveria listar o elenco inteiro`,
+      );
+    }
+
+    assert.equal(linha(resultado, "A", "vendidos", "a1")?.valor, 0);
+    assert.equal(linha(resultado, "A", "vgv", "a1")?.valor, "0.00");
+    assert.equal(linha(resultado, "A", "propostas", "a1")?.valor, 0);
+    assert.equal(linha(resultado, "A", "vendidos", "a2")?.valor, 1);
+  });
+
+  it("corretor de outra equipe sem produção aqui não aparece", () => {
+    const resultado = calcularMetricasEquipes(
+      [],
+      [corretor("a1", "Da A", "A"), corretor("b1", "Da B", "B")],
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    assert.deepEqual(
+      resultado.equipes[0].rankings.vendidos.map((l) => l.corretorId),
+      ["a1"],
+    );
+    assert.deepEqual(
+      resultado.equipes[1].rankings.vendidos.map((l) => l.corretorId),
+      ["b1"],
+    );
+  });
+});
+
+describe("transferência de corretor (DEC-038)", () => {
+  // X está hoje na B, mas produziu no mês pelas duas.
+  const corretores = [
+    corretor("x", "Xavier", "B"),
+    corretor("a1", "Alice", "A"),
+    corretor("b1", "Bruno", "B"),
+  ];
+
+  const lancamentos = [
+    evento("VENDA", "2026-08-05", "x", "A", "100.00"),
+    evento("VENDA", "2026-08-20", "x", "B", "250.00"),
+  ];
+
+  it("aparece nas duas equipes", () => {
+    const resultado = calcularMetricasEquipes(lancamentos, corretores, TRES_EQUIPES, AGORA);
+
+    assert.ok(linha(resultado, "A", "vendidos", "x"), "X está no quadro da A");
+    assert.ok(linha(resultado, "B", "vendidos", "x"), "X está no quadro da B");
+  });
+
+  it("cada quadro soma só a própria produção histórica", () => {
+    const resultado = calcularMetricasEquipes(lancamentos, corretores, TRES_EQUIPES, AGORA);
+
+    assert.equal(linha(resultado, "A", "vendidos", "x")?.valor, 1);
+    assert.equal(linha(resultado, "A", "vgv", "x")?.valor, "100.00");
+
+    assert.equal(linha(resultado, "B", "vendidos", "x")?.valor, 1);
+    assert.equal(linha(resultado, "B", "vgv", "x")?.valor, "250.00");
+  });
+
+  it("nenhum quadro recebe a produção somada", () => {
+    const resultado = calcularMetricasEquipes(lancamentos, corretores, TRES_EQUIPES, AGORA);
+
+    for (const equipeId of ["A", "B"]) {
+      assert.notEqual(linha(resultado, equipeId, "vendidos", "x")?.valor, 2);
+      assert.notEqual(linha(resultado, equipeId, "vgv", "x")?.valor, "350.00");
+    }
+  });
+
+  it("transferido sem produção nova aparece na equipe atual com zero", () => {
+    const resultado = calcularMetricasEquipes(
+      [evento("VENDA", "2026-08-05", "x", "A", "100.00")],
+      corretores,
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    // Na A, pela produção histórica do mês.
+    assert.equal(linha(resultado, "A", "vendidos", "x")?.valor, 1);
+    assert.equal(linha(resultado, "A", "vgv", "x")?.valor, "100.00");
+
+    // Na B, pela lotação atual — zerado.
+    assert.equal(linha(resultado, "B", "vendidos", "x")?.valor, 0);
+    assert.equal(linha(resultado, "B", "vgv", "x")?.valor, "0.00");
+  });
+
+  it("o crédito nunca vem da lotação atual do corretor", () => {
+    // Se o código usasse `corretor.equipeId`, a venda creditada a A apareceria
+    // na B, que é onde X está hoje.
+    const resultado = calcularMetricasEquipes(
+      [evento("VENDA", "2026-08-05", "x", "A", "100.00")],
+      corretores,
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    assert.equal(linha(resultado, "B", "vgv", "x")?.valor, "0.00");
+    assert.equal(linha(resultado, "B", "vgv", "b1")?.valor, "0.00");
+  });
+});
+
+describe("totalCorretores é headcount atual", () => {
+  it("não conta o transferido na equipe antiga e conta na atual", () => {
+    const corretores = [
+      corretor("x", "Xavier", "B"),
+      corretor("a1", "Alice", "A"),
+      corretor("a2", "Ana", "A"),
+      corretor("b1", "Bruno", "B"),
+      corretor("c1", "Carla", "C"),
+      corretor("a3", "Antigo", "A", false),
+    ];
+
+    const resultado = calcularMetricasEquipes(
+      [evento("VENDA", "2026-08-05", "x", "A", "100.00")],
+      corretores,
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    const porId = new Map(resultado.equipes.map((e) => [e.id, e]));
+
+    // A tem a1 e a2 ativos; x aparece no ranking mas não no headcount, e o
+    // inativo a3 não conta.
+    assert.equal(porId.get("A")?.totalCorretores, 2);
+    assert.ok(linha(resultado, "A", "vendidos", "x"), "x está no elenco do mês da A");
+
+    assert.equal(porId.get("B")?.totalCorretores, 2, "b1 e x");
+    assert.equal(porId.get("C")?.totalCorretores, 1);
+  });
+});
+
+describe("corretor inativo (DEC-006)", () => {
+  const corretores = [
+    corretor("y", "Yara", "A", false),
+    corretor("a1", "Alice", "A"),
+    corretor("b1", "Bruno", "B"),
+    corretor("c1", "Carla", "C"),
+  ];
+
+  const lancamentos = [
+    evento("VENDA", "2026-08-05", "y", "A", "700.00"),
+    evento("PROPOSTA", "2026-08-06", "y", "A"),
+    evento("VENDA", "2026-08-07", "a1", "A", "300.00"),
+  ];
+
+  it("não aparece em ranking nenhum", () => {
+    const resultado = calcularMetricasEquipes(lancamentos, corretores, TRES_EQUIPES, AGORA);
+
+    for (const chave of CHAVES_RANKING) {
+      assert.equal(
+        linha(resultado, "A", chave, "y"),
+        undefined,
+        `inativo não pode ter linha em ${chave}`,
+      );
+    }
+    assert.ok(linha(resultado, "A", "vendidos", "a1"), "o ativo continua");
+  });
+
+  it("mas os eventos dele continuam nos totais da empresa", () => {
+    const empresa = calcularMetricasEmpresa(lancamentos, [], AGORA);
+
+    assert.equal(empresa.quadroMensal.VENDA, 2, "as duas vendas contam");
+    assert.equal(empresa.quadroMensal.PROPOSTA, 1);
+    assert.equal(empresa.vgvPeriodos.mensal, "1000.00", "700 + 300");
+  });
+
+  it("o headcount da equipe também ignora o inativo", () => {
+    const resultado = calcularMetricasEquipes(lancamentos, corretores, TRES_EQUIPES, AGORA);
+    assert.equal(resultado.equipes[0].totalCorretores, 1);
+  });
+});
+
+describe("as oito métricas", () => {
+  const corretores = [corretor("a1", "Alice", "A"), corretor("a2", "Ana", "A")];
+
+  const lancamentos = [
+    evento("VENDA", "2026-08-01", "a1", "A", "1000.00"),
+    evento("VENDA", "2026-08-02", "a1", "A", "500.00"),
+    evento("LOCACAO", "2026-08-03", "a1", "A", "3000.00"),
+    evento("CAPTACAO_VENDA", "2026-08-04", "a1", "A"),
+    evento("CAPTACAO_EXCLUSIVA", "2026-08-05", "a1", "A"),
+    evento("CAPTACAO_EXCLUSIVA", "2026-08-06", "a1", "A"),
+    evento("CAPTACAO_LOCACAO", "2026-08-07", "a1", "A"),
+    evento("PROPOSTA", "2026-08-08", "a1", "A"),
+    evento("PROPOSTA", "2026-08-09", "a1", "A"),
+    evento("PROPOSTA", "2026-08-10", "a1", "A"),
+    evento("AVALIACAO_GOOGLE", "2026-08-11", "a1", "A"),
+  ];
+
+  it("cada tipo alimenta somente a própria métrica", () => {
+    const resultado = calcularMetricasEquipes(lancamentos, corretores, TRES_EQUIPES, AGORA);
+
+    assert.equal(linha(resultado, "A", "vendidos", "a1")?.valor, 2);
+    assert.equal(linha(resultado, "A", "vgv", "a1")?.valor, "1500.00");
+    assert.equal(linha(resultado, "A", "locados", "a1")?.valor, 1);
+    assert.equal(linha(resultado, "A", "capVenda", "a1")?.valor, 1);
+    assert.equal(linha(resultado, "A", "exclusivas", "a1")?.valor, 2);
+    assert.equal(linha(resultado, "A", "capLocacao", "a1")?.valor, 1);
+    assert.equal(linha(resultado, "A", "propostas", "a1")?.valor, 3);
+    assert.equal(linha(resultado, "A", "avaliacoes", "a1")?.valor, 1);
+  });
+
+  it("o VGV não conta locação", () => {
+    const resultado = calcularMetricasEquipes(lancamentos, corretores, TRES_EQUIPES, AGORA);
+    // Os 3000.00 da locação apareceriam se o filtro de tipo falhasse.
+    assert.equal(linha(resultado, "A", "vgv", "a1")?.valor, "1500.00");
+  });
+
+  it("captação de venda e exclusividade não se somam (DEC-003)", () => {
+    const resultado = calcularMetricasEquipes(
+      [
+        evento("CAPTACAO_VENDA", "2026-08-04", "a1", "A"),
+        evento("CAPTACAO_EXCLUSIVA", "2026-08-05", "a1", "A"),
+        evento("CAPTACAO_EXCLUSIVA", "2026-08-06", "a1", "A"),
+      ],
+      corretores,
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    assert.equal(linha(resultado, "A", "capVenda", "a1")?.valor, 1);
+    assert.equal(linha(resultado, "A", "exclusivas", "a1")?.valor, 2);
+    assert.notEqual(linha(resultado, "A", "capVenda", "a1")?.valor, 3);
+    assert.notEqual(linha(resultado, "A", "exclusivas", "a1")?.valor, 3);
+  });
+
+  it("ranking só usa o mês corrente", () => {
+    const resultado = calcularMetricasEquipes(
+      [
+        evento("VENDA", "2026-08-15", "a1", "A", "10.00"),
+        evento("VENDA", "2026-07-31", "a1", "A", "999.00"),
+        evento("VENDA", "2026-09-01", "a1", "A", "888.00"),
+      ],
+      corretores,
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    assert.equal(linha(resultado, "A", "vendidos", "a1")?.valor, 1);
+    assert.equal(linha(resultado, "A", "vgv", "a1")?.valor, "10.00");
+  });
+});
+
+describe("VGV do ranking é exato", () => {
+  const corretores = [corretor("a1", "Alice", "A")];
+
+  it("0.10 + 0.20 dá 0.30", () => {
+    const resultado = calcularMetricasEquipes(
+      [
+        evento("VENDA", "2026-08-01", "a1", "A", "0.10"),
+        evento("VENDA", "2026-08-02", "a1", "A", "0.20"),
+      ],
+      corretores,
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    assert.equal(linha(resultado, "A", "vgv", "a1")?.valor, "0.30");
+  });
+
+  it("passa do topo de Decimal(14,2) sem perder centavo", () => {
+    const resultado = calcularMetricasEquipes(
+      [
+        evento("VENDA", "2026-08-01", "a1", "A", "999999999999.99"),
+        evento("VENDA", "2026-08-02", "a1", "A", "0.01"),
+      ],
+      corretores,
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    assert.equal(linha(resultado, "A", "vgv", "a1")?.valor, "1000000000000.00");
+  });
+
+  it("ordena por centavos, não por texto", () => {
+    const resultado = calcularMetricasEquipes(
+      [
+        evento("VENDA", "2026-08-01", "a1", "A", "999999999999.99"),
+        evento("VENDA", "2026-08-01", "a2", "A", "1000000000000.00"),
+        evento("VENDA", "2026-08-01", "a3", "A", "9.00"),
+      ],
+      [corretor("a1", "Alice", "A"), corretor("a2", "Ana", "A"), corretor("a3", "Aurora", "A")],
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    // Ordenado como texto, "9.00" viria antes de "1000000000000.00".
+    assert.deepEqual(
+      resultado.equipes[0].rankings.vgv.map((l) => l.corretorId),
+      ["a2", "a1", "a3"],
+    );
+  });
+
+  it("venda sem valor no ranking falha explicitamente", () => {
+    assert.throws(
+      () =>
+        calcularMetricasEquipes(
+          [evento("VENDA", "2026-08-10", "a1", "A", null)],
+          corretores,
+          TRES_EQUIPES,
+          AGORA,
+        ),
+      /VENDA sem valor/,
+    );
+  });
+
+  it("venda sem valor fora do mês não derruba o ranking", () => {
+    const resultado = calcularMetricasEquipes(
+      [
+        evento("VENDA", "2026-07-10", "a1", "A", null),
+        evento("VENDA", "2026-08-10", "a1", "A", "5.00"),
+      ],
+      corretores,
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    assert.equal(linha(resultado, "A", "vgv", "a1")?.valor, "5.00");
+  });
+});
+
+describe("ordenação dos rankings", () => {
+  it("resultado decrescente", () => {
+    const resultado = calcularMetricasEquipes(
+      [
+        evento("PROPOSTA", "2026-08-01", "a1", "A"),
+        evento("PROPOSTA", "2026-08-02", "a2", "A"),
+        evento("PROPOSTA", "2026-08-03", "a2", "A"),
+        evento("PROPOSTA", "2026-08-04", "a3", "A"),
+        evento("PROPOSTA", "2026-08-05", "a3", "A"),
+        evento("PROPOSTA", "2026-08-06", "a3", "A"),
+      ],
+      [corretor("a1", "Alice", "A"), corretor("a2", "Ana", "A"), corretor("a3", "Aurora", "A")],
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    assert.deepEqual(
+      resultado.equipes[0].rankings.propostas.map((l) => [l.corretorId, l.valor]),
+      [
+        ["a3", 3],
+        ["a2", 2],
+        ["a1", 1],
+      ],
+    );
+  });
+
+  it("empate desempata por nomeExibicao em pt-BR, com acento no lugar certo", () => {
+    // Em ordem de código, "Bastos" (B) viria antes de "Ávila" (Á = U+00C1).
+    const resultado = calcularMetricasEquipes(
+      [],
+      [
+        corretor("c3", "Bastos", "A"),
+        corretor("c1", "Ávila", "A"),
+        corretor("c2", "Alves", "A"),
+        corretor("c4", "Çelik", "A"),
+        corretor("c5", "Cunha", "A"),
+      ],
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    assert.deepEqual(
+      resultado.equipes[0].rankings.vendidos.map((l) => l.nomeExibicao),
+      ["Alves", "Ávila", "Bastos", "Çelik", "Cunha"],
+    );
+  });
+
+  it("mesmo nome e mesmo resultado desempata por id", () => {
+    const resultado = calcularMetricasEquipes(
+      [],
+      [
+        corretor("zzz", "João Silva", "A"),
+        corretor("aaa", "João Silva", "A"),
+        corretor("mmm", "João Silva", "A"),
+      ],
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    assert.deepEqual(
+      resultado.equipes[0].rankings.vendidos.map((l) => l.corretorId),
+      ["aaa", "mmm", "zzz"],
+    );
+  });
+
+  it("resultado tem prioridade sobre o nome", () => {
+    const resultado = calcularMetricasEquipes(
+      [evento("PROPOSTA", "2026-08-01", "z", "A")],
+      [corretor("a", "Alice", "A"), corretor("z", "Zeca", "A")],
+      TRES_EQUIPES,
+      AGORA,
+    );
+
+    assert.deepEqual(
+      resultado.equipes[0].rankings.propostas.map((l) => l.corretorId),
+      ["z", "a"],
+    );
+  });
+});
+
+describe("determinismo", () => {
+  const corretores = [
+    corretor("a1", "Alice", "A"),
+    corretor("a2", "Ana", "A"),
+    corretor("b1", "Bruno", "B"),
+    corretor("c1", "Carla", "C"),
+  ];
+
+  const lancamentos = [
+    evento("VENDA", "2026-08-01", "a1", "A", "10.00"),
+    evento("VENDA", "2026-08-02", "a2", "A", "10.00"),
+    evento("PROPOSTA", "2026-08-03", "a2", "A"),
+    evento("VENDA", "2026-08-04", "b1", "B", "20.00"),
+    evento("AVALIACAO_GOOGLE", "2026-08-05", "c1", "C"),
+  ];
+
+  it("a saída não depende da ordem das entradas", () => {
+    const direto = calcularMetricasEquipes(lancamentos, corretores, TRES_EQUIPES, AGORA);
+    const invertido = calcularMetricasEquipes(
+      [...lancamentos].reverse(),
+      [...corretores].reverse(),
+      [...TRES_EQUIPES].reverse(),
+      AGORA,
+    );
+
+    assert.deepEqual(invertido, direto);
+  });
+
+  it("não muta os arrays recebidos", () => {
+    const equipesEntrada = [...TRES_EQUIPES];
+    const corretoresEntrada = [...corretores];
+    const lancamentosEntrada = [...lancamentos];
+
+    calcularMetricasEquipes(lancamentosEntrada, corretoresEntrada, equipesEntrada, AGORA);
+
+    assert.deepEqual(equipesEntrada, TRES_EQUIPES);
+    assert.deepEqual(corretoresEntrada, corretores);
+    assert.deepEqual(lancamentosEntrada, lancamentos);
+  });
+});
+
+describe("estado do mês nas equipes", () => {
+  const corretores = [corretor("a1", "Alice", "A")];
+
+  it("nenhum lançamento no mês é SEM_DADOS", () => {
+    const resultado = calcularMetricasEquipes([], corretores, TRES_EQUIPES, AGORA);
+
+    assert.equal(resultado.estadoPeriodoMensal, "SEM_DADOS");
+    // O domínio ainda traz as linhas zeradas; quem decide não exibir é a F3.4.
+    assert.equal(resultado.equipes.length, 3);
+    assert.equal(linha(resultado, "A", "vendidos", "a1")?.valor, 0);
+  });
+
+  it("lançamento fora do mês também é SEM_DADOS", () => {
+    const resultado = calcularMetricasEquipes(
+      [evento("VENDA", "2026-07-31", "a1", "A", "10.00")],
+      corretores,
+      TRES_EQUIPES,
+      AGORA,
+    );
+    assert.equal(resultado.estadoPeriodoMensal, "SEM_DADOS");
+  });
+
+  it("um lançamento de qualquer tipo, em qualquer equipe, já é OK", () => {
+    const resultado = calcularMetricasEquipes(
+      [evento("AVALIACAO_GOOGLE", "2026-08-10", "c1", "C")],
+      corretores,
+      TRES_EQUIPES,
+      AGORA,
+    );
+    assert.equal(resultado.estadoPeriodoMensal, "OK");
+  });
+
+  it("a regra é a mesma da empresa", () => {
+    const lancamentos = [evento("PROPOSTA", "2026-08-10", "a1", "A")];
+    assert.equal(
+      calcularMetricasEquipes(lancamentos, corretores, TRES_EQUIPES, AGORA).estadoPeriodoMensal,
+      calcularMetricasEmpresa(lancamentos, [], AGORA).estadoPeriodoMensal,
+    );
+  });
+});
+
+describe("rankings seguem São Paulo, não UTC", () => {
+  it("02:30Z de 1º de março ainda ranqueia fevereiro", () => {
+    const virada = new Date("2026-03-01T02:30:00.000Z");
+    const resultado = calcularMetricasEquipes(
+      [
+        evento("VENDA", "2026-02-28", "a1", "A", "500.00"),
+        evento("VENDA", "2026-03-01", "a1", "A", "900.00"),
+      ],
+      [corretor("a1", "Alice", "A")],
+      TRES_EQUIPES,
+      virada,
+    );
+
+    assert.equal(resultado.estadoPeriodoMensal, "OK");
+    assert.equal(linha(resultado, "A", "vendidos", "a1")?.valor, 1);
+    assert.equal(linha(resultado, "A", "vgv", "a1")?.valor, "500.00");
+  });
+
+  it("03:30Z do mesmo dia já ranqueia março", () => {
+    const depois = new Date("2026-03-01T03:30:00.000Z");
+    const resultado = calcularMetricasEquipes(
+      [
+        evento("VENDA", "2026-02-28", "a1", "A", "500.00"),
+        evento("VENDA", "2026-03-01", "a1", "A", "900.00"),
+      ],
+      [corretor("a1", "Alice", "A")],
+      TRES_EQUIPES,
+      depois,
+    );
+
+    assert.equal(linha(resultado, "A", "vgv", "a1")?.valor, "900.00");
   });
 });
