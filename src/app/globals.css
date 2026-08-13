@@ -10,6 +10,8 @@
   --color-destaque: #c9a96a;
   --color-positivo: #7e9b6e;
   --color-negativo: #c1745b;
+  /* Fundo atrás do painel, visível só quando a viewport não é 16:9. */
+  --color-moldura: #3e382e;
 }
 
 html,

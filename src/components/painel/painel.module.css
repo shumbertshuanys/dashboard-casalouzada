@@ -1,5 +1,5 @@
 /* Estilo do painel, portado do protótipo HTML de referência.
-   As cores reusam os tokens de `globals.css`; só a moldura é local a esta tela.
+   As cores reusam os tokens de `globals.css`, inclusive a da moldura.
 
    Toda a escala interna é em `cqw` — 1cqw é 1% da largura do próprio painel, que
    por sua vez é derivada da viewport (ver `.tv`).
@@ -15,14 +15,16 @@
    dariam 31.9px e 109.8px a 3840px, logo abaixo dos mínimos de 32px e 110px da
    seção 6 do PLANO. */
 
-/* Fundo atrás do painel, visível só quando a viewport não é 16:9. Fica aqui, e não
-   em `globals.css`, porque é decisão desta tela e não do sistema. */
+/* Fundo atrás do painel, visível só quando a viewport não é 16:9. */
 .moldura {
   position: fixed;
   inset: 0;
   display: grid;
   place-items: center;
-  background: #3e382e;
+  background: var(--color-moldura);
+  /* A TV não tem operador: um ponteiro parado no meio da tela ficaria lá o dia
+     inteiro. Vale só aqui — o `/admin` continua com cursor normal. */
+  cursor: none;
   overflow: hidden;
 }
 
@@ -132,7 +134,7 @@
   line-height: 1.5;
 }
 .vgvItem {
-  border-left: 1px solid rgb(241 239 234 / 0.14);
+  border-left: 0.05cqw solid rgb(241 239 234 / 0.14);
   padding-left: 1.8cqw;
 }
 .vgvItem .rot {
@@ -236,7 +238,7 @@
 /* Régua pontilhada preenchendo o vão entre rótulo e valor. */
 .linha .rule {
   flex: 1;
-  border-bottom: 1px dotted rgb(241 239 234 / 0.16);
+  border-bottom: 0.05cqw dotted rgb(241 239 234 / 0.16);
   transform: translateY(-0.25cqw);
 }
 
