@@ -13,10 +13,14 @@ import estilos from "./painel.module.css";
  * desenho é o mesmo nas duas, e é justamente por ser um só que o protótipo
  * continua valendo como contrato visual da tela de verdade.
  *
- * **Server Component**, sem `"use client"`. Ele recebe tudo pronto em
- * `ApresentacaoPainel` (F3.4): aqui não se lê banco, não se calcula e não se
- * formata nada. Os estados já chegam resolvidos — `—` onde não há número a
- * afirmar, zero real onde há.
+ * Não carrega `"use client"`: pelo grafo do `/preview` ele é renderizado no
+ * servidor. Pelo grafo da rota real, porém, quem o importa é o
+ * `AtualizadorPainel` — que é cliente —, e ele entra no bundle junto. Isso é
+ * possível justamente por não ter estado nem efeito próprio: recebe tudo pronto
+ * em `ApresentacaoPainel` (F3.4) e desenha.
+ *
+ * Aqui não se lê banco, não se calcula e não se formata nada. Os estados já
+ * chegam resolvidos — `—` onde não há número a afirmar, zero real onde há.
  */
 
 // Jost é a tipografia da seção 6 do PLANO. Fica só no painel: o admin e o login
@@ -38,7 +42,14 @@ function EstadoEquipes({ titulo }: { titulo: string }) {
   );
 }
 
-export function PainelVisual({ apresentacao }: { apresentacao: ApresentacaoPainel }) {
+export function PainelVisual({
+  apresentacao,
+  atualizadoEm,
+}: {
+  apresentacao: ApresentacaoPainel;
+  /** Hora da leitura mais antiga ainda em tela. Ausente no `/preview`. */
+  atualizadoEm?: string | null;
+}) {
   const decisao = decidirAreaEquipes(apresentacao.equipes);
 
   return (
@@ -49,7 +60,14 @@ export function PainelVisual({ apresentacao }: { apresentacao: ApresentacaoPaine
         <div className={estilos.conteudo}>
           <div className={estilos.topo}>
             <div className={estilos.marca}>CASA LOUZADA</div>
-            <div className={estilos.periodo}>{apresentacao.periodo}</div>
+            <div className={estilos.periodo}>
+              {apresentacao.periodo}
+              {/* Discreto de propósito: quem passa pelo escritório lê os números,
+                  não o relógio. Sem selo quando não há leitura a datar. */}
+              {atualizadoEm ? (
+                <span className={estilos.atualizacao}>atualizado {atualizadoEm}</span>
+              ) : null}
+            </div>
           </div>
 
           <FaixaBig itens={apresentacao.bigNumbers} />

@@ -69,6 +69,13 @@
   color: var(--color-texto-secundario);
 }
 
+/* Selo "atualizado HH:MM", ao lado do período. Herda cor e caixa do `.periodo`:
+   é informação de rodapé no topo, e não pode competir com os números. */
+.atualizacao {
+  margin-left: 1.2cqw;
+  opacity: 0.72;
+}
+
 .faixaBig {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

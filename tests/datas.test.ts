@@ -5,6 +5,7 @@ import {
   deDataCivil,
   formatarDataBR,
   hojeEmSaoPaulo,
+  horaEmSaoPaulo,
   type JanelaCivil,
   mesCorrente,
   paraDataCivil,
@@ -72,6 +73,50 @@ describe("hojeEmSaoPaulo", () => {
 
   it("devolve algo no formato canônico sem argumento", () => {
     assert.match(hojeEmSaoPaulo(), /^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("horaEmSaoPaulo", () => {
+  it("converte o instante para o relógio do escritório", () => {
+    // 15:00Z é meio-dia em São Paulo (UTC-3).
+    assert.equal(horaEmSaoPaulo(new Date("2026-08-15T15:00:00.000Z")), "12:00");
+    assert.equal(horaEmSaoPaulo(new Date("2026-08-15T17:32:41.000Z")), "14:32");
+  });
+
+  it("usa o relógio do escritório mesmo com o servidor já no dia seguinte", () => {
+    // 02:00Z de 1º de janeiro ainda é 23:00 de 31 de dezembro em São Paulo.
+    const virada = new Date("2026-01-01T02:00:00.000Z");
+    assert.equal(hojeEmSaoPaulo(virada), "2025-12-31");
+    assert.equal(horaEmSaoPaulo(virada), "23:00");
+  });
+
+  it("cobre os últimos minutos do dia", () => {
+    assert.equal(horaEmSaoPaulo(new Date("2026-08-16T02:55:00.000Z")), "23:55");
+    assert.equal(horaEmSaoPaulo(new Date("2026-08-16T02:59:59.999Z")), "23:59");
+  });
+
+  it("meia-noite sai como 00:00, nunca 24:00", () => {
+    // `hourCycle: "h23"` existe exatamente para isto.
+    assert.equal(horaEmSaoPaulo(new Date("2026-08-16T03:00:00.000Z")), "00:00");
+    assert.equal(horaEmSaoPaulo(new Date("2026-08-16T03:07:00.000Z")), "00:07");
+  });
+
+  it("sai sempre com dois dígitos em cada campo", () => {
+    for (const instante of [
+      "2026-08-16T03:00:00.000Z",
+      "2026-08-15T15:00:00.000Z",
+      "2026-08-16T02:55:00.000Z",
+    ]) {
+      assert.match(horaEmSaoPaulo(new Date(instante)), /^([01]\d|2[0-3]):[0-5]\d$/);
+    }
+  });
+
+  it("não depende do fuso do processo", () => {
+    // O mesmo instante em qualquer máquina: o `timeZone` é explícito, e a suíte
+    // roda inteira nos três fusos de `npm run test:fusos`.
+    const instante = new Date("2026-08-15T17:32:00.000Z");
+    assert.equal(horaEmSaoPaulo(instante), "14:32");
+    assert.equal(horaEmSaoPaulo(new Date(instante.getTime())), "14:32");
   });
 });
 

@@ -7,8 +7,10 @@
  * `new Date(ano, mes, dia)`, o mesmo código gravaria dias diferentes em máquinas
  * com fusos diferentes — e o servidor não roda no fuso de São Paulo.
  *
- * O único ponto que conhece `America/Sao_Paulo` é `hojeEmSaoPaulo`, porque ali a
- * pergunta é outra: que dia é hoje para quem opera o sistema.
+ * Os pontos que conhecem `America/Sao_Paulo` são `hojeEmSaoPaulo` e
+ * `horaEmSaoPaulo`, porque ali a pergunta é outra: que dia — e que hora — é agora
+ * para quem opera o sistema. Os dois saem da mesma travessia `Intl`, para não
+ * existirem duas conversões de fuso que pudessem divergir.
  *
  * Recortes de período — mês, trimestre, ano — moram aqui desde a F3.1, como
  * janelas civis. Só os limites: o que se conta dentro deles é das fatias
@@ -68,24 +70,54 @@ export function formatarDataBR(data: Date): string {
 }
 
 /**
- * Data civil de hoje em São Paulo, como `YYYY-MM-DD`.
+ * Partes de data e hora já convertidas para o fuso do negócio.
  *
- * `agora` é injetável para o teste não depender do relógio. O fuso entra por
- * `Intl` com `timeZone` explícito: às 23h de São Paulo o servidor em UTC já está
- * no dia seguinte, e é o dia do escritório que vale.
+ * É a **única** travessia de fuso do módulo: `hojeEmSaoPaulo` e `horaEmSaoPaulo`
+ * saem daqui. O `timeZone` é explícito, então às 23h de São Paulo — quando o
+ * servidor em UTC já está no dia seguinte — o que vale é o relógio do escritório.
  */
-export function hojeEmSaoPaulo(agora: Date = new Date()): string {
+function partesEmSaoPaulo(
+  agora: Date,
+  opcoes: Intl.DateTimeFormatOptions,
+): (tipo: Intl.DateTimeFormatPartTypes) => string {
   const partes = new Intl.DateTimeFormat("en-CA", {
     timeZone: FUSO_NEGOCIO,
+    ...opcoes,
+  }).formatToParts(agora);
+
+  return (tipo) => partes.find((parte) => parte.type === tipo)?.value ?? "";
+}
+
+/**
+ * Data civil de hoje em São Paulo, como `YYYY-MM-DD`.
+ *
+ * `agora` é injetável para o teste não depender do relógio.
+ */
+export function hojeEmSaoPaulo(agora: Date = new Date()): string {
+  const pegar = partesEmSaoPaulo(agora, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(agora);
-
-  const pegar = (tipo: "year" | "month" | "day") =>
-    partes.find((parte) => parte.type === tipo)?.value ?? "";
+  });
 
   return `${pegar("year")}-${pegar("month")}-${pegar("day")}`;
+}
+
+/**
+ * Hora de São Paulo como `HH:mm`, em 24 horas.
+ *
+ * Serve ao selo "atualizado HH:MM" do painel: quem lê a TV precisa da hora do
+ * escritório, não da do servidor. `hourCycle: "h23"` de propósito — com `h24` a
+ * meia-noite sairia como `24:00`.
+ */
+export function horaEmSaoPaulo(agora: Date): string {
+  const pegar = partesEmSaoPaulo(agora, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+
+  return `${pegar("hour")}:${pegar("minute")}`;
 }
 
 /**
