@@ -1,4 +1,4 @@
-import type { VgvPeriodo } from "@/lib/mock-painel";
+import type { VgvPeriodo } from "@/lib/apresentacao-painel";
 import estilos from "./painel.module.css";
 
 /** Faixa do meio: VGV anual, trimestral e mensal lado a lado. */

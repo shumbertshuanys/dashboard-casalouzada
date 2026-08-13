@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Equipe, Metrica } from "@/lib/mock-painel";
+import type { Equipe, Metrica } from "@/lib/apresentacao-painel";
 import estilos from "./painel.module.css";
 
 /** 20s por métrica. Com as oito do ciclo, uma volta completa leva 2min40s. */

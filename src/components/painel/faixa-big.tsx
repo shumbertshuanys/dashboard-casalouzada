@@ -1,4 +1,4 @@
-import type { BigNumber } from "@/lib/mock-painel";
+import type { BigNumber } from "@/lib/apresentacao-painel";
 import estilos from "./painel.module.css";
 
 /** Faixa de topo: os três acumulados que se leem de longe. */

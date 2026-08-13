@@ -8,60 +8,48 @@
 // o rótulo de período fixo. O cálculo de verdade é da Fase 3, em `src/lib/metricas.ts`,
 // e não deve ser antecipado aqui nem nos componentes (ver DEC-013 em docs/DECISOES.md).
 
-export type ChaveMetrica =
-  | "vendidos"
-  | "vgv"
-  | "locados"
-  | "capVenda"
-  | "exclusivas"
-  | "capLocacao"
-  | "propostas"
-  | "avaliacoes";
+// Os tipos visuais moram em `src/lib/apresentacao-painel.ts` desde a F3.4: o
+// mock e a apresentação real precisam desenhar o mesmo shape, e mantê-lo em dois
+// lugares deixaria o protótipo divergir da tela de verdade sem ninguém notar.
+import {
+  type BigNumber,
+  type Equipe,
+  type Linha,
+  type Metrica,
+  METRICAS_PAINEL,
+  type VgvPeriodo,
+} from "@/lib/apresentacao-painel";
 
-/** Uma métrica do ciclo de rotação dos quadros de equipe. */
-export type Metrica = { chave: ChaveMetrica; nome: string };
-
-/** Valor com partes tipografadas de forma diferente: R$ 4,2 bi */
-export type ValorComposto = { prefixo?: string; valor: string; sufixo?: string };
-
-/** Linha `rótulo … valor` — serve tanto ao quadro mensal quanto aos rankings. */
-export type Linha = { rotulo: string; valor: string };
-
-export type BigNumber = { rotulo: string; numero: ValorComposto };
-export type VgvPeriodo = { rotulo: string; valor: ValorComposto };
-
-export type Equipe = {
-  nome: string;
-  gerente: string;
-  totalCorretores: number;
-  /** Já ordenado do maior para o menor, uma lista pronta por métrica. */
-  rankings: Record<ChaveMetrica, Linha[]>;
-};
+export type {
+  BigNumber,
+  ChaveMetrica,
+  Equipe,
+  Linha,
+  Metrica,
+  ValorComposto,
+  VgvPeriodo,
+} from "@/lib/apresentacao-painel";
 
 /** Fixo de propósito: o preview não usa relógio, para o screenshot ser reproduzível. */
 export const periodo = "agosto de 2026";
 
-export const metricas: Metrica[] = [
-  { chave: "vendidos", nome: "Vendidos" },
-  { chave: "vgv", nome: "VGV do mês" },
-  { chave: "locados", nome: "Locados" },
-  { chave: "capVenda", nome: "Captação de venda" },
-  { chave: "exclusivas", nome: "Exclusividades" },
-  { chave: "capLocacao", nome: "Captação de locação" },
-  { chave: "propostas", nome: "Propostas" },
-  { chave: "avaliacoes", nome: "Avaliações Google" },
-];
+/** Mesma ordem do ciclo real — derivada, não recopiada (DEC-033). */
+export const metricas: Metrica[] = [...METRICAS_PAINEL];
 
 export const bigNumbers: BigNumber[] = [
-  { rotulo: "Imóveis vendidos", numero: { valor: "528" } },
-  { rotulo: "VGV acumulado", numero: { prefixo: "R$", valor: "4,2", sufixo: "bi" } },
-  { rotulo: "Avaliações Google", numero: { valor: "2.643" } },
+  { rotulo: "Imóveis vendidos", numero: { valor: "528" }, estado: "OK" },
+  {
+    rotulo: "VGV acumulado",
+    numero: { prefixo: "R$", valor: "4,2", sufixo: "bi" },
+    estado: "OK",
+  },
+  { rotulo: "Avaliações Google", numero: { valor: "2.643" }, estado: "OK" },
 ];
 
 export const vgvPeriodos: VgvPeriodo[] = [
-  { rotulo: "Anual", valor: { prefixo: "R$", valor: "431", sufixo: "mi" } },
-  { rotulo: "Trimestral", valor: { prefixo: "R$", valor: "128", sufixo: "mi" } },
-  { rotulo: "Mensal", valor: { prefixo: "R$", valor: "42,5", sufixo: "mi" } },
+  { rotulo: "Anual", valor: { prefixo: "R$", valor: "431", sufixo: "mi" }, estado: "OK" },
+  { rotulo: "Trimestral", valor: { prefixo: "R$", valor: "128", sufixo: "mi" }, estado: "OK" },
+  { rotulo: "Mensal", valor: { prefixo: "R$", valor: "42,5", sufixo: "mi" }, estado: "OK" },
 ];
 
 /** Sete linhas: todas as métricas menos VGV, que tem faixa própria. */
