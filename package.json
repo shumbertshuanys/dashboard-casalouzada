@@ -10,6 +10,7 @@
     "test": "node --import tsx --conditions=react-server --test \"tests/*.test.ts\"",
     "test:fusos": "tsx scripts/testar-fusos.ts",
     "test:integracao": "tsx scripts/banco-teste.ts node --import tsx --conditions=react-server --test \"tests/integracao/*.test.ts\"",
+    "test:integracao:painel": "tsx scripts/banco-teste.ts node --import tsx --conditions=react-server --test \"tests/integracao-painel/*.test.ts\"",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
