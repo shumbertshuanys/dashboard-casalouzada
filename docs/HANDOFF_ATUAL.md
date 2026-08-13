@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `592df35` — `feat: adiciona janelas civis do painel` |
+| Commit de referência | `8ec6cbc` — `feat: adiciona métricas de equipes e rankings` |
 | Data do handoff | 2026-08-12 |
 
 ## Estado executivo
@@ -22,17 +22,24 @@ A **Fase 2 — Administração está concluída**. Equipes, corretores, lançame
 saldo histórico podem ser gerenciados pela área administrativa, e o sistema já pode
 ser alimentado de verdade.
 
-Da **F3 — Painel**, duas fatias estão concluídas. A **F3.0 — decisões e contratos**
+Da **F3 — Painel**, três fatias estão concluídas. A **F3.0 — decisões e contratos**
 registrou nas DEC-036 a DEC-042 as regras aprovadas pelo proprietário em 2026-08-12. A
-**F3.1 — janelas civis** foi implementada e publicada em `592df35`, e entregou
-**somente a infraestrutura temporal**: o tipo `JanelaCivil` e as funções
-`mesCorrente`, `trimestreCorrente` e `anoCorrente` em `src/lib/datas.ts`.
+**F3.1 — janelas civis** (`592df35`) entregou `JanelaCivil`, `mesCorrente`,
+`trimestreCorrente` e `anoCorrente` em `src/lib/datas.ts`. A **F3.2 — núcleo puro de
+métricas** foi publicada em dois commits: `6cf0627` (empresa) e `8ec6cbc` (equipes e
+rankings).
 
-Nada além disso do painel existe. `src/lib/metricas.ts` continua ausente,
-`/painel/[token]` continua respondendo "Painel em construção" sem consultar o banco, e
-nenhum cálculo consome as janelas ainda.
+`src/lib/metricas.ts` existe e tem duas entradas —
+`calcularMetricasEmpresa(lancamentos, saldos, agora?)` e
+`calcularMetricasEquipes(lancamentos, corretores, equipes, agora?)`. As duas consomem
+as janelas da F3.1 e são **puras**: recebem os dados já lidos e não conhecem Prisma,
+banco nem ambiente.
 
-A próxima fatia é a **F3.2 — núcleo puro de métricas**, não iniciada.
+O que a F3.2 **não** fez foi integração. Ninguém lê o banco por essa camada,
+`/painel/[token]` continua respondendo "Painel em construção" sem dados reais, e
+`/preview` segue desenhando a partir de `src/lib/mock-painel.ts`.
+
+A próxima fatia é a **F3.3 — leitura Prisma**, não iniciada.
 
 ## Fases
 
@@ -49,8 +56,8 @@ A próxima fatia é a **F3.2 — núcleo puro de métricas**, não iniciada.
 | **F2 — Administração** | **Concluída** | — |
 | F3.0 — Decisões e contratos do painel | **Concluída** | DEC-036 a DEC-042; sem código |
 | F3.1 — Janelas civis | **Concluída** | `592df35` |
-| F3.2 — Núcleo puro de métricas | **Não iniciada** — próxima | `src/lib/metricas.ts` ausente |
-| F3.3 — Leitura Prisma | **Não iniciada** | — |
+| F3.2 — Núcleo puro de métricas | **Concluída** | `6cf0627` + `8ec6cbc` |
+| F3.3 — Leitura Prisma | **Não iniciada** — próxima | `obterMetricasPainel` não existe |
 | F3.4 — Shape de apresentação | **Não iniciada** | — |
 | F3.5 — Painel real | **Não iniciada** | `/painel/[token]` sem banco |
 | F3.6 — Atualização automática | **Não iniciada** | — |
@@ -75,6 +82,8 @@ A próxima fatia é a **F3.2 — núcleo puro de métricas**, não iniciada.
   como único ponto que conhece o fuso do negócio e, desde a F3.1, as janelas civis de
   mês, trimestre e ano) e `src/lib/dinheiro.ts` (dinheiro como string decimal, sem
   ponto flutuante em nenhum caminho de persistência).
+- **Núcleo de cálculo**: `src/lib/metricas.ts`, desde a F3.2. Puro — recebe os dados
+  por parâmetro, sem Prisma nem ambiente.
 
 ## Administração implementada
 
@@ -202,7 +211,7 @@ a contagem atual:
 
 ### Baseline da entrega da F3.1
 
-Medido durante a F3.1, snapshot posterior ao da F2.5:
+Medido durante a F3.1, snapshot intermediário entre a F2.5 e a F3.2:
 
 | Comando | Resultado verificado |
 |---|---|
@@ -214,8 +223,41 @@ Medido durante a F3.1, snapshot posterior ao da F2.5:
 | `npm run lint` | exit 0 |
 | `npm run build` | exit 0 |
 
-Os 20 testes e 5 suítes que separam um baseline do outro são os da F3.1, todos em
+Os 20 testes e 5 suítes que separam esse baseline do da F2.5 são os da F3.1, todos em
 `tests/datas.test.ts`.
+
+### Baseline da entrega da F3.2
+
+Bateria completa executada sobre a árvore da F3.2, **antes** da microcorreção textual
+final:
+
+| Comando | Resultado verificado |
+|---|---|
+| `npm test` | 266 testes, 70 suítes, 266 aprovados, 0 falhas, 0 pulados |
+| `npm run test:fusos` | 266/266 em `UTC`, 266/266 em `America/Sao_Paulo`, 266/266 em `Asia/Tokyo` |
+| `npm run test:integracao` | 88 testes, 33 suítes, 88 aprovados, 0 falhas |
+| `tests/metricas.test.ts` isolado | 78 testes, 21 suítes, 78 aprovados, 0 falhas |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `npm run build` | 18 rotas, exit 0 |
+| `git diff --check` | exit 0 |
+
+Os 78 testes de `metricas.test.ts` são 38 da F3.2A mais 40 da F3.2B.
+
+#### Verificação pós-microcorreção textual
+
+Depois dessa bateria houve uma microcorreção que alterou **dois comentários** em
+`src/lib/metricas.ts` e **o título de um teste** — zero lógica, zero assertions. Sobre
+a árvore final foram executados apenas:
+
+| Comando | Resultado verificado |
+|---|---|
+| `tests/metricas.test.ts` isolado | 78 testes, 78 aprovados, 0 falhas |
+| `npx tsc --noEmit` | exit 0 |
+| `git diff --check` | exit 0 |
+
+A bateria completa **não** foi repetida depois da microcorreção; o que consta acima é
+o que de fato rodou.
 
 `npm test` é rápido e não toca banco. `test:fusos` roda a suíte unitária em `UTC`,
 `America/Sao_Paulo` e `Asia/Tokyo`, para provar que nenhum teste depende do relógio
@@ -256,15 +298,25 @@ Não se pode dizer que a situação de credenciais esteja saneada hoje.
 
 ## O que ainda NÃO está implementado
 
-Verificado na árvore em `592df35`, arquivo por arquivo.
+Verificado na árvore em `8ec6cbc`, arquivo por arquivo.
+
+**"F3.2 concluída" não significa "painel pronto".** O que ainda não existe:
+
+- leitura Prisma das métricas — nada consulta o banco por essa camada;
+- `obterMetricasPainel(prisma, agora?)` (DEC-041);
+- `EstadoLeitura` / `INDISPONIVEL`, que só faz sentido havendo leitura (DEC-042);
+- shape de apresentação — formatação de moeda, `—`, `mi`/`bi`, rótulos;
+- substituição do mock pela origem real;
+- painel real conectado;
+- atualização automática de verdade.
 
 | Item | Estado | Fase |
 |---|---|---|
-| `src/lib/metricas.ts` | ausente | F3 |
-| Cálculo real do painel | ausente | F3 |
-| Big numbers reais | ausente | F3 |
-| Períodos reais (mês, trimestre, ano) | só os limites, pela F3.1; nenhum cálculo os usa | F3 |
-| Rankings ligados ao banco | ausente | F3 |
+| `src/lib/metricas.ts` | **existe** — núcleo puro, sem leitura | F3.2 feita |
+| Cálculo real do painel | existe como núcleo puro; sem dados do banco | F3.3 |
+| Big numbers reais | calculados pelo núcleo, mas sem origem real | F3.3 |
+| Períodos reais (mês, trimestre, ano) | janelas da F3.1 consumidas pelo núcleo da F3.2 | F3.3 |
+| Rankings ligados ao banco | calculados pelo núcleo; ligação ao banco ausente | F3.3 |
 | Troca do mock pela origem real | ausente — `/preview` ainda usa `src/lib/mock-painel.ts` | F3 |
 | Atualização automática do painel real | ausente | F3 |
 | Comportamento offline | ausente | F4 |
@@ -374,14 +426,48 @@ Os dois limites são datas civis ancoradas na **meia-noite UTC**, como o resto d
 módulo. Qual período é o corrente se decide por `hojeEmSaoPaulo`; depois disso o fuso
 da máquina não interfere, o que a suíte prova rodando em três fusos.
 
-**Nenhum cálculo do painel consome essas janelas ainda.** Não há métricas, não há
-consulta ao banco, não há estado de tela.
+Desde a F3.2, `src/lib/metricas.ts` consome essas janelas.
+
+### F3.2 — núcleo puro de métricas · concluída
+
+Publicada em dois commits, ambos só em `src/lib/metricas.ts` e
+`tests/metricas.test.ts`. O módulo tem um único import — `@/lib/datas` — e nenhuma
+linha de Prisma, banco, `process.env` ou React.
+
+**F3.2A — empresa (`6cf0627`)**, por `calcularMetricasEmpresa(lancamentos, saldos, agora?)`:
+
+- `EstadoPeriodo` (`OK` / `SEM_DADOS`) e `EstadoAcumulado` (`OK` / `SEM_SALDO_HISTORICO`);
+- acumulados de imóveis vendidos, VGV e avaliações, cada um somando o saldo com os
+  lançamentos de `dataReferencia > dataCorte` — o `>` é o corte inclusivo da DEC-036, e
+  cada tipo usa o `dataCorte` da própria linha;
+- sem saldo do tipo, o acumulado vem `SEM_SALDO_HISTORICO` com valor `null`, nunca zero;
+- VGV mensal, trimestral e anual, só `VENDA`, sem participação de saldo;
+- quadro mensal com os sete tipos, sem VGV, com `CAPTACAO_VENDA` e `CAPTACAO_EXCLUSIVA`
+  independentes (DEC-003);
+- dinheiro exato: string decimal canônica na fronteira, `bigint` de centavos na soma.
+
+**F3.2B — equipes e rankings (`8ec6cbc`)**, por
+`calcularMetricasEquipes(lancamentos, corretores, equipes, agora?)`:
+
+- `EstadoEquipes` (`OK` / `CONFIGURACAO_INVALIDA`), exigindo **exatamente três** equipes
+  ativas; fora disso a lista de equipes volta vazia, para não renderizar subconjunto;
+- elenco mensal como união dos ativos lotados hoje na equipe com os ativos que
+  produziram para ela no mês (DEC-038);
+- corretor transferido aparece nos dois quadros, cada um só com a produção creditada
+  àquela equipe — o crédito é sempre `Lancamento.equipeId`, nunca a lotação atual;
+- corretor inativo não aparece em ranking nenhum, e seus eventos continuam nos totais
+  da empresa;
+- `totalCorretores` é o headcount ativo **atual**, não o tamanho do elenco do mês;
+- oito rankings na ordem do protótipo (DEC-033), sete por contagem e o VGV por soma
+  exata em centavos;
+- desempate determinístico: resultado decrescente, `nomeExibicao` em pt-BR crescente,
+  `id` crescente.
 
 ### Fatias seguintes
 
-`F3.2` núcleo puro de métricas — **próxima** · `F3.3` leitura Prisma · `F3.4` shape de
-apresentação e tipos fora do mock · `F3.5` painel real ligado aos dados · `F3.6`
-atualização automática. Nenhuma iniciada.
+`F3.3` leitura Prisma — **próxima** · `F3.4` shape de apresentação e tipos fora do
+mock · `F3.5` painel real ligado aos dados · `F3.6` atualização automática. Nenhuma
+iniciada.
 
 ### Fora da F3
 
@@ -395,7 +481,7 @@ não bloqueia a F3 e não reabre a F2 agora.
    proprietário, mas não resolvido.
 2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
    antes de ativar lá a versão correspondente, com gate apropriado.
-3. **F3.2 — núcleo puro de métricas**: próxima fatia de implementação.
+3. **F3.3 — leitura Prisma**: próxima fatia de implementação.
 4. **F4 — Identidade e modo TV**: depende da F3.
 5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
 
@@ -420,8 +506,7 @@ O `PLANO.md` foi anotado onde divergia do código, sem ser reescrito:
 4. **§6** — pede Jost ou Outfit. O layout raiz, `/admin` e `/login` seguem com Geist;
    `/preview` usa Jost, restrita àquela rota. Aplicar ao painel real é F4.
 5. **§8** — da estrutura prevista, `src/components/painel/`, `src/lib/metricas.ts` e
-   `src/lib/datas.ts` eram citados: os dois primeiros agora existem parcialmente
-   (`painel/` sim, `metricas.ts` não) e `datas.ts` existe. Continuam ausentes
+   `src/lib/datas.ts` eram citados, e os três existem hoje. Continuam ausentes
    `src/components/ui/`, `src/app/api/`, `src/styles/` e `public/marca/`.
 6. **§7** — cita `github.com/<usuário>/dashboard-casalouzada`; o repositório hoje é
    concreto e público.

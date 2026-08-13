@@ -64,9 +64,11 @@ Não têm data de fato, só data de corte.
 **Impacto.** Qualquer cálculo por período deverá ignorar `saldo_historico`. Confundir
 isso duplicaria valores no VGV do mês.
 
-**Fonte.** `prisma/schema.prisma` (modelo `SaldoHistorico`); `PLANO.md` §3 e §4.
-**invariante futura** — o modelo `SaldoHistorico` já está implementado; a aplicação da
-regra de cálculo entra na F3, junto com a DEC-013
+**Fonte.** `prisma/schema.prisma` (modelo `SaldoHistorico`); `PLANO.md` §3 e §4;
+`src/lib/metricas.ts`; commit `6cf0627`.
+**implementada no núcleo de cálculo** — `calcularMetricasEmpresa` usa saldo apenas nos
+acumulados, e o VGV mensal, trimestral e anual soma só lançamentos. O painel real ainda
+não consome esse cálculo, porque a leitura do banco é da F3.3.
 
 ### DEC-005 — Períodos civis no fuso `America/Sao_Paulo`
 
@@ -78,13 +80,13 @@ do dia 1º para o mês anterior.
 **Impacto.** Nenhum cálculo de período pode usar o fuso do servidor. O fuso é fixo,
 não é o do navegador nem o da máquina de deploy.
 
-**Fonte.** `PLANO.md` §4; `src/lib/datas.ts`; commit `592df35`.
-**suporte técnico implementado na F3.1** — `mesCorrente`, `trimestreCorrente` e
-`anoCorrente` materializam as janelas civis em `America/Sao_Paulo` como intervalos
-semiabertos, decidindo o período corrente por `hojeEmSaoPaulo` e ancorando os limites
-na meia-noite UTC, de modo que o fuso do servidor não interfere. A **aplicação** dessas
-janelas aos cálculos do painel ainda pertence às fatias seguintes da F3: nada as
-consome hoje.
+**Fonte.** `PLANO.md` §4; `src/lib/datas.ts`; `src/lib/metricas.ts`; commits `592df35`,
+`6cf0627` e `8ec6cbc`.
+**implementada no núcleo de cálculo** — a F3.1 materializou as janelas civis em
+`mesCorrente`, `trimestreCorrente` e `anoCorrente`, decidindo o período corrente por
+`hojeEmSaoPaulo` e ancorando os limites na meia-noite UTC, de modo que o fuso do
+servidor não interfere. A F3.2 as consome: VGV por período na empresa, e mês corrente
+no quadro geral e nos rankings. Falta só a origem dos dados — a leitura real é da F3.3.
 
 ### DEC-006 — Corretor se inativa, não se exclui
 
@@ -196,7 +198,10 @@ tela.
 **Impacto.** É a fronteira onde DEC-003, DEC-004, DEC-005 e DEC-014 são efetivamente
 aplicadas.
 
-**Fonte.** `PLANO.md` §8. **invariante futura** — o arquivo ainda não existe
+**Fonte.** `PLANO.md` §8; `src/lib/metricas.ts`; commits `6cf0627` e `8ec6cbc`.
+**implementada** — o arquivo existe e concentra o cálculo da F3.2, com duas entradas
+puras: `calcularMetricasEmpresa` e `calcularMetricasEquipes`. A leitura dos dados
+(F3.3) e a apresentação (F3.4) ficam **fora** dele, por desenho.
 
 ### DEC-014 — Zero real é diferente de ausência de lançamento
 
@@ -418,11 +423,12 @@ portado.
 aprovado.
 
 **Impacto.** O port do protótipo pode usar dados fictícios; o painel de F3, não. As
-duas pré-condições estão satisfeitas — administração pronta e protótipo portado —,
-então a F3 está liberada para começar. Ela própria continua não iniciada.
+duas pré-condições foram satisfeitas — administração pronta e protótipo portado — e a
+F3 começou sobre elas. O cálculo já existe; ligá-lo a dados reais é o que falta.
 
 **Fonte.** `PLANO.md` §9; commits `22bf943` e `485ba36`.
-**invariante futura** — pré-condições cumpridas, F3 ainda não começou
+**cumprida** — pré-condições atendidas e a F3 começou na ordem prevista: F3.0, F3.1 e
+F3.2 concluídas, F3.3 é a próxima
 
 ### DEC-030 — F4 depende da F3
 
@@ -548,8 +554,10 @@ saldo com lançamento.
 
 **Fonte.** Q8, aprovada pelo proprietário em 2026-08-12; `prisma/schema.prisma`;
 `prisma/migrations/20260812120000_saldo_historico_tipo_unico/`;
-`src/lib/validacao/saldo-historico.ts`; commit `485ba36`.
-**implementada na administração** — o uso nos cálculos continua sendo F3
+`src/lib/validacao/saldo-historico.ts`; commit `485ba36`. O uso nos acumulados está em
+`src/lib/metricas.ts`, commit `6cf0627`.
+**implementada na administração e no cálculo** — a leitura real do saldo pelo painel
+continua sendo F3.3
 
 ---
 
@@ -588,8 +596,12 @@ inclusive aparecer num recorte por período. Ele apenas não é somado de novo n
 acumulado. Nada disso vira validação cruzada entre lançamento e saldo, nem proibição
 de lançamento retroativo, nem "data de início da operação".
 
-**Fonte.** Q-F3, aprovada em 2026-08-12; `PLANO.md` §4.
-**invariante futura** — a camada de cálculo ainda não existe
+**Fonte.** Q-F3, aprovada em 2026-08-12; `PLANO.md` §4; `src/lib/metricas.ts`;
+`tests/metricas.test.ts`; commit `6cf0627`.
+**implementada no núcleo de cálculo** — a regra real é o filtro
+`lancamento.dataReferencia > dataCorte`, com o corte de cada tipo vindo da própria
+linha de saldo. Coberta por testes de evento antes do corte, exatamente no corte e
+depois dele.
 
 ### DEC-037 — Sem saldo histórico, o acumulado é indisponível, não zero
 
@@ -607,7 +619,11 @@ do que não mostrar.
 não dependem de saldo e seguem normalmente. É a aplicação da DEC-014 a este caso, e o
 mesmo princípio que a administração já usa ao exibir "Não cadastrado" em vez de `0`.
 
-**Fonte.** Q-F3, aprovada em 2026-08-12; DEC-014; DEC-035. **invariante futura**
+**Fonte.** Q-F3, aprovada em 2026-08-12; DEC-014; DEC-035; `src/lib/metricas.ts`;
+commit `6cf0627`.
+**implementada no núcleo de cálculo** — sem saldo do tipo, o acumulado sai como
+`SEM_SALDO_HISTORICO` com valor `null`. O `—` na tela é apresentação e ainda não
+existe.
 
 ### DEC-038 — Corretor transferido aparece nos dois quadros, sem duplicar produção
 
@@ -632,7 +648,11 @@ continuam contando nos totais da empresa e continuam pertencendo à equipe grava
 **Motivo.** A alternativa seria reescrever ou esconder histórico para deixar a TV
 visualmente mais simples, e isso falsearia o desempenho das duas equipes.
 
-**Fonte.** Q-F3, aprovada em 2026-08-12; DEC-002; DEC-006. **invariante futura**
+**Fonte.** Q-F3, aprovada em 2026-08-12; DEC-002; DEC-006; `src/lib/metricas.ts`;
+`tests/metricas.test.ts`; commit `8ec6cbc`.
+**implementada no núcleo de cálculo** — elenco mensal como união, crédito por
+`Lancamento.equipeId`, transferido presente nos dois quadros sem duplicar evento, e
+inativo fora dos rankings mas ainda contando nos totais da empresa.
 
 ### DEC-039 — Mês sem nenhum lançamento não afirma desempenho zero
 
@@ -654,7 +674,12 @@ reais quanto avaliações ainda não lançadas. O schema não tem "mês fechado"
 conferidos" nem status de preenchimento, e essa informação **não será inventada**.
 Resolver isso exigiria modelagem operacional nova, fora da F3 atual e da v1.
 
-**Fonte.** Q-F3, aprovada em 2026-08-12; DEC-014. **invariante futura**
+**Fonte.** Q-F3, aprovada em 2026-08-12; DEC-014; `src/lib/metricas.ts`; commits
+`6cf0627` e `8ec6cbc`.
+**implementada no núcleo, pendente na apresentação** — `EstadoPeriodo` existe, mês sem
+nenhum lançamento devolve `SEM_DADOS`, e dentro de um mês `OK` os zeros são reais. O
+que ainda não existe é a outra metade: traduzir `SEM_DADOS` em `—` na tela, que é da
+F3.4.
 
 ### DEC-040 — O painel v1 exige exatamente três equipes ativas
 
@@ -674,8 +699,12 @@ inventaria um layout que ninguém aprovou.
 
 **Impacto.** Nenhuma alteração de CSS agora. A implementação é de fatia posterior.
 
-**Fonte.** Q-F3, aprovada em 2026-08-12; `src/components/painel/painel.module.css`.
-**invariante futura**
+**Fonte.** Q-F3, aprovada em 2026-08-12; `src/components/painel/painel.module.css`;
+`src/lib/metricas.ts`; commit `8ec6cbc`.
+**implementada no núcleo, pendente na apresentação** — `EstadoEquipes` existe, e com
+número de equipes ativas diferente de três o resultado vem `CONFIGURACAO_INVALIDA` com
+a lista de equipes **vazia**, o que impede renderizar subconjunto. Como a área se
+comporta visualmente nesse estado é da F3.5.
 
 ### DEC-041 — A camada de métricas recebe o cliente Prisma por parâmetro
 
@@ -697,7 +726,9 @@ explícita, a integração exercita **a mesma camada**, passando `criarPrismaTes
 cliente por parâmetro é suficiente.
 
 **Fonte.** Q-F3, aprovada em 2026-08-12; `src/lib/db.ts`;
-`tests/helpers/banco-teste.ts`. **invariante futura**
+`tests/helpers/banco-teste.ts`. **invariante futura** — `obterMetricasPainel` ainda não
+existe. O núcleo da F3.2 já é puro e recebe tudo por parâmetro, o que deixa o caminho
+aberto; materializar a leitura injetada é exatamente a F3.3.
 
 ### DEC-042 — Os estados do painel são dimensões separadas, não um enum único
 
@@ -728,4 +759,10 @@ localizada apagar dado correto.
 **Impacto.** Os nomes acima são semânticos, não assinaturas TypeScript congeladas. A
 separação conceitual, essa sim, é obrigatória.
 
-**Fonte.** Q-F3, aprovada em 2026-08-12. **invariante futura**
+**Fonte.** Q-F3, aprovada em 2026-08-12; `src/lib/metricas.ts`; commits `6cf0627` e
+`8ec6cbc`.
+**parcialmente implementada** — três das quatro dimensões existem como tipos separados
+no núcleo: `EstadoPeriodo` (`OK` / `SEM_DADOS`), `EstadoAcumulado` (`OK` /
+`SEM_SALDO_HISTORICO`) e `EstadoEquipes` (`OK` / `CONFIGURACAO_INVALIDA`). A quarta,
+estado de leitura com `INDISPONIVEL`, **não existe**: só faz sentido havendo leitura, e
+depende da F3.3.

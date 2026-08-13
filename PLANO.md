@@ -5,9 +5,10 @@ desenho pretendido; o estado real do que está construído fica em
 `docs/HANDOFF_ATUAL.md`, e as decisões em `docs/DECISOES.md`.
 
 **Situação em 2026-08-12:** Fase 1, protótipo visual e Fase 2 — Administração
-concluídos e publicados. A próxima fase é a **F3 — Painel**, ainda não
-iniciada: não existe camada de cálculo, e a tela da TV continua desligada do
-banco.
+concluídos e publicados. A **F3 — Painel** está em curso: F3.0, F3.1 e F3.2
+concluídas. `src/lib/metricas.ts` existe e calcula empresa e equipes, mas é um
+núcleo **puro** — não lê banco. A próxima fatia é a **F3.3, leitura Prisma**, e
+até ela a tela da TV continua desligada do banco.
 
 ---
 
@@ -139,10 +140,15 @@ o registro inicial vem pelo seed e a senha se troca pela própria área administ
 > acumulados dos big numbers. Os recortes por período usam exclusivamente lançamentos,
 > e ignoram `dataCorte` (DEC-004, DEC-036).
 
-Desde a F3.1, os limites desses três recortes existem em código: `mesCorrente`,
-`trimestreCorrente` e `anoCorrente`, em `src/lib/datas.ts`, devolvem a janela civil
-corrente em `America/Sao_Paulo` como intervalo semiaberto `[inicio, fimExclusivo)`. São
-só os limites — nenhum cálculo do painel os consome ainda.
+Os limites desses recortes vêm da F3.1: `mesCorrente`, `trimestreCorrente` e
+`anoCorrente`, em `src/lib/datas.ts`, devolvem a janela civil corrente em
+`America/Sao_Paulo` como intervalo semiaberto `[inicio, fimExclusivo)`. Desde a F3.2,
+`src/lib/metricas.ts` as consome: o VGV da empresa usa as três janelas, e o quadro
+mensal geral e os rankings de equipe usam a do mês corrente. O saldo histórico
+continua entrando somente nos acumulados.
+
+O que ainda não existe é a **leitura**: o núcleo recebe os dados prontos, e ligar
+isso ao banco é a F3.3.
 
 ---
 
@@ -286,11 +292,11 @@ referência para a rota `/preview`, com dados fictícios. Serve de contrato visu
 CRUD de equipes, corretores e lançamentos. Saldo histórico. Ao final desta fase você
 já consegue alimentar o sistema de verdade, mesmo sem o painel pronto.
 
-**Fase 3 — Painel** · *em curso: F3.0 e F3.1 concluídas, F3.2 é a próxima*
+**Fase 3 — Painel** · *em curso: F3.0, F3.1 e F3.2 concluídas, F3.3 é a próxima*
 Camada de cálculo, as três faixas do layout, atualização automática, rotação de métricas,
-proteção por token na URL. A F3.1 já acrescentou as janelas civis a `src/lib/datas.ts`,
-mas `src/lib/metricas.ts` ainda não existe e `/painel/[token]`, embora protegida por
-token, **continua sem consultar o banco**.
+proteção por token na URL. `src/lib/metricas.ts` já existe e calcula empresa e equipes a
+partir de dados recebidos por parâmetro. Falta a leitura: nada consulta o banco ainda, e
+`/painel/[token]`, embora protegida por token, **continua sem dados reais**.
 
 A fase foi fatiada assim:
 
@@ -298,8 +304,8 @@ A fase foi fatiada assim:
 |---|---|---|
 | F3.0 | decisões e contratos | **concluída** — DEC-036 a DEC-042 |
 | F3.1 | janelas civis (mês, trimestre, ano) em `America/Sao_Paulo` | **concluída** — commit `592df35` |
-| F3.2 | núcleo puro de métricas | **próxima, não iniciada** |
-| F3.3 | leitura Prisma | não iniciada |
+| F3.2 | núcleo puro de métricas | **concluída** — `6cf0627` (empresa) e `8ec6cbc` (equipes) |
+| F3.3 | leitura Prisma | **próxima, não iniciada** |
 | F3.4 | shape de apresentação e tipos fora do mock | não iniciada |
 | F3.5 | painel real ligado aos dados | não iniciada |
 | F3.6 | atualização automática | não iniciada |
