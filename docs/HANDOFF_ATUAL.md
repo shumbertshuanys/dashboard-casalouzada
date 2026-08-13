@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `8684f1d` — `feat: liga painel aos dados reais` |
+| Commit de referência | `888f779` — `feat: adiciona atualização automática ao painel` |
 | Data do handoff | 2026-08-13 |
 
 ## Estado executivo
@@ -22,14 +22,15 @@ A **Fase 2 — Administração está concluída**. Equipes, corretores, lançame
 saldo histórico podem ser gerenciados pela área administrativa, e o sistema já pode
 ser alimentado de verdade.
 
-Da **F3 — Painel**, seis fatias estão concluídas. A **F3.0 — decisões e contratos**
-registrou nas DEC-036 a DEC-042 as regras aprovadas pelo proprietário em 2026-08-12. A
-**F3.1 — janelas civis** (`592df35`) entregou `JanelaCivil`, `mesCorrente`,
-`trimestreCorrente` e `anoCorrente` em `src/lib/datas.ts`. A **F3.2 — núcleo puro de
-métricas** foi publicada em dois commits: `6cf0627` (empresa) e `8ec6cbc` (equipes e
-rankings). A **F3.3 — leitura Prisma** foi publicada em `9ec8439`, a **F3.4 — shape
-de apresentação** em `a9fe849` e a **F3.5 — painel real ligado aos dados** em
-`8684f1d`.
+Da **F3 — Painel**, as sete fatias estão concluídas — a **Fase 3 está concluída
+tecnicamente**. A **F3.0 — decisões e contratos** registrou nas DEC-036 a DEC-042 as
+regras aprovadas pelo proprietário em 2026-08-12. A **F3.1 — janelas civis**
+(`592df35`) entregou `JanelaCivil`, `mesCorrente`, `trimestreCorrente` e
+`anoCorrente` em `src/lib/datas.ts`. A **F3.2 — núcleo puro de métricas** foi
+publicada em dois commits: `6cf0627` (empresa) e `8ec6cbc` (equipes e rankings). A
+**F3.3 — leitura Prisma** foi publicada em `9ec8439`, a **F3.4 — shape de
+apresentação** em `a9fe849`, a **F3.5 — painel real ligado aos dados** em `8684f1d` e
+a **F3.6 — atualização automática e último valor conhecido** em `888f779`.
 
 `src/lib/metricas.ts` existe e tem duas entradas —
 `calcularMetricasEmpresa(lancamentos, saldos, agora?)` e
@@ -47,12 +48,28 @@ recebe o `ResultadoPainel` da leitura mais um `agora` e devolve `ApresentacaoPai
 rótulos, moeda compacta, contagens em pt-BR e `—` onde não há número a afirmar. A
 entrada é `criarApresentacaoPainel(resultado, agora)`.
 
-Desde a F3.5 a cadeia está **conectada na rota real**:
+Desde a F3.5 a cadeia está **conectada na rota real**, e desde a F3.6 ela tem dois
+momentos. A leitura inicial, no servidor:
 
 ```
-prisma
-  → obterMetricasPainel(prisma, agora)   → ResultadoPainel
-  → criarApresentacaoPainel(resultado, agora) → ApresentacaoPainel
+request inicial
+  → tokenPainelConfere
+  → lerPainel(prisma, agora)
+      (obterMetricasPainel → criarApresentacaoPainel, fatiada em três blocos)
+  → LeituraPainel
+  → AtualizadorPainel
+  → PainelVisual
+```
+
+E as atualizações, no cliente, a cada 60 segundos:
+
+```
+AtualizadorPainel
+  → GET /painel/[token]/dados
+      (tokenPainelConfere → lerPainel(prisma, agora) → LeituraPainel em JSON)
+  → ehLeituraPainel
+  → resolverAtualizacao
+  → comporApresentacao
   → PainelVisual
 ```
 
@@ -70,9 +87,12 @@ negócio na tela.
 `/preview` continua exclusivamente fictício — sem banco, sem env, `noindex/nocache` —,
 mas desenha pela **mesma** composição visual da rota real.
 
-A próxima fatia é a **F3.6 — atualização automática**, não iniciada. Hoje uma
-requisição é uma leitura: `force-dynamic` garante render a cada request, o que **não**
-é atualização automática — a aba parada não busca dado novo sozinha.
+Desde a F3.6 a aba se mantém sozinha: o `AtualizadorPainel` consulta a rota de dados
+a cada 60 segundos, valida cada payload em runtime e aplica a política de retenção —
+falha de atualização não apaga dado bom, e leitura válida substitui o que estava na
+tela. `force-dynamic` continua garantindo leitura fresca na request **inicial**; a
+atualização contínua é client-side, própria da F3.6. A próxima fase é a **F4 —
+Identidade e modo TV**, não iniciada.
 
 ## Fases
 
@@ -93,8 +113,9 @@ requisição é uma leitura: `force-dynamic` garante render a cada request, o qu
 | F3.3 — Leitura Prisma | **Concluída** | `9ec8439` |
 | F3.4 — Shape de apresentação | **Concluída** | `a9fe849` |
 | F3.5 — Painel real | **Concluída** | `8684f1d` |
-| F3.6 — Atualização automática | **Não iniciada** — próxima | — |
-| F4 — Identidade e modo TV | **Não iniciada** | depende da F3 |
+| F3.6 — Atualização automática e último valor conhecido | **Concluída** | `888f779` |
+| **F3 — Painel** | **Concluída** | — |
+| F4 — Identidade e modo TV | **Não iniciada** — próxima | — |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
@@ -136,6 +157,20 @@ requisição é uma leitura: `force-dynamic` garante render a cada request, o qu
   desde a F3.5. Decisão pura, sem JSX, React, CSS ou banco, com `switch` exaustivo
   guardado por `never` — um quinto estado quebra a compilação em vez de cair calado num
   ramo qualquer.
+- **Guard de token compartilhado**: `src/lib/token-painel.ts`, desde a F3.6.
+  `server-only`; `tokenPainelConfere` compara com `timingSafeEqual` e é a única
+  comparação de token, usada pela página e pela rota de dados.
+- **Leitura empacotada**: `src/lib/leitura-painel.ts`, desde a F3.6.
+  `lerPainel(prisma, agora)` chama `obterMetricasPainel` e `criarApresentacaoPainel` —
+  não calcula nem formata dinheiro por conta própria —, fatia a apresentação nos três
+  blocos e carimba `competencia`, `lidoEmMs` e `horaLeitura`. Um único `agora`
+  alimenta tudo.
+- **Contrato HTTP**: `src/lib/contrato-atualizacao-painel.ts`, desde a F3.6.
+  `LeituraPainel` é JSON-safe, e `ehLeituraPainel` valida estrutura, dimensões,
+  equipes, rankings e coerência em runtime, manualmente e sem Zod. Payload inválido
+  não entra no reducer.
+- **Retenção**: `src/lib/retencao-painel.ts`, desde a F3.6. Reducer puro do último
+  valor conhecido, por bloco (DEC-045), consumido pelo `AtualizadorPainel`.
 
 ## Administração implementada
 
@@ -218,7 +253,7 @@ mês, trimestre, ano, quadro mensal ou ranking. Essa regra de cálculo é da F3
 
 ## Rotas existentes
 
-Dezessete páginas versionadas:
+Dezessete páginas versionadas, mais uma Route Handler:
 
 | Área | Rotas |
 |---|---|
@@ -227,9 +262,10 @@ Dezessete páginas versionadas:
 | | `/admin/corretores`, `/admin/corretores/novo`, `/admin/corretores/[id]/editar` |
 | | `/admin/lancamentos`, `/admin/lancamentos/novo`, `/admin/lancamentos/[id]/editar` |
 | | `/admin/saldo-historico`, `/admin/saldo-historico/novo`, `/admin/saldo-historico/[id]/editar` |
-| Painel | `/painel/[token]` (dados reais, desde a F3.5), `/preview` (protótipo com dados fictícios) |
+| Painel | `/painel/[token]` (dados reais, desde a F3.5), `/painel/[token]/dados` (Route Handler de atualização, desde a F3.6), `/preview` (protótipo com dados fictícios) |
 
-Não existe `src/app/api/` — nenhuma Route Handler foi criada.
+Não existe `src/app/api/` — a única Route Handler é `GET /painel/[token]/dados`,
+criada na F3.6 ao lado da página que a consome.
 
 ## Migrations
 
@@ -248,7 +284,7 @@ Duas migrations versionadas:
 ## Testes
 
 Cada baseline é o snapshot de uma entrega: vale como registro do que foi medido
-naquele gate, e não como promessa de estabilidade futura. Ficam os seis, em
+naquele gate, e não como promessa de estabilidade futura. Ficam os sete, em
 sequência.
 
 ### Baseline do fechamento da F2.5
@@ -399,7 +435,59 @@ existentes não alcançam: `obterMetricasPainel` lê as tabelas **inteiras**, en
 fixture de outra suíte entraria nas contas. A suíte exige o banco em repouso antes de
 começar e falha alto se não estiver, em vez de limpar dado que não é seu. **As duas
 suítes de integração nunca devem rodar em paralelo.** Destino local validado nas duas:
-`127.0.0.1:5432/casalouzada_test`.
+`127.0.0.1:5432/casalouzada_test`. Desde a F3.6 esse diretório tem duas suítes:
+`painel.integracao.test.ts`, que cria fixtures e exige o repouso descrito, e
+`leitura-painel.integracao.test.ts`, que divide o mesmo runner com ela e por isso
+foi escrita para **não depender do conteúdo do banco**.
+
+### Baseline da entrega da F3.6
+
+Bateria completa executada sobre os blobs que vieram a ser publicados em `888f779`.
+Na execução de publicação ela **não** foi repetida: o blob gate provou que a árvore
+publicada é idêntica à medida, byte a byte.
+
+| Comando | Resultado verificado |
+|---|---|
+| suítes específicas da F3.6 | 75 testes, 23 suítes, 75 aprovados, 0 falhas |
+| `npm test` | 462 testes, 130 suítes, 462 aprovados, 0 falhas |
+| `npm run test:fusos` | 462/462 em `UTC`, 462/462 em `America/Sao_Paulo`, 462/462 em `Asia/Tokyo` |
+| `npm run test:integracao` | 88 testes, 33 suítes, 88 aprovados, 0 falhas |
+| `npm run test:integracao:painel` | 35 testes, 12 suítes, 35 aprovados, 0 falhas |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `npm run build` | 19 rotas, exit 0 |
+| `git diff --check` | exit 0 |
+
+As quatro superfícies novas são `tests/contrato-atualizacao-painel.test.ts`,
+`tests/retencao-painel.test.ts`, `tests/rota-dados-painel.test.ts` e
+`tests/integracao-painel/leitura-painel.integracao.test.ts`; `tests/datas.test.ts`
+ganhou a suíte de `horaEmSaoPaulo`. A integração administrativa permaneceu em 88/33.
+
+**RouteContext e typegen.** A primeira execução de `npx tsc --noEmit` depois de criar
+a rota nova falhou com `TS2304: Cannot find name 'RouteContext'`: os tipos
+route-aware gerados eram anteriores à nova rota. `npx next typegen` (exit 0) os
+regenerou e o `tsc` seguinte saiu 0. Não é regressão, e `package.json` não foi
+alterado por isso.
+
+**Evidência HTTP local.** `GET /painel/<token válido>/dados` → 200 com
+`Cache-Control: no-store`; token inválido → 404; `X-Robots-Tag: noindex, nofollow,
+noarchive` presente, coberto pelo matcher já existente de `/painel/:token*`. Com a
+conexão de banco apontada de propósito para `127.0.0.1:1`, o GET válido respondeu
+HTTP 200 com os três blocos em `INDISPONIVEL` — indisponibilidade é dado, não
+exceção.
+
+**Limites da evidência.** Não houve ferramenta de browser automatizado. Não se afirma
+teste visual automatizado aprovado, prova automatizada de ausência de flicker, nem
+unit test do timer de 60 s ou da rotação visual. A lógica temporal e de retenção foi
+provada por testes puros, integração, inspeção estrutural e evidência HTTP local.
+
+**Integração de `lerPainel`.**
+`tests/integracao-painel/leitura-painel.integracao.test.ts` usa **um único snapshot**
+de `lerPainel(prismaTeste, AGORA)` e deliberadamente **não** faz uma segunda leitura
+independente de `obterMetricasPainel` para comparar valor a valor: a suíte divide o
+glob com `painel.integracao.test.ts`, que cria e apaga fixtures, e duas leituras
+separadas poderiam legitimamente divergir. Ela prova carimbo, estrutura, contrato,
+serialização e recomposição do snapshot. É uma limitação registrada, não uma falha.
 
 ## Banco de teste
 
@@ -436,19 +524,17 @@ Não se pode dizer que a situação de credenciais esteja saneada hoje.
 
 ## O que ainda NÃO está implementado
 
-Verificado na árvore em `8684f1d`, arquivo por arquivo.
+Verificado na árvore em `888f779`, arquivo por arquivo.
 
-**"F3.5 concluída" não significa "F3 pronta".** A TV já mostra os números reais, mas
-os mostra **uma vez por requisição**. O que continua não existindo:
+**A F3 está concluída.** A TV mostra os números reais e os mantém atualizados
+sozinha. O que continua não existindo:
 
-- atualização automática dos dados — polling, refresh ou equivalente;
-- retenção do último valor conhecido quando uma atualização falha;
-- comportamento definido da tela durante falha de atualização;
 - `error.tsx` específico do painel: exceção que escape segue o mecanismo padrão do
   Next, e não há fallback próprio. Isto é uma limitação registrada, não uma fatia
   atribuída;
-- comportamento offline;
-- modo quiosque e refinamento 4K.
+- comportamento offline persistente — a retenção da F3.6 vive só na memória da aba;
+- modo quiosque e refinamento 4K;
+- identidade aplicada ao painel real.
 
 | Item | Estado | Fase |
 |---|---|---|
@@ -464,21 +550,22 @@ os mostra **uma vez por requisição**. O que continua não existindo:
 | `PainelVisual` compartilhado com `/preview` | **existe** | F3.5 feita |
 | Big numbers, períodos e rankings reais na tela | **existem** | F3.5 feita |
 | Área de equipes reagindo a `INDISPONIVEL`/`CONFIGURACAO_INVALIDA` | **existe** | F3.5 feita |
-| Atualização automática do painel real | ausente | F3.6 |
-| Retenção do último valor conhecido | ausente | F3.6 |
-| Comportamento da tela em falha de atualização | ausente | F3.6 |
+| Atualização automática do painel real | **existe** — 60 s, timeout de 15 s | F3.6 feita |
+| Retenção do último valor conhecido | **existe** — por bloco (DEC-045) | F3.6 feita |
+| Comportamento da tela em falha de atualização | **existe** — retenção + selo `atualizado HH:MM` | F3.6 feita |
 | `error.tsx` específico do painel | ausente | limitação registrada |
 | Troca do mock pela origem real em `/preview` | não se aplica — o preview é fictício por desenho | — |
 | Comportamento offline | ausente | F4 |
 | Modo quiosque | ausente | F4 |
 | Identidade aplicada ao painel real | ausente | F4 |
-| `src/app/api/`, `src/components/ui/`, `src/styles/`, `public/marca/` | ausentes | F3/F4 |
+| `src/app/api/`, `src/components/ui/`, `src/styles/`, `public/marca/` | ausentes | F4 |
 | Tela de troca de senha | ausente — o mecanismo é `npm run db:trocar-senha-admin` | futura |
 | Metas | ausente por decisão | fora da v1 |
 
-`/painel/[token]` consulta o banco e desenha os números reais. `force-dynamic` garante
-render a cada requisição — o que **não** é atualização automática: a aba parada não
-busca dado novo sozinha.
+`/painel/[token]` consulta o banco e desenha os números reais. `force-dynamic`
+continua garantindo leitura fresca na request **inicial**; desde a F3.6 a aba não
+depende só disso — o `AtualizadorPainel` mantém atualização client-side própria, e a
+aba parada busca dado novo sozinha.
 
 ## F3 — Painel
 
@@ -718,7 +805,8 @@ ranking. A rota apenas compõe o que já existia.
   preservados; o token nunca é registrado em log;
 - `PainelVisual` é compartilhado entre as duas rotas — o preview continua fictício;
 - os estados da área de equipes ganharam representação real (abaixo);
-- **sem refresh automático**: uma requisição é uma leitura.
+- **sem refresh automático** nesta fatia: uma requisição era uma leitura — limite
+  superado pela F3.6.
 
 #### Estados da área de equipes
 
@@ -735,9 +823,103 @@ fictícia: a área de estado ocupa as três colunas reservadas às equipes, e o 
 títulos vêm sozinhos — sem stack, nome de tabela ou instrução administrativa, porque a
 TV fica à vista de quem passa pelo escritório.
 
-### Fatias seguintes
+### F3.6 — atualização automática e último valor conhecido · concluída
 
-`F3.6` atualização automática — **próxima**, não iniciada.
+Publicada em `888f779`, criando o guard compartilhado de token, o contrato HTTP, a
+leitura empacotada, o reducer de retenção, a rota de dados, o `AtualizadorPainel` e
+quatro superfícies de teste, e alterando a página do painel, `datas.ts`, o
+`PainelVisual`, o CSS e `tests/datas.test.ts`. **Nenhuma linha de `metricas.ts`,
+`metricas-prisma.ts`, `apresentacao-painel.ts`, `mock-painel.ts` ou dos componentes
+de quadro foi tocada.**
+
+#### Leitura inicial
+
+`/painel/[token]` valida o token com `tokenPainelConfere` — helper `server-only` com
+`timingSafeEqual`, o **mesmo** da rota de dados —, cria **um único** `agora`, chama
+`lerPainel(prisma, agora)` e entrega a leitura ao `AtualizadorPainel`, que renderiza
+o `PainelVisual`.
+
+#### Atualização
+
+`AtualizadorPainel` é a fronteira client responsável pela atualização automática da
+rota real (`QuadrosEquipe` continua client, com o estado e o timer da rotação de
+20 s). O `AtualizadorPainel`:
+
+- token lido por `useParams` — **não** é prop, e não entra em state, storage, query
+  string, header novo nem console;
+- intervalo de 60 segundos; timeout de 15 segundos por `AbortSignal.timeout`;
+- no máximo **uma** request em voo (`useRef`);
+- `visibilitychange` provoca tentativa imediata quando a aba volta a ficar visível;
+- zero `localStorage`/`sessionStorage`;
+- falha não limpa estado: o `catch` não zera nada.
+
+#### Endpoint
+
+`GET /painel/[token]/dados`: token validado **antes** de qualquer toque no banco, 404
+para token inválido, um único `agora`, `lerPainel`, resposta JSON com
+`Cache-Control: no-store`. O `X-Robots-Tag` já era coberto pelo matcher existente de
+`next.config.ts`. Sem `catch` genérico.
+
+#### lerPainel
+
+`src/lib/leitura-painel.ts` — `lerPainel(prisma, agora)` chama `obterMetricasPainel`
+e `criarApresentacaoPainel`; **não calcula** e **não formata dinheiro** por conta
+própria. Fatia a apresentação nos três blocos e adiciona `competencia`, `lidoEmMs` e
+`horaLeitura`. O mesmo `agora` alimenta tudo.
+
+#### Contrato HTTP
+
+`src/lib/contrato-atualizacao-painel.ts` — `LeituraPainel` é JSON-safe.
+`ehLeituraPainel` é validação runtime manual, sem Zod: estrutura, quantidades,
+equipes, rankings e coerência entre `estadoLeitura` e conteúdo. Payload inválido
+**não entra no reducer**.
+
+#### Retenção
+
+Falha de fetch, timeout, HTTP não-200, JSON inválido ou payload fora do contrato → o
+estado renderizável permanece o anterior, **inteiro**.
+
+Leitura válida, bloco a bloco:
+
+| Bloco | Nova leitura | Condição | Resultado |
+|---|---|---|---|
+| periodos | `OK` | — | aceita |
+| periodos | `INDISPONIVEL` | anterior `OK`, mesma competência | retém o anterior |
+| periodos | `INDISPONIVEL` | competência nova | aceita a indisponibilidade nova |
+| acumulados | `OK` | — | aceita |
+| acumulados | `INDISPONIVEL` | anterior `OK` | retém — inclusive atravessando o mês |
+| equipes | `OK` | — | aceita |
+| equipes | `INDISPONIVEL` | anterior `OK`, mesma competência | retém o anterior |
+| equipes | `INDISPONIVEL` | competência nova | aceita a indisponibilidade nova |
+
+`SEM_DADOS`, `SEM_SALDO_HISTORICO` e `CONFIGURACAO_INVALIDA` são estados de domínio —
+**dados válidos** — e passam: não são alvo de retenção.
+
+#### Primeira carga
+
+Retenção só existe quando há valor anterior elegível. Na primeira carga com banco
+indisponível, a F3.3 produz blocos `INDISPONIVEL`, a F3.4 produz a apresentação
+correspondente e a tela mostra indisponibilidade/`—` — não inventa zero. Não existe
+dado anterior para reter.
+
+#### Persistência
+
+O último valor conhecido vive **somente na memória da aba**. Não existe
+`localStorage`, `sessionStorage` nem cache persistente da retenção: recarregar a
+página durante uma indisponibilidade perde a retenção em memória. Isso **não é
+defeito da F3.6** — offline/reload resiliente pertence à F4.
+
+#### Selo
+
+`PainelVisual` pode receber `atualizadoEm`, e o selo discreto `atualizado HH:MM` usa
+a hora do bloco `OK` mais antigo ainda exibido. Sem nenhum bloco `OK`, o selo fica
+ausente. Não há alerta rico de conexão.
+
+#### Rotação
+
+`QuadrosEquipe` permaneceu intacto: o timer visual continua em 20 s e o refresh de
+dados em 60 s — relógios independentes. Nenhuma key de competência ou timestamp
+remonta a rotação. (Sem teste visual automatizado disso.)
 
 ### Fora da F3
 
@@ -751,10 +933,8 @@ não bloqueia a F3 e não reabre a F2 agora.
    proprietário, mas não resolvido.
 2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
    antes de ativar lá a versão correspondente, com gate apropriado.
-3. **F3.6 — atualização automática**: próxima fatia de implementação. Hoje a TV mostra
-   o dado do momento da requisição e não o atualiza sozinha.
-4. **F4 — Identidade e modo TV**: depende da F3.
-5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
+3. **F4 — Identidade e modo TV**: próxima fase, não iniciada.
+4. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
 
 Pendências de informação herdadas do plano, nenhuma bloqueante: número máximo de
 corretores por equipe (dimensiona a altura dos quadros), valores iniciais do saldo

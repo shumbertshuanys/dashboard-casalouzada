@@ -68,8 +68,8 @@ isso duplicaria valores no VGV do mês.
 `src/lib/metricas.ts`; commit `6cf0627`.
 **implementada no núcleo de cálculo e na leitura** — `calcularMetricasEmpresa` usa saldo
 apenas nos acumulados, e o VGV mensal, trimestral e anual soma só lançamentos. Desde a
-F3.3 os dois vêm do banco. O painel real ainda não exibe esse cálculo: a apresentação é
-da F3.4 e a ligação da rota, da F3.5.
+F3.3 os dois vêm do banco, desde a F3.4 a apresentação os formata e desde a F3.5
+`/painel/[token]` os exibe.
 
 ### DEC-005 — Períodos civis no fuso `America/Sao_Paulo`
 
@@ -106,11 +106,10 @@ resultado dos rankings sem perder o histórico.
 **Fonte.** `prisma/schema.prisma`, campo `ativo` de `Corretor`;
 `src/app/admin/corretores/acoes.ts`; commit `fa49528`; `src/lib/metricas.ts`;
 `tests/metricas.test.ts`; commit `8ec6cbc`.
-**implementada na administração e no núcleo de cálculo; apresentação real ainda
-futura** — `calcularMetricasEquipes` exclui o corretor inativo dos rankings e do
-`totalCorretores`, e os eventos dele continuam contando nos totais da empresa, que
-saem dos lançamentos e não passam pelo elenco (DEC-038). O que ainda não existe é a
-tela: `/painel/[token]` não está conectado nem apresenta esses rankings.
+**implementada** — `calcularMetricasEquipes` exclui o corretor inativo dos rankings e
+do `totalCorretores`, e os eventos dele continuam contando nos totais da empresa, que
+saem dos lançamentos e não passam pelo elenco (DEC-038). Desde a F3.5,
+`/painel/[token]` está conectado e apresenta esses rankings com dados reais.
 
 ### DEC-007 — Histórico protegido por foreign keys `Restrict`
 
@@ -164,7 +163,9 @@ algo a ser adivinhado ali.
 **Impacto.** A comparação usa `timingSafeEqual`, para o tempo de resposta também não
 denunciar nada.
 
-**Fonte.** `src/app/painel/[token]/page.tsx`, função `tokenConfere`. **implementada**
+**Fonte.** `src/lib/token-painel.ts`, função `tokenPainelConfere` — extraída na F3.6
+e usada tanto pela página quanto pela rota `/painel/[token]/dados`;
+`src/app/painel/[token]/page.tsx`. **implementada**
 
 ### DEC-011 — Painel é `noindex`
 
@@ -228,12 +229,13 @@ informação falsa na parede do escritório.
 **Impacto.** Vale também para a queda de rede prevista no plano: em falha, o painel
 mantém o último valor conhecido em vez de zerar.
 
-**Fonte.** `PLANO.md` §5.1; DEC-039; DEC-043; `src/lib/metricas.ts`;
+**Fonte.** `PLANO.md` §5.1; DEC-039; DEC-043; DEC-045; `src/lib/metricas.ts`;
 `tests/metricas.test.ts`; commits `6cf0627` e `8ec6cbc`;
 `src/lib/apresentacao-painel.ts`; `tests/apresentacao-painel.test.ts`; commit
-`a9fe849`; `src/app/painel/[token]/page.tsx`, commit `8684f1d`.
-**parcialmente implementada — distinção e representação no painel real concluídas;
-retenção do último valor ainda futura na F3.6** — a distinção existe no núcleo: mês sem
+`a9fe849`; `src/app/painel/[token]/page.tsx`, commit `8684f1d`;
+`src/lib/retencao-painel.ts`; `src/components/painel/atualizador-painel.tsx`;
+`tests/retencao-painel.test.ts`; commit `888f779`.
+**implementada** — a distinção existe no núcleo: mês sem
 nenhum lançamento devolve `SEM_DADOS` em vez de afirmar desempenho zero, e dentro de um
 mês `OK` um corretor sem evento aparece com zero real (DEC-039). Ausência de saldo
 histórico segue a mesma regra, como `SEM_SALDO_HISTORICO` com valor `null` (DEC-037).
@@ -244,9 +246,12 @@ continua saindo como zero. A mesma disciplina alcançou o dinheiro — um valor 
 que a compactação levaria a zero sai como `R$ < 0,1 mi`, e não como `R$ 0,0 mi`
 (DEC-043).
 
-Continua futura a outra metade: **reter o último valor conhecido** em queda de leitura
-ou de conexão, em vez de zerar, que depende da atualização automática da F3.6. Hoje uma
-requisição é uma leitura, e não há retenção entre elas.
+A outra metade chegou com a F3.6: em queda de leitura ou de conexão o painel **retém
+o último valor conhecido** em vez de zerar. Falha posterior não substitui bloco `OK`
+elegível por falso zero nem por ausência, e a retenção é **localizada**, bloco a
+bloco, conforme a F3.6 — períodos e equipes só dentro da mesma competência mensal,
+acumulados também através da virada (DEC-045). Zero real continua distinto de
+ausência, e os estados sem número continuam representados como `—`.
 
 ---
 
@@ -456,12 +461,12 @@ aprovado.
 
 **Impacto.** O port do protótipo pode usar dados fictícios; o painel de F3, não. As
 duas pré-condições foram satisfeitas — administração pronta e protótipo portado — e a
-F3 começou sobre elas. Cálculo, leitura e apresentação existem e estão ligados à rota
-da TV; o que falta é manter os números atualizados sozinhos.
+F3 começou sobre elas. Cálculo, leitura, apresentação e atualização automática
+existem e estão ligados à rota da TV.
 
 **Fonte.** `PLANO.md` §9; commits `22bf943` e `485ba36`.
-**cumprida** — pré-condições atendidas e a F3 começou na ordem prevista: F3.0 a F3.5
-concluídas, F3.6 é a próxima
+**cumprida** — pré-condições atendidas e a F3 correu na ordem prevista: F3.0 a F3.6
+concluídas, e a Fase 3 está concluída
 
 ### DEC-030 — F4 depende da F3
 
@@ -599,7 +604,7 @@ commit `9ec8439`.
 **implementada na administração, no cálculo, na leitura e no shape** — a fronteira da
 F3.3 lê `saldo_historico` restringindo o `where` a `VENDA` e `AVALIACAO_GOOGLE`, os dois
 únicos tipos com saldo de abertura na v1, e o shape da F3.4 já formata os acumulados
-que saem dali. O que falta é a rota da TV desenhá-los, que é da F3.5.
+que saem dali. Desde a F3.5 a rota da TV os desenha.
 
 ---
 
@@ -666,8 +671,8 @@ commit `6cf0627`; `src/lib/apresentacao-painel.ts`, commit `a9fe849`.
 **implementada no núcleo de cálculo e no shape de apresentação** — sem saldo do tipo, o
 acumulado sai do núcleo como `SEM_SALDO_HISTORICO` com valor `null`, e desde a F3.4 o
 shape o traduz em `—`, sem prefixo de moeda. Faltar o saldo de um tipo não contamina o
-outro: o big number correspondente é o único que perde o número. A **página** ainda não
-desenha isso — a rota real é da F3.5.
+outro: o big number correspondente é o único que perde o número. Desde a F3.5 a página
+desenha isso na rota real.
 
 ### DEC-038 — Corretor transferido aparece nos dois quadros, sem duplicar produção
 
@@ -731,6 +736,10 @@ conhecido mesmo sem produção a exibir, e esconder os quadros apagaria dado ver
 VGV trimestral e anual continuam com valor real: são janelas próprias, e um mês vazio
 não diz nada sobre elas. Num mês `OK`, zero segue sendo zero exibível.
 
+Na F3.6, `SEM_DADOS` atravessa a atualização automática como **dado válido**: não é
+confundido com falha de leitura e, chegando dentro de uma leitura válida,
+**substitui** o estado anterior em vez de ser retido contra (DEC-045).
+
 ### DEC-040 — O painel v1 exige exatamente três equipes ativas
 
 **Decisão.** O desenho do painel tem quatro colunas fixas: quadro mensal geral mais
@@ -775,6 +784,11 @@ renderiza "Configuração de equipes inválida"; o estado irmão, `INDISPONIVEL`
 equipes, sem lista vazia e sem equipe fictícia, e o quadro "Mensal geral" continua na
 primeira coluna com os números da empresa que seguem válidos.
 
+Na F3.6, `CONFIGURACAO_INVALIDA` segue sendo estado de domínio válido também na
+atualização automática: uma leitura válida com esse estado **substitui** as equipes
+anteriores na tela — ele não é alvo da retenção, que guarda apenas contra falha de
+leitura (DEC-045).
+
 ### DEC-041 — A camada de métricas recebe o cliente Prisma por parâmetro
 
 **Decisão.** A leitura de métricas aceita explicitamente um `PrismaClient`:
@@ -806,6 +820,11 @@ interface abstrata de banco foi criada. Desde a F3.5 (`8684f1d`) a aplicação r
 fecha o par: `/painel/[token]` importa o cliente de `src/lib/db.ts` e o injeta na
 chamada — `obterMetricasPainel(prisma, agora)` —, de modo que rota e teste exercitam a
 mesma função com clientes diferentes.
+
+A F3.6 manteve a disciplina: `lerPainel(prisma, agora)`, em
+`src/lib/leitura-painel.ts`, também recebe o `PrismaClient` por parâmetro, e tanto a
+página quanto a rota `/painel/[token]/dados` injetam explicitamente o cliente de
+`src/lib/db.ts`. Nenhuma DAL paralela foi criada.
 
 ### DEC-042 — Os estados do painel são dimensões separadas, não um enum único
 
@@ -867,6 +886,14 @@ quadros. O `—` sai sempre sem prefixo de moeda.
 alcançá-lo: um big number nunca fica `SEM_DADOS`, e o VGV por período nunca fica
 `SEM_SALDO_HISTORICO`.
 
+Desde a F3.6 a independência dos blocos atravessa também a **retenção**: `periodos`,
+`acumulados` e `equipes` são retidos separadamente, e uma falha de leitura localizada
+não apaga bloco correto independente — nem na leitura, nem na atualização. A
+distinção de camadas ficou explícita: `INDISPONIVEL` é falha de leitura
+**localizada**, que chega dentro de uma resposta válida e é tratada bloco a bloco;
+falha de transporte, HTTP, parse ou contrato é falha da **atualização inteira**, e
+nesse caso o estado anterior permanece completo (DEC-045, DEC-046).
+
 ---
 
 ## Painel — decisões da F3.4
@@ -915,4 +942,95 @@ real pequeno demais para a escala.
 commit `a9fe849`; `src/app/painel/[token]/page.tsx`, commit `8684f1d`.
 **implementada no shape de apresentação e consumida pela rota real** — a política não
 mudou na F3.5; o que mudou é que `/painel/[token]` passou a desenhar o shape que a
-implementa, então os valores compactos chegam à parede do escritório.
+implementa, então os valores compactos chegam à parede do escritório. A F3.6 também
+não alterou nenhuma regra monetária: o dinheiro que atravessa o contrato de
+atualização já chega formatado por esta política.
+
+---
+
+## Painel — decisões da F3.6
+
+### DEC-044 — Atualização automática usa Route Handler e fetch periódico
+
+**Decisão.** A atualização do painel é feita pelo cliente contra uma Route Handler
+dedicada:
+
+- `GET /painel/[token]/dados` devolve a leitura completa em JSON;
+- um Client Component (`AtualizadorPainel`) faz o `fetch`;
+- intervalo de 60 segundos; timeout de 15 segundos (`AbortSignal.timeout`);
+- `visibilitychange` provoca uma tentativa imediata quando a aba volta a ficar
+  visível;
+- `cache: "no-store"` na requisição e `Cache-Control: no-store` na resposta;
+- no máximo **uma** request em voo;
+- o token permanece no path — lido por `useParams`, nunca passado por prop — e é
+  validado **antes** de qualquer toque no banco, com 404 para token inválido.
+
+**Motivo.** A política de retenção precisa **observar** o resultado de cada
+atualização — sucesso, falha de transporte, timeout, HTTP não-200, payload
+inválido — para decidir o que entra na tela. `router.refresh()` não foi usado porque
+sua API não fornece ao controlador um resultado/promise de sucesso ou falha por
+atualização para alimentar essa política. Server Action não foi usada como transporte
+de leitura.
+
+**Impacto.** A leitura inicial continua no servidor; o refresh é responsabilidade
+exclusiva do cliente. Sem WebSocket, SSE, Service Worker ou storage — a F3.6 não
+abre nenhuma dessas frentes.
+
+**Fonte.** `src/app/painel/[token]/dados/route.ts`;
+`src/components/painel/atualizador-painel.tsx`; `src/lib/token-painel.ts`;
+`tests/rota-dados-painel.test.ts`; commit `888f779`. **implementada**
+
+### DEC-045 — Último valor conhecido é retido por bloco
+
+**Decisão.** A retenção opera sobre os três blocos da leitura — `periodos`,
+`acumulados` e `equipes` — separadamente:
+
+- `periodos` e `equipes` só retêm o valor anterior **dentro da mesma competência
+  mensal**; na virada de mês, a indisponibilidade nova é aceita como
+  indisponibilidade;
+- `acumulados` podem atravessar a virada de mês, porque não têm recorte mensal
+  (DEC-036);
+- leitura `OK` **sempre substitui** o que estava na tela;
+- estados de domínio (`SEM_DADOS`, `SEM_SALDO_HISTORICO`, `CONFIGURACAO_INVALIDA`)
+  são dados válidos e **sempre passam** — não são alvo de retenção;
+- ausência anterior não é patrimônio: só bloco `OK` é retido;
+- o último valor conhecido vive **somente na memória da aba** — sem `localStorage`,
+  `sessionStorage` ou cache persistente.
+
+Falha completa da atualização — transporte, HTTP, parse de JSON ou payload fora do
+contrato — mantém o estado anterior **inteiro**.
+
+**Motivo.** Preservar dado bom sem esconder mudanças reais de mês ou de cadastro. Um
+VGV de agosto sob o rótulo "setembro" seria um número verdadeiro debaixo de uma
+legenda falsa; um acumulado desde sempre continua descrevendo a mesma coisa depois da
+virada.
+
+**Impacto.** O selo discreto `atualizado HH:MM` usa a hora do bloco `OK` mais antigo
+ainda exibido; sem nenhum bloco `OK`, não há selo. Recarregar a página durante uma
+indisponibilidade perde a retenção em memória — offline persistente é F4, não defeito
+da F3.6.
+
+**Fonte.** `src/lib/retencao-painel.ts`; `tests/retencao-painel.test.ts`; commit
+`888f779`. **implementada**
+
+### DEC-046 — Payload de atualização é validado em runtime antes da retenção
+
+**Decisão.** `LeituraPainel` é um contrato JSON explícito entre o servidor e o
+cliente, e `ehLeituraPainel` o valida manualmente em runtime, sem Zod nem dependência
+nova:
+
+- estrutura e tipos de cada campo;
+- dimensões exatas — 8 métricas de chave única, 3 VGV, 3 big numbers, 7 linhas do
+  quadro mensal, 3 equipes nos estados que carregam quadros;
+- rankings presentes para cada métrica do ciclo;
+- coerência entre `estadoLeitura` e o conteúdo apresentado.
+
+Payload recusado **não entra no reducer** e não altera a tela: o estado anterior sai
+intacto, por referência.
+
+**Motivo.** TypeScript não valida JSON recebido da rede. Um payload malformado ou
+incoerente que entrasse na retenção poderia apagar dado bom da parede — exatamente o
+que a DEC-014 proíbe.
+
+**Fonte.** `src/lib/contrato-atualizacao-painel.ts`;
+`tests/contrato-atualizacao-painel.test.ts`; commit `888f779`. **implementada**

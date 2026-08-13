@@ -4,17 +4,21 @@ Documento de planejamento e referência arquitetural. O texto abaixo descreve o
 desenho pretendido; o estado real do que está construído fica em
 `docs/HANDOFF_ATUAL.md`, e as decisões em `docs/DECISOES.md`.
 
-**Situação em 2026-08-13:** Fase 1, protótipo visual e Fase 2 — Administração
-concluídos e publicados. A **F3 — Painel** está em curso: F3.0 a F3.5 concluídas. As
-três camadas do painel existem: `src/lib/metricas.ts` calcula (núcleo **puro**),
-`src/lib/metricas-prisma.ts` lê o banco e alimenta esse núcleo, e
-`src/lib/apresentacao-painel.ts` traduz o resultado no que a tela desenha. A próxima
-fatia é a **F3.6, atualização automática**.
+**Situação em 2026-08-13:** Fase 1, protótipo visual, Fase 2 — Administração e
+**Fase 3 — Painel** concluídos e publicados. As três camadas do painel existem:
+`src/lib/metricas.ts` calcula (núcleo **puro**), `src/lib/metricas-prisma.ts` lê o
+banco e alimenta esse núcleo, e `src/lib/apresentacao-painel.ts` traduz o resultado
+no que a tela desenha. A próxima fase é a **F4 — Identidade e modo TV**, não
+iniciada.
 
-Desde a F3.5 a tela da TV está ligada: `/painel/[token]` valida o token e, só então,
-compõe `prisma → obterMetricasPainel → criarApresentacaoPainel → PainelVisual`, com um
-único `agora` atravessando leitura e apresentação. `/preview` continua com dados
-fictícios, mas desenha pela **mesma** composição visual da rota real.
+Desde a F3.5 a tela da TV está ligada, e desde a F3.6 ela se mantém sozinha:
+`/painel/[token]` valida o token e, só então, faz a leitura inicial no servidor —
+`prisma → lerPainel → AtualizadorPainel → PainelVisual`, com um único `agora`
+atravessando leitura e apresentação. No cliente, o `AtualizadorPainel` consulta
+`GET /painel/[token]/dados` a cada 60 segundos, com timeout de 15 segundos, e
+preserva o último valor conhecido conforme a política de retenção quando uma
+atualização falha. `/preview` continua com dados fictícios, mas desenha pela
+**mesma** composição visual da rota real.
 
 ---
 
@@ -175,9 +179,12 @@ ela está **composta na rota da TV**: `/painel/[token]` cria um `agora` só — 
 validar o token — e o passa às duas camadas, para o cabeçalho não anunciar um mês
 diferente daquele que produziu os números.
 
-O que falta na F3 é a **atualização**: hoje uma requisição é uma leitura, e a aba
-parada não busca dado novo sozinha. Manter os números frescos na parede, e decidir o
-que a TV mostra quando uma atualização falha, é a F3.6.
+A **atualização** veio com a F3.6: a leitura inicial continua no servidor, e o
+cliente consulta `GET /painel/[token]/dados` a cada 60 segundos — o mesmo guard de
+token antes do banco e o mesmo `agora` único por leitura. Cada payload é validado em
+runtime (`ehLeituraPainel`) antes de passar pela política de retenção
+(`resolverAtualizacao` → `comporApresentacao`): falha de atualização não apaga dado
+bom da tela, e leitura válida substitui o que estava lá.
 
 ---
 
@@ -321,12 +328,13 @@ referência para a rota `/preview`, com dados fictícios. Serve de contrato visu
 CRUD de equipes, corretores e lançamentos. Saldo histórico. Ao final desta fase você
 já consegue alimentar o sistema de verdade, mesmo sem o painel pronto.
 
-**Fase 3 — Painel** · *em curso: F3.0 a F3.5 concluídas, F3.6 é a próxima*
+**Fase 3 — Painel** · *concluída*
 Camada de cálculo, as três faixas do layout, atualização automática, rotação de métricas,
 proteção por token na URL. `src/lib/metricas.ts` calcula, `src/lib/metricas-prisma.ts`
 lê o banco, `src/lib/apresentacao-painel.ts` formata para a tela e `/painel/[token]`
-compõe as três desde a F3.5 — **com dados reais**. Falta a atualização automática: uma
-requisição é uma leitura, e a aba parada não busca dado novo sozinha.
+compõe as três desde a F3.5 — **com dados reais**. Desde a F3.6 o `AtualizadorPainel`
+mantém a tela atualizada sozinho, a cada 60 segundos, preservando o último valor
+conhecido quando uma atualização falha.
 
 A fase foi fatiada assim:
 
@@ -338,11 +346,11 @@ A fase foi fatiada assim:
 | F3.3 | leitura Prisma | **concluída** — commit `9ec8439` |
 | F3.4 | shape de apresentação e tipos fora do mock | **concluída** — commit `a9fe849` |
 | F3.5 | painel real ligado aos dados | **concluída** — commit `8684f1d` |
-| F3.6 | atualização automática | **próxima, não iniciada** |
+| F3.6 | atualização automática e último valor conhecido | **concluída** — commit `888f779` |
 
 As decisões da F3.0 são implementáveis sobre o schema atual: **a F3 não exige migration**.
 
-**Fase 4 — Identidade e modo TV** · *depende da F3*
+**Fase 4 — Identidade e modo TV** · *próxima, não iniciada*
 Cores, tipografia, marca, ajuste fino para 3840×2160, transições, comportamento offline,
 configuração do mini PC em modo quiosque. Os tokens de cor já existem desde a F1, e o
 protótipo comprovou tipografia e escala numa tela isolada — aplicar isso ao painel real
