@@ -1034,3 +1034,119 @@ que a DEC-014 proíbe.
 
 **Fonte.** `src/lib/contrato-atualizacao-painel.ts`;
 `tests/contrato-atualizacao-painel.test.ts`; commit `888f779`. **implementada**
+
+---
+
+## Painel — decisões da F4.0
+
+Resolvidas pelo proprietário em 2026-08-13, depois de a F4.1 já ter sido publicada em
+`f49f912`. Nenhuma delas está implementada: são invariantes que restringem as fatias
+seguintes da F4.
+
+### DEC-047 — A marca oficial substitui o wordmark tipográfico no painel
+
+**Decisão.** O cabeçalho da TV usará o **lockup horizontal claro** da marca Casa
+Louzada no lugar do texto tipográfico `CASA LOUZADA`. Os dois **não** aparecem
+simultaneamente: exibir o lockup completo e, ao lado, outro `CASA LOUZADA` digitado
+colocaria a identidade competindo com ela mesma.
+
+O **símbolo oficial isolado** — preferencialmente na variante bege — é a base do
+favicon/ícone. Não existe favicon oficial separado a ser fornecido.
+
+A marca chegou como **PNGs transparentes** fornecidos pelo proprietário. Sobre eles é
+permitido exclusivamente **recortar margens transparentes**, para adequação técnica.
+É proibido redesenhar, vetorizar por aproximação, alterar geometria, trocar cores ou
+reconstruir a marca de qualquer outra forma — inclusive por SVG artesanal
+"equivalente".
+
+**Motivo.** A marca oficial já contém símbolo e nome, e é a fonte visual
+autoritativa. Qualquer reconstrução produz uma segunda marca parecida, não a marca.
+
+**Impacto.** A implementação é **F4.2**: é ela que traz os arquivos para o
+repositório e troca o wordmark do cabeçalho. Até lá nenhuma imagem entra no código —
+`public/marca/` continua não existindo, e `src/components/painel/painel-visual.tsx`
+continua desenhando o texto `CASA LOUZADA`. A escolha visual acima é o que a F4.2
+deve implementar, não um estado já alcançado.
+
+**Fonte.** Marca oficial entregue pelo proprietário em PNG transparente; escolha do
+uso visual delegada por ele à revisão técnica e aprovada em 2026-08-13.
+**invariante futura — implementação é F4.2**
+
+### DEC-048 — Offline não persiste números do painel
+
+**Decisão.** O mecanismo offline da F4 **nunca** armazenará o payload de métricas para
+ressuscitá-lo depois de um reload ou de um boot.
+
+Depois de o mecanismo offline ter sido provisionado **pelo menos uma vez com rede**,
+uma navegação que falhe por ausência de rede ou por indisponibilidade 5xx poderá
+exibir uma **tela institucional** Casa Louzada. Essa tela tenta recuperar a aplicação
+automaticamente e, quando ela voltar a responder, devolve o navegador ao painel para
+uma **leitura fresca** — nunca para números guardados.
+
+Resposta `404` causada por token inválido **não** é indisponibilidade e não pode ser
+mascarada pela tela offline (DEC-010).
+
+**Motivo.** Um número antigo, de idade desconhecida, na parede do escritório viola a
+distinção entre dado real e dado não disponível (DEC-014). A tela institucional
+comunica indisponibilidade sem inventar desempenho.
+
+**Impacto.** O Service Worker futuro poderá cachear **somente** o necessário para a
+tela institucional; nunca `/painel/[token]/dados` nem qualquer payload de métricas. O
+primeiro boot de um perfil de navegador que nunca instalou o mecanismo **continua
+dependendo de rede** — não se deve afirmar offline mágico antes do provisionamento. A
+retenção da F3.6 permanece como está: em memória da aba, perdida no reload (DEC-045).
+
+**Fonte.** DEC-014; DEC-045; decisão do proprietário em 2026-08-13.
+**invariante futura — implementação é F4.4**
+
+### DEC-049 — Phantom Alien 4K é o hardware alvo, mas sua plataforma precisa ser comprovada
+
+**Decisão.** O equipamento pretendido para conduzir a TV é o `Phantom Alien 4K IPTV`.
+
+Seu sistema operacional, firmware, navegador disponível e capacidade de modo
+quiosque/autostart **não são conhecidos** e **não serão inferidos**. A F4.5 começa
+obrigatoriamente por uma inspeção do aparelho real.
+
+**Motivo.** Escrever o procedimento operacional a partir de suposição produziria um
+roteiro que ninguém consegue executar no equipamento que existe.
+
+**Impacto.** Antes de `OPERACAO_TV.md` valer como procedimento definitivo, é preciso
+provar **no equipamento**:
+
+- sistema e firmware;
+- navegador disponível e versão;
+- abertura correta do painel;
+- saída efetiva em 3840×2160;
+- suporte às APIs web que a aplicação usa;
+- possibilidade de inicialização automática, ou mecanismo equivalente;
+- comportamento ao desligar e religar.
+
+Não registrar Android, Chrome ou qualquer outro software sem evidência direta do
+aparelho. Isso supera, para este hardware, a recomendação genérica de mini PC com
+Chrome em quiosque do `PLANO.md` §5.1: ela continua sendo uma alternativa, não uma
+descrição do que está em mãos.
+
+A incerteza **não bloqueia** F4.2, F4.3 nem F4.4; bloqueia apenas o encerramento
+operacional da F4.5.
+
+**Fonte.** Hardware informado pelo proprietário em 2026-08-13.
+**invariante futura / verificação operacional pendente — F4.5**
+
+### DEC-050 — O equipamento é desligado fora do expediente
+
+**Decisão.** TV e equipamento **não operam 24/7**: serão desligados fora do
+expediente. Não se implementa Screen Wake Lock preventivamente.
+
+Durante o expediente, a primeira solução para suspensão de tela é a **configuração
+operacional** do equipamento, da TV e do navegador. Wake Lock só entra na aplicação
+se o ensaio real da F4.5 provar que essa configuração é insuficiente.
+
+**Motivo.** Não introduzir API de browser sem necessidade demonstrada — ainda mais
+uma cuja disponibilidade no aparelho alvo é desconhecida (DEC-049).
+
+**Impacto.** Nenhum código de Wake Lock na F4.2, F4.3 ou F4.4. O assunto se fecha na
+F4.5, com o resultado do ensaio: ou a configuração operacional basta e nada é
+adicionado, ou a insuficiência fica registrada e a API é justificada por ela.
+
+**Fonte.** Decisão do proprietário em 2026-08-13.
+**invariante futura — fechamento operacional em F4.5**

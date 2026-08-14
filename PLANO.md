@@ -8,8 +8,10 @@ desenho pretendido; o estado real do que está construído fica em
 **Fase 3 — Painel** concluídos e publicados. As três camadas do painel existem:
 `src/lib/metricas.ts` calcula (núcleo **puro**), `src/lib/metricas-prisma.ts` lê o
 banco e alimenta esse núcleo, e `src/lib/apresentacao-painel.ts` traduz o resultado
-no que a tela desenha. A próxima fase é a **F4 — Identidade e modo TV**, não
-iniciada.
+no que a tela desenha. A **F4 — Identidade e modo TV está em andamento**: a F4.1 foi
+publicada em `f49f912` e as decisões da F4.0 estão nas DEC-047 a DEC-050. Ainda
+permanecem a identidade oficial e seus assets, a verificação em 4K, o offline de
+navegação e a operação em hardware real.
 
 Desde a F3.5 a tela da TV está ligada, e desde a F3.6 ela se mantém sozinha:
 `/painel/[token]` valida o token e, só então, faz a leitura inicial no servidor —
@@ -253,6 +255,12 @@ Derivada do logotipo:
 Tipografia geométrica alinhada ao logo (Jost ou Outfit) nos títulos e números, com numerais
 tabulares para os valores não deslocarem ao atualizar.
 
+> Resolvido com **Jost**, configurada dentro de `src/components/painel/painel-visual.tsx`.
+> Como essa composição é compartilhada desde a F3.5, a Jost vale para `/preview` **e**
+> para `/painel/[token]` — não é exclusiva do preview. O layout raiz, `/admin` e
+> `/login` seguem com Geist, de propósito. O que ainda falta da identidade é a **marca
+> oficial** no cabeçalho, no lugar do texto `CASA LOUZADA` (DEC-047, fatia F4.2).
+
 Cuidados de leitura à distância, considerando 80 polegadas vistas de 3 a 6 metros. Valores
 em pixels de tela 4K real:
 
@@ -350,11 +358,22 @@ A fase foi fatiada assim:
 
 As decisões da F3.0 são implementáveis sobre o schema atual: **a F3 não exige migration**.
 
-**Fase 4 — Identidade e modo TV** · *próxima, não iniciada*
-Cores, tipografia, marca, ajuste fino para 3840×2160, transições, comportamento offline,
-configuração do mini PC em modo quiosque. Os tokens de cor já existem desde a F1, e o
-protótipo comprovou tipografia e escala numa tela isolada — aplicar isso ao painel real
-continua sendo F4.
+**Fase 4 — Identidade e modo TV** · *em andamento*
+Cores, tipografia, marca, ajuste fino para 3840×2160, transições, comportamento offline
+e operação da TV. Os tokens de cor existem desde a F1, e **a composição visual é
+compartilhada desde a F3.5**: a Jost está configurada dentro de `PainelVisual`, que
+serve `/preview` e `/painel/[token]`, então a tipografia da seção 6 **já chega ao painel
+real**. O que a F4 cuida agora é a **marca oficial e seus assets**, a **verificação em
+4K**, o **offline de navegação** e a **operação na TV**.
+
+A F4.1 — refinamento de modo TV — foi publicada em `f49f912`: token `--color-moldura`,
+cursor oculto no painel, hairlines em `cqw` e remoção dos SVGs de scaffold. As decisões
+de identidade e de modo TV estão nas **DEC-047 a DEC-050**, e o hardware alvo passou a
+ser o `Phantom Alien 4K IPTV`, cuja plataforma ainda precisa ser comprovada (DEC-049) —
+o mini PC com Chrome em quiosque descrito na §5.1 continua sendo alternativa, não o que
+está em mãos. Permanecem não implementadas a marca oficial no painel (F4.2), a
+verificação 4K (F4.3), o offline de navegação (F4.4) e a operação em hardware real
+(F4.5).
 
 **Fase 5 — Refinamentos** · *futura*
 Metas com barra de progresso, destaque do mês, comparativo com o mês anterior, fotos dos
