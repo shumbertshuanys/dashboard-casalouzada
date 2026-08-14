@@ -53,6 +53,12 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
               Lançamentos
             </Link>
             <Link
+              href="/admin/reservas-locacao"
+              className="text-sm text-texto-secundario underline-offset-4 hover:text-texto hover:underline"
+            >
+              Reservas
+            </Link>
+            <Link
               href="/admin/saldo-historico"
               className="text-sm text-texto-secundario underline-offset-4 hover:text-texto hover:underline"
             >

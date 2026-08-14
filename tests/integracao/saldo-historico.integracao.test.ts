@@ -150,14 +150,17 @@ describe("AVALIACAO_GOOGLE", () => {
 
 describe("unicidade sob concorrência", () => {
   it("duas inserções simultâneas do mesmo tipo: no máximo uma vence", async () => {
-    // `LOCACAO` não é tipo suportado pela UI, mas serve para exercitar a
-    // constraint sem colidir com as fixtures dos dois tipos reais.
-    await prisma.saldoHistorico.deleteMany({ where: { tipo: "LOCACAO" } });
+    // `CAPTACAO_EXCLUSIVA` não é tipo suportado pela UI, mas serve para
+    // exercitar a constraint sem colidir com as fixtures dos dois tipos reais.
+    // Tem de ser um tipo que NENHUM outro arquivo do run usa: os arquivos
+    // rodam em paralelo, e o `deleteMany` abaixo é sem escopo — `LOCACAO`, o
+    // tipo antigo, disputava a unique com a suíte da entrega v1.
+    await prisma.saldoHistorico.deleteMany({ where: { tipo: "CAPTACAO_EXCLUSIVA" } });
 
     const tentativa = () =>
       prisma.saldoHistorico.create({
         data: {
-          tipo: "LOCACAO",
+          tipo: "CAPTACAO_EXCLUSIVA",
           quantidade: 1,
           valorTotal: "1.00",
           dataCorte: paraDataCivil("2026-01-01"),
@@ -176,7 +179,7 @@ describe("unicidade sob concorrência", () => {
       "a recusa tem de vir da unicidade",
     );
 
-    await prisma.saldoHistorico.deleteMany({ where: { tipo: "LOCACAO" } });
+    await prisma.saldoHistorico.deleteMany({ where: { tipo: "CAPTACAO_EXCLUSIVA" } });
   });
 });
 
