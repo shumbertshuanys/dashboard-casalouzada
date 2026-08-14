@@ -189,12 +189,26 @@ tela, não em pixels fixos.
 o resultado é conferido, sem manter duas versões.
 
 **Impacto.** Os tamanhos mínimos de leitura do plano (big numbers 220px, VGV 110px,
-nomes 44px, rótulos 32px) são alvos **em pixels de 4K real**, expressos em `cqw`.
-No protótipo os quatro foram medidos e atendidos num painel de 3840px. Aplicar o
-mesmo dimensionamento ao painel **real** continua sendo F3/F4.
+nomes 44px, rótulos 32px) são alvos **em pixels de uma viewport 4K real**, mas a
+implementação continua expressa em `cqw`. Desde a F3.5 a **mesma** composição serve
+`/preview` e `/painel/[token]`, então o dimensionamento relativo vale nas duas rotas.
+A F4.1 eliminou as duas últimas dimensões fixas que restavam — as hairlines
+decorativas, que saíram de `1px` para `0.05cqw`. A F4.3 comprovou num Chrome com
+viewport efetiva **3840×2160**, `devicePixelRatio` 1 e `visualViewport.scale` 1, com
+`.tv` medindo 3840×2160, que os quatro mínimos são atendidos **sem overflow**:
 
-**Fonte.** `PLANO.md` §5.1 e §6; `src/components/painel/painel.module.css`;
-commit `22bf943`. **implementada no protótipo**
+| Elemento | Medido no navegador | Mínimo |
+|---|---|---|
+| Big numbers | 220.032px | 220 |
+| VGV por período | 110.208px | 110 |
+| Nome do corretor | 44.16px | 44 |
+| Valores das listas | 48px | 44 |
+| Rótulos e legendas | 32.256px | 32 |
+
+**Fonte.** `PLANO.md` §§5.1 e 6; `src/components/painel/painel.module.css`;
+`src/components/painel/painel-visual.tsx`; protótipo `22bf943`; painel real
+`8684f1d`; F4.1 `f49f912`; microajuste da F4.3 `16490f0`; evidência
+visual/dimensional da F4.3 em 2026-08-14. **implementada**
 
 ### DEC-013 — Todo cálculo do painel converge para `src/lib/metricas.ts`
 
@@ -1062,15 +1076,26 @@ reconstruir a marca de qualquer outra forma — inclusive por SVG artesanal
 **Motivo.** A marca oficial já contém símbolo e nome, e é a fonte visual
 autoritativa. Qualquer reconstrução produz uma segunda marca parecida, não a marca.
 
-**Impacto.** A implementação é **F4.2**: é ela que traz os arquivos para o
-repositório e troca o wordmark do cabeçalho. Até lá nenhuma imagem entra no código —
-`public/marca/` continua não existindo, e `src/components/painel/painel-visual.tsx`
-continua desenhando o texto `CASA LOUZADA`. A escolha visual acima é o que a F4.2
-deve implementar, não um estado já alcançado.
+**Impacto.** Implementado pela **F4.2**, que trouxe os arquivos oficiais para o
+repositório e trocou o wordmark do cabeçalho:
+
+- o lockup horizontal está em `public/marca/casa-louzada-horizontal-claro.png` e o
+  símbolo em `public/marca/casa-louzada-simbolo-bege.png`;
+- `src/app/icon.png` é o favicon derivado do símbolo oficial, e o
+  `src/app/favicon.ico` genérico do scaffold foi **removido**;
+- `src/components/painel/painel-visual.tsx` desenha o lockup horizontal, e o wordmark
+  textual `CASA LOUZADA` **deixou de ser desenhado** — os dois nunca aparecem juntos;
+- **nenhuma outra variante da marca foi versionada**: os dois PNGs acima são o que
+  existe no repositório;
+- **nenhuma reconstrução, vetorização ou recoloração foi feita** — os PNGs oficiais
+  são servidos como estão.
+
+As proibições acima continuam valendo para qualquer uso futuro da marca.
 
 **Fonte.** Marca oficial entregue pelo proprietário em PNG transparente; escolha do
-uso visual delegada por ele à revisão técnica e aprovada em 2026-08-13.
-**invariante futura — implementação é F4.2**
+uso visual delegada por ele à revisão técnica e aprovada em 2026-08-13; commit
+`7e0e35d` — `style: aplica marca oficial ao painel`.
+**implementada na F4.2 — `7e0e35d`**
 
 ### DEC-048 — Offline não persiste números do painel
 

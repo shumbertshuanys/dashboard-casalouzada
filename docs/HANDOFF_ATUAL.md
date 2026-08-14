@@ -6,8 +6,8 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `f49f912` — `style: ajusta painel para modo TV` |
-| Data do handoff | 2026-08-13 |
+| Commit de referência | `16490f0` — `fix: estabiliza largura dos quadros do painel` |
+| Data do handoff | 2026-08-14 |
 
 ## Estado executivo
 
@@ -93,17 +93,21 @@ falha de atualização não apaga dado bom, e leitura válida substitui o que es
 tela. `force-dynamic` continua garantindo leitura fresca na request **inicial**; a
 atualização contínua é client-side, própria da F3.6.
 
-A **F4 — Identidade e modo TV está em andamento**, e apenas isto está provado:
+A **F4 — Identidade e modo TV está em andamento**, e isto é o que está provado:
 
+- a **F4.0 — decisões de identidade e modo TV** está **concluída**, registrada nas
+  **DEC-047 a DEC-050** em `73f490d`. É fatia documental: nenhuma linha de código,
+  nenhum asset;
 - a **F4.1 — refinamento de modo TV** está **concluída e publicada** em `f49f912`;
-- a **F4.0 — decisões de identidade e modo TV** teve as escolhas do proprietário
-  resolvidas em 2026-08-13 e está sendo registrada agora, nas **DEC-047 a DEC-050**.
-  É fatia documental: nenhuma linha de código, nenhum asset;
-- a **F4.2 — marca oficial e assets não foi implementada**. O cabeçalho do painel
-  ainda desenha o texto `CASA LOUZADA`, `public/marca/` não existe e nenhum PNG da
-  marca entrou no repositório;
-- **F4.3, F4.4 e F4.5 continuam futuras** — verificação 4K, offline de navegação e
-  operação em hardware real, nessa ordem.
+- a **F4.2 — marca oficial e assets** está **concluída e publicada** em `7e0e35d`. O
+  lockup horizontal oficial e o símbolo estão em `public/marca/`, o favicon oficial
+  derivado do símbolo está em `src/app/icon.png`, o favicon genérico do scaffold foi
+  removido e `PainelVisual` desenha a marca no lugar do wordmark textual;
+- a **F4.3 — verificação 4K e microajustes** está **concluída**. O único defeito
+  reproduzido foi corrigido em `16490f0`, e o gate visual em 3840×2160 foi executado
+  depois dele **sem alterar o repositório**, por ser somente verificação;
+- **F4.4 é a próxima fatia** — offline de navegação, ainda não implementada;
+- **F4.5 continua futura** — operação em hardware real.
 
 ## Fases
 
@@ -126,13 +130,13 @@ A **F4 — Identidade e modo TV está em andamento**, e apenas isto está provad
 | F3.5 — Painel real | **Concluída** | `8684f1d` |
 | F3.6 — Atualização automática e último valor conhecido | **Concluída** | `888f779` |
 | **F3 — Painel** | **Concluída** | — |
-| F4.0 — Decisões de identidade e modo TV | **Concluída** | DEC-047 a DEC-050; sem código |
+| F4.0 — Decisões de identidade e modo TV | **Concluída** | DEC-047 a DEC-050 em `73f490d`; sem código |
 | F4.1 — Refinamento de modo TV | **Concluída** | `f49f912` |
-| F4.2 — Marca oficial e assets | **Não implementada** | — |
-| F4.3 — Verificação 4K | **Futura** | — |
-| F4.4 — Offline de navegação | **Futura** | — |
+| F4.2 — Marca oficial e assets | **Concluída** | `7e0e35d` |
+| F4.3 — Verificação 4K e microajustes | **Concluída** | `16490f0` + evidência visual 4K sem commit |
+| F4.4 — Offline de navegação | **Próxima** | — |
 | F4.5 — Operação em hardware real | **Futura** | inventário do aparelho primeiro (DEC-049) |
-| **F4 — Identidade e modo TV** | **Em andamento** | `f49f912` |
+| **F4 — Identidade e modo TV** | **Em andamento** | `16490f0` |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
@@ -541,9 +545,10 @@ Não se pode dizer que a situação de credenciais esteja saneada hoje.
 
 ## O que ainda NÃO está implementado
 
-Levantado arquivo por arquivo na árvore em `888f779`. `f49f912` alterou apenas
-`src/app/globals.css`, `src/components/painel/painel.module.css` e a remoção de cinco
-SVGs de scaffold, então o inventário abaixo continua valendo.
+Levantado arquivo por arquivo na árvore em `888f779` e atualizado pelos três commits
+seguintes: `f49f912` alterou dois arquivos CSS e removeu cinco SVGs de scaffold,
+`7e0e35d` trouxe os assets da marca e o favicon, e `16490f0` acrescentou uma
+propriedade a `painel.module.css`.
 
 **A F3 está concluída.** A TV mostra os números reais e os mantém atualizados
 sozinha. O que continua não existindo:
@@ -554,8 +559,6 @@ sozinha. O que continua não existindo:
 - comportamento offline persistente — a retenção da F3.6 vive só na memória da aba.
   A tela institucional offline é F4.4, e por decisão **não** guardará números
   (DEC-048);
-- marca oficial no painel: o cabeçalho ainda desenha o texto `CASA LOUZADA`, e a
-  troca pelo lockup oficial é F4.2 (DEC-047);
 - operação em hardware real — nada foi verificado no `Phantom Alien 4K IPTV`
   (DEC-049).
 
@@ -579,13 +582,15 @@ sozinha. O que continua não existindo:
 | `error.tsx` específico do painel | ausente | limitação registrada |
 | Troca do mock pela origem real em `/preview` | não se aplica — o preview é fictício por desenho | — |
 | Moldura por token, cursor oculto e hairlines em `cqw` | **existem** | F4.1 feita |
-| Marca oficial no cabeçalho do painel | ausente — ainda é o texto `CASA LOUZADA` (DEC-047) | F4.2 |
-| Favicon derivado do símbolo oficial | ausente (DEC-047) | F4.2 |
-| Verificação em 3840×2160 real | não realizada | F4.3 |
+| Marca oficial no cabeçalho do painel | **existe** — lockup horizontal, sem wordmark textual (DEC-047) | F4.2 feita |
+| Favicon derivado do símbolo oficial | **existe** — `src/app/icon.png` (DEC-047) | F4.2 feita |
+| Verificação em 3840×2160 real | **realizada** — Chrome headless, viewport medido | F4.3 feita |
+| Largura dos quadros estável sob nome longo | **existe** — `min-width: 0` em `.quadro` | F4.3 feita |
 | Comportamento offline de navegação | ausente — sem Service Worker e sem `offline.html` (DEC-048) | F4.4 |
 | Inventário e operação do `Phantom Alien 4K IPTV` | não realizados (DEC-049) | F4.5 |
 | Screen Wake Lock | ausente **por decisão** (DEC-050) | F4.5, só se o ensaio provar necessidade |
-| `src/app/api/`, `src/components/ui/`, `src/styles/`, `public/marca/` | ausentes | F4.2 em diante |
+| `public/marca/` | **existe** — duas imagens oficiais | F4.2 feita |
+| `src/app/api/`, `src/components/ui/`, `src/styles/` | ausentes | sem fatia atribuída |
 | Tela de troca de senha | ausente — o mecanismo é `npm run db:trocar-senha-admin` | futura |
 | Metas | ausente por decisão | fora da v1 |
 
@@ -956,7 +961,8 @@ não bloqueia a F3 e não reabre a F2 agora.
 
 ## F4 — Identidade e modo TV
 
-Fase **em andamento**. Só duas fatias saíram do papel, e uma delas não tem código.
+Fase **em andamento**, com **F4.0 a F4.3 concluídas**. Restam a F4.4 — offline de
+navegação, a próxima fatia — e a F4.5 — operação em hardware real.
 
 ### F4.0 — decisões de identidade e modo TV · concluída
 
@@ -969,7 +975,7 @@ F4.1 já ter sido publicada — e estão registradas nas **DEC-047 a DEC-050**. 
   isolado**, preferencialmente bege, é a base do favicon. A marca chegou em **PNG
   transparente**; só o recorte de margens transparentes é permitido, e redesenhar,
   vetorizar por aproximação ou recolorir é proibido. Não há favicon oficial separado.
-  A implementação é F4.2.
+  A implementação é F4.2, **já entregue em `7e0e35d`**.
 - **DEC-048** — o offline **não persiste números**. Depois de provisionado ao menos
   uma vez com rede, uma navegação que falhe por falta de rede ou por 5xx pode mostrar
   uma tela institucional que se recupera sozinha e volta ao painel para leitura
@@ -1029,18 +1035,128 @@ documental**: não reexecutou a suíte, não rodou build nem lint, não repetiu 
 conferência visual, e **não reutiliza os resultados acima como se fossem novos**. Eles
 são evidência histórica daquela entrega, não medição desta.
 
-### F4.2 em diante — não implementadas
+### F4.2 — marca oficial e assets · concluída
 
-- **F4.2 — marca oficial e assets.** Não começou. A marca existe em PNG na mão do
-  proprietário, mas **nenhum arquivo entrou no repositório**: `public/marca/` não
-  existe, não há favicon derivado do símbolo e `painel-visual.tsx` continua
-  desenhando o texto `CASA LOUZADA`.
-- **F4.3 — verificação 4K.** O painel nunca foi conferido numa saída real de
-  3840×2160. O dimensionamento em `cqw` foi medido no protótipo (DEC-012), o que não
-  é a mesma coisa.
-- **F4.4 — offline de navegação.** Não existe Service Worker, `offline.html` nem
-  qualquer cache persistente. A retenção da F3.6 continua vivendo só na memória da
-  aba.
+Publicada em `7e0e35d`, tocando seis caminhos. É só isto que o commit prova:
+
+- **lockup horizontal oficial** em `public/marca/casa-louzada-horizontal-claro.png`;
+- **símbolo oficial** em `public/marca/casa-louzada-simbolo-bege.png`;
+- **favicon oficial derivado do símbolo** em `src/app/icon.png`, e **remoção** do
+  `src/app/favicon.ico` genérico herdado do scaffold;
+- `PainelVisual` passou a desenhar o lockup horizontal, e o **wordmark textual
+  `CASA LOUZADA` deixou de ser desenhado** — os dois nunca aparecem juntos (DEC-047);
+- a **proporção da marca é preservada**: a altura vem do CSS em `cqw` e a largura é
+  `auto`, com as dimensões intrínsecas 2511×297 declaradas para reservar a razão;
+- `painel.module.css` trocou o bloco do wordmark tipográfico pelo container da
+  imagem, e o alinhamento do topo passou de `baseline` para `center`.
+
+Nenhuma outra variante da marca foi versionada: os dois PNGs acima são o que existe
+no repositório.
+
+O `src/app/icon.png` entra no build como rota estática própria, e por isso a
+contagem de rotas do `next build` passou de 19 para **20** a partir deste commit.
+
+### F4.3 — verificação 4K e microajustes · concluída
+
+Fatia de **verificação**, com um único microajuste publicado.
+
+#### Microajuste — `16490f0`
+
+Os stresses de layout reproduziram um defeito concreto: um **nome longo de corretor**
+fazia uma coluna da `.faixaBase` crescer pelo `min-content` automático do CSS Grid e
+**comprimir as outras três**, em vez de o rótulo usar o ellipsis que já existia. Como
+o elenco de cada ranking muda a cada 20 s com a rotação, as quatro colunas mudariam
+de largura junto com ela.
+
+A correção é uma propriedade em `src/components/painel/painel.module.css`:
+
+```css
+.quadro {
+  ...
+  min-width: 0;
+}
+```
+
+Com ela as tracks ficam estáveis e o rótulo passa a reticenciar. Publicada em
+`16490f0` — `fix: estabiliza largura dos quadros do painel`, um arquivo, nove linhas.
+
+Os stresses posteriores de `.faixaBig` e `.faixaVgv` **não reproduziram** o mesmo
+defeito, então **nenhuma propriedade preventiva foi acrescentada a elas**.
+
+#### Baseline da entrega da F4.3
+
+Medido sobre a árvore que contém o microajuste, isto é, a que veio a ser publicada em
+`16490f0`:
+
+| Comando | Resultado verificado |
+|---|---|
+| `npm test` | 462 testes, 130 suítes, 0 falhas |
+| `npm run test:fusos` | 462/462 em `UTC`, 462/462 em `America/Sao_Paulo`, 462/462 em `Asia/Tokyo` |
+| `npm run test:integracao` | 88 testes, 0 falhas |
+| `npm run test:integracao:painel` | 35 testes, 0 falhas |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `tsx scripts/banco-teste.ts npm run build` | exit 0, **20 rotas** |
+| `git diff --check` | exit 0 |
+
+As contagens repetem as da F3.6 e da F4.1 porque a F4.3 é uma fatia de CSS: ela não
+criou nem removeu teste algum. A subida de 19 para 20 rotas veio da F4.2, não daqui.
+
+**O gate final em Chrome headless foi exclusivamente visual e dimensional e NÃO
+reexecutou essas suítes** — nenhum código mudou entre a bateria acima e ele, e os
+números desta tabela não devem ser reapresentados como medição daquela execução.
+
+#### Gate 4K
+
+Executado com **Chrome headless real** (151.0.7922.138), dirigido por **Chrome
+DevTools Protocol**, em processo e perfil isolados. **Não houve commit**: a fatia era
+verificação, e o repositório terminou intocado.
+
+Medido no navegador, não inferido:
+
+| Item | Medido |
+|---|---|
+| `window.innerWidth` | **3840** |
+| `window.innerHeight` | **2160** |
+| `devicePixelRatio` | **1** |
+| `visualViewport.scale` | **1** |
+| `.tv` | **3840 × 2160** |
+| Overflow global e interno | **zero** — `scrollWidth == clientWidth` e `scrollHeight == clientHeight` |
+| Screenshot PNG | **3840 × 2160** exatos |
+| Marca | intrínsecos **2511×297**, proporcional, sem clipping |
+
+Mínimos da seção 6 do PLANO, com os valores exatos que o navegador devolveu — sem
+arredondar para cima:
+
+| Elemento | Medido | Mínimo |
+|---|---|---|
+| Big number | **220.032px** | 220 |
+| VGV por período | **110.208px** | 110 |
+| Nome de corretor | **44.16px** | 44 |
+| Valor de lista | **48px** | 44 |
+| Rótulos, período e subtítulos | **32.256px** | 32 |
+
+As margens de `220.032px` e `32.256px` são **marginais**, e ficam registradas assim.
+
+#### Hairlines — observação operacional
+
+Não é falha da F4.3, e sim item a conferir no ensaio físico:
+
+- em Chrome 4K com **DPR 1**, as duas borders declaradas como `0.05cqw` (nominalmente
+  1.92px) computam e renderizam em aproximadamente **1 device pixel**;
+- elas **estão presentes e visíveis** na inspeção 1:1 do screenshot — o separador
+  vertical da faixa VGV é contínuo, e a régua pontilhada alterna 1px ligado / 1px
+  desligado;
+- são **decorativas**: nenhuma informação do painel depende delas;
+- a **percepção real a 3–6 metros deve ser conferida no ensaio físico da F4.5**;
+- **nenhum ajuste adicional foi feito na F4.3**, por falta de evidência física que o
+  justificasse.
+
+### F4.4 e F4.5 — não implementadas
+
+- **F4.4 — offline de navegação.** Não existe Service Worker, `offline.html`,
+  manifest nem qualquer cache persistente. A retenção da F3.6 continua vivendo só na
+  memória da aba. O contrato está na DEC-048 e permanece **futuro**.
 - **F4.5 — operação em hardware real.** Nada foi verificado no aparelho. Ver as
   Pendências abaixo.
 
@@ -1050,22 +1166,22 @@ são evidência histórica daquela entrega, não medição desta.
    proprietário, mas não resolvido.
 2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
    antes de ativar lá a versão correspondente, com gate apropriado.
-3. **F4 — Identidade e modo TV**: em andamento. O que falta, objetivamente:
-   - a **marca oficial já está disponível em PNG** transparente, fornecida pelo
-     proprietário; **integrá-la é F4.2**, e nada dela entrou no repositório ainda;
+3. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.3 concluídas. O que
+   falta, objetivamente:
+   - **offline persistente de navegação é F4.4**, a próxima fatia, e por decisão não
+     guardará números (DEC-048);
    - o **hardware alvo é o `Phantom Alien 4K IPTV`**;
    - o **SO e o navegador do aparelho ainda não foram comprovados** — a F4.5 começa
      por inspecioná-lo (DEC-049). **O aparelho não foi validado**;
-   - **offline persistente de navegação é F4.4**, e por decisão não guardará números
-     (DEC-048);
    - **o ensaio operacional real é F4.5**, e é ele que fecha quiosque, autostart e
-     suspensão de tela (DEC-050).
+     suspensão de tela (DEC-050). É também nele que se confere a percepção das
+     hairlines a 3–6 metros, registrada na F4.3.
 4. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
 
 Pendências de informação herdadas do plano: número máximo de corretores por equipe
 (dimensiona a altura dos quadros) e valores iniciais do saldo histórico. A terceira —
-arquivos da marca em alta resolução — **deixou de ser pendência de informação**: os
-PNGs oficiais foram fornecidos em 2026-08-13, e o que resta é a integração da F4.2.
+arquivos da marca em alta resolução — **está encerrada**: os PNGs oficiais foram
+fornecidos em 2026-08-13 e integrados pela F4.2 em `7e0e35d`.
 
 ## Bloqueios
 
@@ -1085,10 +1201,12 @@ O `PLANO.md` foi anotado onde divergia do código, sem ser reescrito:
    A Jost está configurada dentro de **`PainelVisual`**, que é compartilhado por
    `/preview` e `/painel/[token]`; portanto **a rota real também usa Jost desde a
    ligação da F3.5** — ela nunca foi restrita ao preview. O que faltava para a F4 era
-   **marca/assets e refinamento de modo TV**, não aplicar Jost ao painel real.
-5. **§8** — da estrutura prevista, `src/components/painel/`, `src/lib/metricas.ts` e
-   `src/lib/datas.ts` eram citados, e os três existem hoje. Continuam ausentes
-   `src/components/ui/`, `src/app/api/`, `src/styles/` e `public/marca/`.
+   **marca/assets e refinamento de modo TV**, não aplicar Jost ao painel real; a marca
+   oficial entrou na F4.2, em `7e0e35d`.
+5. **§8** — da estrutura prevista, `src/components/painel/`, `src/lib/metricas.ts`,
+   `src/lib/datas.ts` e `public/marca/` eram citados, e os quatro existem hoje —
+   `public/marca/` desde a F4.2. Continuam ausentes `src/components/ui/`,
+   `src/app/api/` e `src/styles/`.
 6. **§7** — cita `github.com/<usuário>/dashboard-casalouzada`; o repositório hoje é
    concreto e público.
 

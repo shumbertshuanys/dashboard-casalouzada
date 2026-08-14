@@ -4,14 +4,15 @@ Documento de planejamento e referência arquitetural. O texto abaixo descreve o
 desenho pretendido; o estado real do que está construído fica em
 `docs/HANDOFF_ATUAL.md`, e as decisões em `docs/DECISOES.md`.
 
-**Situação em 2026-08-13:** Fase 1, protótipo visual, Fase 2 — Administração e
+**Situação em 2026-08-14:** Fase 1, protótipo visual, Fase 2 — Administração e
 **Fase 3 — Painel** concluídos e publicados. As três camadas do painel existem:
 `src/lib/metricas.ts` calcula (núcleo **puro**), `src/lib/metricas-prisma.ts` lê o
 banco e alimenta esse núcleo, e `src/lib/apresentacao-painel.ts` traduz o resultado
-no que a tela desenha. A **F4 — Identidade e modo TV está em andamento**: a F4.1 foi
-publicada em `f49f912` e as decisões da F4.0 estão nas DEC-047 a DEC-050. Ainda
-permanecem a identidade oficial e seus assets, a verificação em 4K, o offline de
-navegação e a operação em hardware real.
+no que a tela desenha. A **F4 — Identidade e modo TV está em andamento**, com F4.0 a
+F4.3 concluídas: decisões nas DEC-047 a DEC-050, modo TV em `f49f912`, **marca
+oficial aplicada** em `7e0e35d` e **verificação em 3840×2160** encerrada, com o
+microajuste dos quadros publicado em `16490f0`. Restam o **offline de navegação**
+(F4.4, próxima fatia) e a **operação em hardware real** (F4.5).
 
 Desde a F3.5 a tela da TV está ligada, e desde a F3.6 ela se mantém sozinha:
 `/painel/[token]` valida o token e, só então, faz a leitura inicial no servidor —
@@ -258,8 +259,9 @@ tabulares para os valores não deslocarem ao atualizar.
 > Resolvido com **Jost**, configurada dentro de `src/components/painel/painel-visual.tsx`.
 > Como essa composição é compartilhada desde a F3.5, a Jost vale para `/preview` **e**
 > para `/painel/[token]` — não é exclusiva do preview. O layout raiz, `/admin` e
-> `/login` seguem com Geist, de propósito. O que ainda falta da identidade é a **marca
-> oficial** no cabeçalho, no lugar do texto `CASA LOUZADA` (DEC-047, fatia F4.2).
+> `/login` seguem com Geist, de propósito. A **marca oficial** foi aplicada na F4.2
+> (`7e0e35d`): o cabeçalho desenha o lockup horizontal de `public/marca/`, e o texto
+> `CASA LOUZADA` deixou de ser desenhado (DEC-047).
 
 Cuidados de leitura à distância, considerando 80 polegadas vistas de 3 a 6 metros. Valores
 em pixels de tela 4K real:
@@ -272,6 +274,11 @@ em pixels de tela 4K real:
 | Rótulos e legendas | 32px |
 
 Contraste alto, espaçamento generoso, e nenhuma informação transmitida só por cor.
+
+> Os quatro mínimos foram **medidos e atendidos** na F4.3, num Chrome com viewport de
+> 3840×2160 e `devicePixelRatio` 1: 220.032px, 110.208px, 44.16px (nome) e 48px
+> (valor de lista), e 32.256px nos rótulos. As margens dos big numbers e dos rótulos
+> são estreitas, e ficam registradas como tais no `docs/HANDOFF_ATUAL.md`.
 
 ---
 
@@ -363,17 +370,39 @@ Cores, tipografia, marca, ajuste fino para 3840×2160, transições, comportamen
 e operação da TV. Os tokens de cor existem desde a F1, e **a composição visual é
 compartilhada desde a F3.5**: a Jost está configurada dentro de `PainelVisual`, que
 serve `/preview` e `/painel/[token]`, então a tipografia da seção 6 **já chega ao painel
-real**. O que a F4 cuida agora é a **marca oficial e seus assets**, a **verificação em
-4K**, o **offline de navegação** e a **operação na TV**.
+real**. A **marca oficial e seus assets** e a **verificação em 4K** já foram entregues;
+o que resta da fase é o **offline de navegação** e a **operação na TV**.
 
-A F4.1 — refinamento de modo TV — foi publicada em `f49f912`: token `--color-moldura`,
-cursor oculto no painel, hairlines em `cqw` e remoção dos SVGs de scaffold. As decisões
-de identidade e de modo TV estão nas **DEC-047 a DEC-050**, e o hardware alvo passou a
-ser o `Phantom Alien 4K IPTV`, cuja plataforma ainda precisa ser comprovada (DEC-049) —
-o mini PC com Chrome em quiosque descrito na §5.1 continua sendo alternativa, não o que
-está em mãos. Permanecem não implementadas a marca oficial no painel (F4.2), a
-verificação 4K (F4.3), o offline de navegação (F4.4) e a operação em hardware real
-(F4.5).
+A fase foi fatiada assim:
+
+| Fatia | Escopo | Estado |
+|---|---|---|
+| F4.0 | decisões de identidade e modo TV | **concluída** — DEC-047 a DEC-050, em `73f490d` |
+| F4.1 | refinamento de modo TV | **concluída** — commit `f49f912` |
+| F4.2 | marca oficial e assets | **concluída** — commit `7e0e35d` |
+| F4.3 | verificação 4K e microajustes | **concluída** — commit `16490f0`, mais evidência visual sem commit |
+| F4.4 | offline de navegação | **próxima** — não implementada |
+| F4.5 | operação em hardware real | **futura** — inventário do aparelho primeiro (DEC-049) |
+
+A **F4.1** trouxe o token `--color-moldura`, o cursor oculto no painel, as hairlines
+em `cqw` e a remoção dos SVGs de scaffold.
+
+A **F4.2** aplicou a **marca oficial**: o lockup horizontal e o símbolo entraram em
+`public/marca/`, o favicon derivado do símbolo em `src/app/icon.png`, e o cabeçalho
+do painel deixou de desenhar o wordmark textual (DEC-047).
+
+A **F4.3** verificou o painel em **3840×2160** com `devicePixelRatio` 1 — viewport
+medido no navegador, sem overflow, com os quatro mínimos da §6 atendidos — e publicou
+um **microajuste dos quadros** (`min-width: 0` em `.quadro`), que impede um nome longo
+de corretor de alargar a própria coluna e comprimir as demais. A percepção das
+hairlines à distância de operação ficou para o ensaio físico da F4.5.
+
+O **offline de navegação continua não implementado**: não há Service Worker,
+`offline.html` nem cache institucional, e o contrato da DEC-048 permanece futuro.
+
+A **operação no `Phantom Alien 4K IPTV` continua futura**: a plataforma do aparelho
+ainda precisa ser comprovada (DEC-049) — o mini PC com Chrome em quiosque descrito na
+§5.1 continua sendo alternativa, não o que está em mãos.
 
 **Fase 5 — Refinamentos** · *futura*
 Metas com barra de progresso, destaque do mês, comparativo com o mês anterior, fotos dos
@@ -389,4 +418,5 @@ Nenhuma bloqueia o início do desenvolvimento.
    Se uma equipe passar de 8 ou 9 nomes, o quadro precisa de rolagem automática ou de
    mostrar só os primeiros colocados.
 2. Valores iniciais do saldo histórico (quantidades e VGV acumulado antes do sistema).
-3. Arquivos da marca em alta resolução para a TV 4K.
+3. ~~Arquivos da marca em alta resolução para a TV 4K.~~ **Encerrada** — os PNGs
+   oficiais foram fornecidos e integrados pela F4.2 (`7e0e35d`).
