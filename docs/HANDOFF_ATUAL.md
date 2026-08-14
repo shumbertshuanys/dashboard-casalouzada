@@ -6,7 +6,10 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `6d55617a8580a7d9458c1069ac304f76b6033e4f` — `docs: encerra etapa E4 da entrega v1` |
+| Commit de referência | `adabe2dfe8f442826fa9006aa12c10ab248c83b6` — `docs: encerra etapa E5 da entrega v1` |
+| **Release em produção** | **`adabe2dfe8f442826fa9006aa12c10ab248c83b6`** — o mesmo commit; a v1 está no ar |
+| **URL pública** | `https://dashboard-casalouzada.onrender.com` |
+| **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
 | Data do handoff | 2026-08-14 |
 
 ## Estado executivo
@@ -110,9 +113,10 @@ A **F4 — Identidade e modo TV está em andamento**, e isto é o que está prov
 - a **F4.4 — offline de navegação** está **concluída e publicada** em `8b9fce2`. Uma
   navegação que falhe por rede ou por 5xx passa a mostrar a tela institucional, que
   se recupera sozinha — **sem guardar número nenhum** (DEC-048);
-- a **F4.5 — operação em hardware real — está ADIADA, não cancelada** (DEC-057):
-  por decisão do proprietário em 2026-08-14, a prioridade imediata é a **entrega da
-  v1 por URL**, e o ensaio no aparelho vem depois do go-live.
+- a **F4.5 — operação em hardware real — está LIBERADA PARA RETOMADA e não iniciada**
+  (DEC-057): ela foi adiada em 2026-08-14 em favor da entrega da v1 por URL, e **o
+  go-live dessa entrega já aconteceu**, então o ensaio no aparelho deixou de estar
+  bloqueado. Nada foi verificado no aparelho até agora.
 
 A **F4 como um todo continua em andamento**: ela só se encerra com a F4.5.
 
@@ -202,9 +206,17 @@ implementou feature, não criou commit de código e terminou com a árvore byte 
 como começou. **Nenhuma feature da v1 continua pendente antes do E6** — o contrato de
 produto das DEC-051 a DEC-056 está inteiramente implementado e provado.
 
-A **próxima etapa é a E6 — go-live no Render + smoke público**, que **não** foi
-iniciada. Nada de Render foi configurado, nenhuma migration foi aplicada em produção e
-a credencial exposta na P1 continua sem rotação.
+A **E6 — go-live no Render + smoke público — está CONCLUÍDA**.
+
+## A ENTREGA V1 ESTÁ CONCLUÍDA E EM PRODUÇÃO
+
+O release **`adabe2d`** roda em `https://dashboard-casalouzada.onrender.com`. **Nenhuma
+feature da v1 continua pendente**, as **cinco migrations estão aplicadas em produção** e
+a **credencial exposta na P1 foi rotacionada e revogada** antes do go-live. O painel da
+TV fica em `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>`.
+
+A próxima frente é a **F4.5 — operação em hardware real**, agora **liberada para
+retomada** e **não iniciada**, se o proprietário decidir retomá-la.
 
 ## Fases
 
@@ -232,7 +244,7 @@ a credencial exposta na P1 continua sem rotação.
 | F4.2 — Marca oficial e assets | **Concluída** | `7e0e35d` |
 | F4.3 — Verificação 4K e microajustes | **Concluída** | `16490f0` + evidência visual 4K sem commit |
 | F4.4 — Offline de navegação | **Concluída** | `8b9fce2` |
-| F4.5 — Operação em hardware real | **Adiada** | retomada após o go-live da v1 (DEC-057) |
+| F4.5 — Operação em hardware real | **Liberada para retomada** | o go-live da v1 aconteceu (DEC-057); **não iniciada** |
 | **F4 — Identidade e modo TV** | **Em andamento** | `8b9fce2` |
 | E1 — Contratos e modelo de dados da v1 | **Concluída** | `078f360` — DEC-051 a DEC-057; sem código |
 | E2A — Schema e migration aditiva + backfills | **Concluída** | `c6464b5` — sem cutover de VENDA |
@@ -242,7 +254,8 @@ a credencial exposta na P1 continua sem rotação.
 | E3 — Venda compartilhada + métricas + cutover final | **Concluída** | `2a50965` — publicação atômica |
 | E4 — Painel operacional A/B e novos estados | **Concluída** | `c24a0c9` — publicação atômica, sem migration |
 | E5 — Gate completo | **Concluída** | `RELEASE_CANDIDATE_READY_FOR_E6 = YES` — sem commit de código |
-| E6 — Go-live no Render + smoke test | **Próxima** | não iniciada |
+| E6 — Go-live no Render + smoke público | **Concluída** | `adabe2d` LIVE, 5 migrations aplicadas, sem commit de código |
+| **Entrega v1** | **Concluída e em produção** | `https://dashboard-casalouzada.onrender.com` |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
@@ -507,19 +520,19 @@ Cinco migrations versionadas:
    antigo, zero não-VENDA sem crédito, zero VENDA sem participação, e o `CHECK` de
    proposta da E2B ainda presente. Nenhuma migration anterior foi editada.
 
-> **Estado de produção.** A migration `20260812120000_saldo_historico_tipo_unico` foi
-> testada e aplicada somente no `casalouzada_test`, e **não há evidência de aplicação
-> em produção**. As migrations da E2A, da E2B e a do cutover da E3 foram igualmente
-> aplicadas e testadas **apenas no banco local de teste**; **nenhuma migration remota
-> foi executada** em nenhuma das cinco publicações — nem em Supabase, nem em qualquer
-> outro ambiente. A E4 (`c24a0c9`) não criou migration nenhuma e também não aplicou
-> nenhuma. Publicar no Git **não é** aplicar em produção. Portanto, antes do
-> go-live (E6), existe **gate operacional de migrations de produção** para as quatro,
-> nesta ordem: `20260812120000_saldo_historico_tipo_unico`,
-> `20260814150000_entrega_v1_aditiva`, `20260814210000_contrato_proposta` e
-> `20260814230000_cutover_venda_compartilhada`. A última é especialmente sensível: ela
-> zera colunas, e o runtime que a acompanha exige o estado novo — migration e deploy do
-> mesmo commit têm de ir na mesma janela. Ver Pendências.
+> **Estado de produção — as cinco estão aplicadas.** Até o E5, só
+> `20260811014943_inicial` existia em produção; nenhuma das cinco publicações de código
+> aplicou migration remota, porque publicar no Git **não é** aplicar em produção. O
+> **E6 fechou esse gate**: num único deploy do commit `adabe2d`, o `pre-deploy`
+> (`npm run db:deploy`) aplicou as quatro pendentes **nesta ordem** —
+> `20260812120000_saldo_historico_tipo_unico`, `20260814150000_entrega_v1_aditiva`,
+> `20260814210000_contrato_proposta` e `20260814230000_cutover_venda_compartilhada` —,
+> respondendo *"All migrations have been successfully applied"*. O `migrate status`
+> seguinte diz **"Database schema is up to date!"**. **Não há migration pendente.**
+>
+> O risco que a última carregava foi tratado por construção, não por sorte: ela zera
+> colunas e o runtime que a acompanha exige o estado novo, então rodou no `pre-deploy`
+> — **antes** de o processo novo receber tráfego, no mesmo deploy do mesmo commit.
 
 ## Testes
 
@@ -744,23 +757,33 @@ serialização e recomposição do snapshot. É uma limitação registrada, não
 
 ## Segurança e credenciais
 
-O histórico aqui tem duas partes, e a segunda não está encerrada.
+O histórico aqui tem duas partes, e a segunda **foi encerrada no E6**.
 
 **Depois da F1**, todas as credenciais foram rotacionadas fora do Git — banco,
 `DATABASE_URL`, `DIRECT_URL`, `PAINEL_TOKEN`, `AUTH_SECRET` e a senha
 administrativa —, com cada revogação comprovada por teste.
 
 **Depois disso, durante a P1**, uma credencial do banco de produção foi **exposta
-acidentalmente em transcript** por um erro de tratamento de erro. Estado atual:
+acidentalmente em transcript** por um erro de tratamento de erro. O histórico:
 
-- não há evidência de que essa credencial tenha sido versionada no Git em momento
+- não houve evidência de que essa credencial tenha sido versionada no Git em momento
   algum;
-- **ela ainda não foi rotacionada**;
-- em 2026-08-12 o proprietário **aceitou explicitamente o risco** e autorizou seguir
-  com o desenvolvimento;
-- isso não bloqueia mais o trabalho, mas **continua sendo pendência operacional**.
+- ela permaneceu **sem rotação** de 2026-08-12 até o E6, com o proprietário tendo
+  **aceitado explicitamente o risco** para seguir com o desenvolvimento;
+- **no E6, antes do go-live, ela foi ROTACIONADA e a antiga está REVOGADA.**
 
-Não se pode dizer que a situação de credenciais esteja saneada hoje.
+**Estado final: `OLD_DATABASE_CREDENTIAL_REVOKED = YES`**, provado, não inferido:
+
+- a senha do banco foi resetada pelo Dashboard do Supabase, com o gerador oficial dele;
+- as connection strings novas — `DATABASE_URL` e `DIRECT_URL` — foram validadas com
+  `SELECT 1`, ambas **PASS**;
+- as **antigas foram testadas depois do reset** e as duas retornaram
+  `28P01 invalid_password`.
+
+Nenhum valor — antigo ou novo — foi publicado em documentação, log, transcript ou Git.
+A senha nunca trafegou por argumento de linha de comando: entrou no processo por stdin,
+com a ponte via área de transferência, que foi limpa em seguida. A pendência da P1
+**está encerrada**.
 
 **O que a auditoria da E5 provou — e o que ela não provou.** A varredura de segredos
 cobriu os 129 arquivos versionados e o **histórico inteiro** do repositório: nenhum
@@ -770,9 +793,9 @@ rastreado é o `.env.example`, cujo `AUTH_SECRET`, `PAINEL_TOKEN` e senha de see
 de nuvem ou senha literal foi encontrado. O único hash bcrypt em código é o de descarte
 de `src/lib/auth.ts`, deliberado, usado para gastar tempo quando o e-mail não existe.
 
-**Isso não elimina a pendência acima.** A credencial da P1 vazou **fora do Git**, em
-transcript, e continua **sem rotação**. Repositório limpo e credencial rotacionada são
-duas afirmações diferentes, e só a primeira está provada.
+Repositório limpo e credencial rotacionada são duas afirmações diferentes, e no E5 só a
+primeira estava provada. **No E6 a segunda também ficou** — ver acima. Hoje as duas
+valem.
 
 ## O que ainda NÃO está implementado
 
@@ -1534,11 +1557,12 @@ teste algum: a lógica do Service Worker só existe dentro do runtime do navegad
 aceites acima a exercitam melhor do que uma simulação faria. **Estes resultados
 pertencem à execução da implementação da F4.4, não a esta execução documental.**
 
-### F4.5 — operação em hardware real · adiada
+### F4.5 — operação em hardware real · liberada para retomada, não iniciada
 
-Nada foi verificado no aparelho, e por decisão do proprietário em 2026-08-14 a fatia
-está **adiada, não cancelada** (DEC-057): a entrega da v1 por URL vem antes, e a
-F4.5 é retomada depois do go-live. Ver as Pendências e a seção Entrega v1 abaixo.
+**Nada foi verificado no aparelho.** A fatia foi adiada em 2026-08-14 (DEC-057) porque a
+entrega da v1 por URL vinha antes; **esse go-live já aconteceu**, então a F4.5 deixou de
+estar bloqueada e está **liberada para retomada** — ainda **não iniciada**. Ver as
+Pendências e a seção Entrega v1 abaixo.
 
 ## Entrega v1 — decisões de produto e modelo (E1)
 
@@ -1824,6 +1848,141 @@ na DEC-009.
   todas comentário. 72 usos de `cqw`;
 - **marcadores** — nenhum `TODO`/`FIXME`/`HACK`/`XXX` real em código executável.
 
+### E6 — go-live no Render + smoke público · concluída
+
+O go-live da v1. **Sem commit de código**: o release implantado é o `adabe2d`, o mesmo
+que a E5 certificou. A ordem foi escolhida para minimizar exposição — rotação da
+credencial **antes** de qualquer secret entrar no Render, e migrations no `pre-deploy`
+**antes** de o processo novo receber tráfego.
+
+#### Infraestrutura
+
+| Item | Valor |
+|---|---|
+| Serviço | `dashboard-casalouzada` (Render Web Service) |
+| Região / plano | Virginia / Starter |
+| Node | 24.19.0 |
+| Auto-deploy | **OFF** |
+| Build | `npm ci && npm run build` |
+| Pre-deploy | `npm run db:deploy` |
+| Start | `npm start` |
+| Health check | `/login` |
+| URL pública | `https://dashboard-casalouzada.onrender.com` |
+| URL do painel | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` |
+
+O plano **Starter** foi escolhido, com autorização explícita do proprietário, para
+evitar o comportamento de instância Free — que desliga após 15 minutos sem tráfego e
+leva cerca de um minuto para voltar, inaceitável numa TV que fica ligada o dia inteiro —
+e para permitir o `pre-deploy` das migrations.
+
+#### Conexões de produção — arquitetura, sem valores
+
+| Variável | Papel | Modo |
+|---|---|---|
+| `DATABASE_URL` | runtime da aplicação | Supabase **Transaction Pooler**, porta 6543 |
+| `DIRECT_URL` | migrations do Prisma | Supabase **Session Pooler**, porta 5432 |
+
+A separação importa: `prisma migrate deploy` não pode rodar em transaction mode, porque
+o pooler nesse modo derruba os advisory locks do schema engine. O Session Pooler mantém
+sessão dedicada e evita depender de conectividade IPv6 do Render.
+
+#### Variáveis no serviço — somente nomes
+
+`AUTH_SECRET`, `DATABASE_URL`, `DIRECT_URL`, `NODE_VERSION`, `PAINEL_TOKEN`.
+
+**Não existem no serviço** `SEED_ADMIN_SENHA` nem `TROCA_SENHA_NOVA`: o administrador já
+existia em produção e **nenhum seed foi executado**. Os valores foram cadastrados pelo
+Dashboard, coladas as quatro linhas de uma vez pelo proprietário — a CLI **não** foi
+usada com `--env-var`, que exporia o valor em linha de comando e log. O salvamento usou
+**"Save only"**, e a API confirmou que ele não disparou deploy nenhum.
+
+#### Deploys
+
+**Deploy inicial da criação — `pre_deploy_failed`, inócuo.** Ao criar o serviço, o
+Render disparou um deploy automático. O build passou, e o `pre-deploy` falhou com
+*"The datasource.url property is required…"*: o serviço ainda não tinha
+`DATABASE_URL`/`DIRECT_URL`, então o Prisma **nem chegou a tentar conectar**. **Nenhuma
+migration rodou nesse deploy** e o banco não foi tocado. Foi consequência prevista de
+criar a infraestrutura antes dos secrets, e é justamente isso que garantiu que a
+credencial ainda-não-rotacionada nunca precisou entrar no Render.
+
+**Deploy válido — `dep-d9vo24o1ne8s73b590i0`.** Disparado manualmente pela CLI com o SHA
+explícito, commit `adabe2dfe8f442826fa9006aa12c10ab248c83b6`. Build **PASS**, com o mesmo
+mapa de **23 rotas** do gate local. Pre-deploy **PASS**. Resultado: **LIVE**.
+
+#### Migrations aplicadas em produção
+
+As quatro pendentes aplicaram nesta ordem, dentro do `pre-deploy`, sem nenhuma extra:
+
+1. `20260812120000_saldo_historico_tipo_unico`
+2. `20260814150000_entrega_v1_aditiva`
+3. `20260814210000_contrato_proposta`
+4. `20260814230000_cutover_venda_compartilhada`
+
+*"All migrations have been successfully applied."* → *"Database schema is up to date!"*
+Com a `20260811014943_inicial`, que já existia, são **5 de 5 aplicadas**, todas
+concluídas e nenhuma revertida.
+
+#### Prova pós-cutover, sobre dado real de produção
+
+| Verificação | Resultado |
+|---|---|
+| `participacoes_venda` | **existe** |
+| `reservas_locacao` | **existe** |
+| VENDA com `corretor_id`/`equipe_id` antigos preenchidos | **0** |
+| VENDA sem participação | **0** |
+| Não-VENDA sem corretor/equipe | **0** |
+| `lancamentos_venda_credito_check` | **presente** |
+| `lancamentos_proposta_campos_check` | **presente** |
+
+A VENDA real que existia em produção foi **backfillada para 1 participação** e teve os
+campos antigos zerados. Isso é o que diferencia este cutover dos anteriores: ele foi
+provado **sobre dado real**, não sobre fixture.
+
+#### Smoke público
+
+| Requisição | Resultado |
+|---|---|
+| `GET /` | 307 para `/admin` |
+| `GET /login` | 200 — é o health check |
+| `GET /admin` sem sessão | 307 para `/login?proximo=%2Fadmin` |
+| `GET /painel/<inválido>` | **404** |
+| `GET /painel/<inválido>/dados` | **404** |
+| `GET /painel/<TOKEN>` | 200, `X-Robots-Tag: noindex, nofollow, noarchive` |
+| `GET /painel/<TOKEN>/dados` | 200, `Cache-Control: no-store`, **cinco blocos** — `periodos`, `acumulados`, `equipes`, `propostas`, `reservas` |
+| `offline.html` / `sw.js` / marca | 200 / 200 / 200 |
+
+`ADMIN_PRESENT = YES` e **`ADMIN_LOGIN_PRODUCTION = PASS`** — login real feito pelo
+proprietário, sem alterar dado nenhum. A rota `/admin/reservas-locacao` responde
+corretamente sobre o banco já migrado, o que prova que a tabela nova é consultável pela
+aplicação.
+
+#### Validação visual pública
+
+Medido no ar, em Chrome headless dirigido por CDP: viewport **3840×2160**, DPR **1**,
+`.tv` **3840×2160**, **overflow zero**. Sequência observada **A → B → A**; faixa
+superior **445,44 / 445,44 / 445,44**; topo do VGV estável em **639,72** e o da base em
+**946,13** — sem layout jump. Marca carregada. **`PUBLIC_ROTATION_AB = PASS`.**
+
+Requisição real a `/dados` observada depois de aproximadamente 60 segundos com a página
+aberta. **`PUBLIC_AUTO_REFRESH = PASS`.**
+
+#### Estado honesto dos dados em produção
+
+**`saldo_historico` está vazio.** A consequência correta, e observada no smoke, é que os
+três acumulados aparecem como `—` (`SEM_SALDO_HISTORICO`). **Isso não é bug** — é a
+DEC-014 e a DEC-037 funcionando: ausência não vira zero. Para os big numbers passarem a
+afirmar valores, o **saldo histórico de abertura precisa ser informado pelo
+proprietário** na administração. Nenhum saldo fictício foi cadastrado.
+
+No mesmo smoke, "Reservas de locação" mostrou lista vazia legítima e "Propostas em
+andamento" mostrou **1 item real**. **Nenhum dado foi criado para o teste.**
+
+#### Auto-deploy
+
+**`AUTO_DEPLOY = OFF`.** Decisão operacional atual: qualquer versão futura exige deploy
+manual, até nova decisão. É o comportamento seguro enquanto a política não for revista.
+
 ### Venda compartilhada (DEC-051, DEC-052)
 
 - **Uma venda comercial = um lançamento `VENDA`**, sempre — nunca uma linha por
@@ -1977,42 +2136,31 @@ propostas, saldo e reservas — sem cutover de VENDA; **concluída em `c6464b5`,
 `fe00fd2` e `18a6599`**) → E3 (venda compartilhada + métricas + **cutover final** —
 **concluída em `2a50965`**) → E4 (painel A/B e novos estados — **concluída em
 `c24a0c9`**) → E5 (gate completo — **concluída**, `RELEASE_CANDIDATE_READY_FOR_E6 =
-YES`) → E6 (go-live no Render + smoke público — **próxima, não iniciada**). O go-live
-provisório precede a F4.5; plano/infraestrutura de produção se decide no E6, e nada de
-Render foi configurado. Depois do E6, retoma-se a F4.5, que continua **adiada**. F5
+YES`) → E6 (go-live no Render + smoke público — **concluída**, `adabe2d` no ar). **As
+seis etapas estão concluídas e a Entrega v1 está em produção.** O go-live precedia a
+F4.5, que agora está **liberada para retomada** e não iniciada. A infraestrutura de
+produção foi decidida no E6: **Render**, e não Vercel como a §7 do PLANO previa. F5
 continua futura e não está iniciada. O transporte de precisão e das listas
 operacionais para o painel não exigiu preparação na E3: o contrato de leitura ficou
 intocado até a E4, que fez o desenho inteiro sem tocar schema nem migration.
 
 ## Pendências
 
-1. **Rotacionar a credencial de produção exposta na P1.** Risco aceito pelo
-   proprietário, mas não resolvido.
-2. **Aplicar as migrations pendentes em produção**, com gate apropriado, antes de
-   ativar lá a versão correspondente, **nesta ordem**:
-   `20260812120000_saldo_historico_tipo_unico`, `20260814150000_entrega_v1_aditiva`,
-   `20260814210000_contrato_proposta` e
-   `20260814230000_cutover_venda_compartilhada`. As quatro estão versionadas no Git e
-   foram exercitadas **somente** no banco local de teste; **nenhuma migration remota
-   foi executada** em nenhuma publicação. É gate do E6. A do cutover zera colunas e o
-   runtime que a acompanha exige o estado novo — ela e o deploy do código têm de ir na
-   mesma janela.
-3. **Entrega v1 (E6)**: E1 a E5 estão concluídas (`078f360`; `c6464b5` + `fe00fd2` +
-   `18a6599`; `2a50965`; `c24a0c9`; e a E5, certificação sem commit de código). O
-   contrato de produto está inteiramente implementado e o release candidate está
-   certificado — **`RELEASE_CANDIDATE_READY_FOR_E6 = YES`**. Falta apenas o **E6**, cujas
-   sete pendências abaixo são **bloqueantes do go-live**, nesta ordem:
-   1. **rotacionar a credencial de produção exposta anteriormente** (item 1 acima);
-   2. definir e cadastrar os valores finais das variáveis de produção;
-   3. **aplicar as quatro migrations pendentes** no banco de produção (item 2 acima);
-   4. configurar o serviço no Render;
-   5. deploy;
-   6. smoke público;
-   7. validar a URL final.
-   Nenhuma delas foi executada. Publicar no Git e passar no gate local **não é**
-   go-live.
+**Encerradas no E6:** a rotação da credencial da P1 (feita e revogação provada), a
+aplicação das quatro migrations em produção (5/5 aplicadas) e a própria Entrega v1
+(E1 a E6 concluídas, `adabe2d` no ar). Nenhuma das três é mais pendência.
+
+O que resta:
+
+1. **Cadastrar o saldo histórico real pela administração.** Hoje `saldo_historico` está
+   vazio em produção, e por isso os três acumulados aparecem como `—`. **Não é defeito
+   técnico** — é ausência de dado, que o sistema afirma corretamente em vez de inventar
+   zero (DEC-014, DEC-037). Só o proprietário tem os números de abertura.
+2. **F4.5 — operação em hardware real**: **liberada para retomada**, não iniciada.
+3. **Decidir a política de auto-deploy.** Hoje está **OFF**: toda versão futura exige
+   deploy manual. É o padrão seguro, e mudá-lo é decisão do proprietário.
 4. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas e a
-   **F4.5 adiada** até o go-live da v1 (DEC-057). O que falta nela, objetivamente:
+   **F4.5 liberada para retomada** (DEC-057). O que falta nela, objetivamente:
    - o **hardware alvo é o `Phantom Alien 4K IPTV`**;
    - o **SO e o navegador do aparelho ainda não foram comprovados** — a F4.5 começa
      por inspecioná-lo (DEC-049). **O aparelho não foi validado**;
@@ -2026,21 +2174,23 @@ Pendências de informação herdadas do plano: número máximo de corretores por
 arquivos da marca em alta resolução — **está encerrada**: os PNGs oficiais foram
 fornecidos em 2026-08-13 e integrados pela F4.2 em `7e0e35d`.
 
-### Render — política operacional do E6 (plano, não execução)
+### Render — política operacional (planejada na E5, executada no E6)
 
-Registrado na E5 como **plano**. **Nenhuma configuração de Render foi executada**, nenhum
-serviço foi criado e nenhum plano ou instance type foi escolhido.
+Esta seção foi escrita na E5 como **plano**; o **E6 a executou**, e o resultado está na
+seção da E6 acima. O que segue é a política que valeu — e continua valendo para
+operações futuras.
 
-- **Claude Code é o operador** da configuração e do deploy no E6;
+- **Claude Code é o operador** da configuração e do deploy;
 - **as autenticações interativas são do proprietário**, feitas por ele quando
-  solicitadas — o agente não cria conta, não autentica e não guarda credencial;
+  solicitadas — o agente não cria conta, não autentica e não guarda credencial. Foi
+  assim no `render login`, no reset da senha do Supabase, no cadastro dos secrets e no
+  login administrativo de produção;
 - **secrets não vão para documentação, log ou conversa**, em hipótese alguma. O que se
-  registra é nome de variável, nunca valor;
-- a **ausência de `engines` no `package.json`** permanece **decisão operacional do E6**:
-  sem ela a plataforma escolhe a versão de Node por conta própria. O E5 não editou o
-  arquivo, de propósito;
-- ambiente local medido na E5, para subsidiar essa decisão: **Node v24.19.0**,
-  **npm 11.17.0**.
+  registra é nome de variável, nunca valor. A CLI do Render **não** deve ser usada com
+  `--env-var` para valor sensível, porque isso o expõe em linha de comando e log;
+- a **ausência de `engines` no `package.json`** foi resolvida por variável: o serviço
+  define `NODE_VERSION=24.19.0`. O arquivo continua intocado;
+- ambiente local medido na E5: **Node v24.19.0**, **npm 11.17.0**.
 
 **Variáveis exigidas pelo código, por momento de uso** — nomes apenas:
 

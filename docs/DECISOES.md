@@ -1590,11 +1590,10 @@ Ordem de entrega aprovada:
 | E3 | venda compartilhada + métricas + **cutover final** (DEC-051) — **concluída em `2a50965`** |
 | E4 | painel operacional A/B e apresentação dos novos estados — **concluída em `c24a0c9`** |
 | E5 | gate completo — **concluída**: `RELEASE_CANDIDATE_READY_FOR_E6 = YES`, sem commit de código |
-| E6 | go-live no Render + smoke público — **próxima, não iniciada** |
+| E6 | go-live no Render + smoke público — **concluída**: `adabe2d` em produção, 5 migrations aplicadas |
 
 Depois da entrega, retoma-se a F4.5. A escolha de plano/infraestrutura de produção é
-do E6 — nada de Render é configurado antes dele. F5 continua futura e não se declara
-iniciada.
+do E6. F5 continua futura e não se declara iniciada.
 
 **Motivo.** O valor imediato está em o painel existir numa URL acessível; o ensaio
 do aparelho físico pode vir depois sem atrasar isso.
@@ -1605,11 +1604,20 @@ continua **em andamento** e só se encerra com a F4.5.
 
 **Fonte.** Decisão do proprietário em 2026-08-14.
 
-**Estado de implementação.** As cinco primeiras etapas estão concluídas. A **E5**
-certificou o release candidate — `RELEASE_CANDIDATE_READY_FOR_E6 = YES` — sem
-implementar feature e sem publicar código. Resta o **E6**, que é operação, não produto:
-rotação da credencial exposta, variáveis finais de produção, aplicação das quatro
-migrations pendentes na ordem, configuração do serviço, deploy, smoke público e
-validação da URL. **Nada disso foi executado**, e nenhuma dessas afirmações deve ser
-lida como feita. Depois do E6, retoma-se a F4.5.
-**em vigor — fechamento no E6, com a F4.5 retomada em seguida**
+**Estado de implementação. CUMPRIDA — o go-live provisório por URL está CONCLUÍDO.** As
+seis etapas terminaram: a **E5** certificou o release candidate
+(`RELEASE_CANDIDATE_READY_FOR_E6 = YES`) sem publicar código, e o **E6** executou a
+operação — rotação da credencial exposta e prova da revogação, criação do Web Service no
+Render, cadastro das variáveis de produção sem expor valor, deploy manual único do
+commit `adabe2d` com as **quatro migrations aplicadas na ordem** pelo `pre-deploy`,
+smoke público e validação da URL.
+
+A Entrega v1 está **em produção** em `https://dashboard-casalouzada.onrender.com`; o
+painel da TV fica em `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>`, e o
+token **não** é publicado. A infraestrutura escolhida foi **Render** (Web Service,
+Virginia, Starter, Node 24.19.0), com **auto-deploy OFF** — toda versão futura exige
+deploy manual até nova decisão.
+
+Com o go-live feito, a **F4.5 está liberada para retomada** e **não iniciada**. A F4
+continua **em andamento** e só se encerra com ela. **F5 segue futura e não iniciada.**
+**cumprida — go-live concluído; F4.5 liberada para retomada, ainda não iniciada**

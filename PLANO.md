@@ -13,12 +13,12 @@ F4.4 concluídas: decisões nas DEC-047 a DEC-050, modo TV em `f49f912`, **marca
 oficial aplicada** em `7e0e35d`, **verificação em 3840×2160** encerrada com o
 microajuste dos quadros em `16490f0`, e **offline de navegação** em `8b9fce2`.
 
-Por decisão do proprietário em 2026-08-14, a **F4.5 — operação em hardware real —
-está ADIADA, não cancelada** (DEC-057). A prioridade imediata é a **entrega da v1
-por URL**, em seis etapas (E1 a E6, ver §9): ajustes funcionais aprovados — venda
-compartilhada, propostas com status, saldo mínimo conhecido, reservas de locação e a
-faixa superior alternada —, gate completo e go-live provisório no Render. Depois da
-entrega, a F4.5 é retomada.
+Por decisão do proprietário em 2026-08-14, a **F4.5 — operação em hardware real** foi
+adiada em favor da **entrega da v1 por URL**, em seis etapas (E1 a E6, ver §9): ajustes
+funcionais aprovados — venda compartilhada, propostas com status, saldo mínimo
+conhecido, reservas de locação e a faixa superior alternada —, gate completo e go-live
+no Render. **Essa entrega está concluída e no ar**, e a F4.5 está agora **liberada para
+retomada**, ainda não iniciada.
 
 A **E1 — contratos, documental — está concluída** (`078f360`); a **E2 está concluída**
 em três commits — **`c6464b5`** (E2A — schema e migration aditiva com backfills),
@@ -26,13 +26,17 @@ em três commits — **`c6464b5`** (E2A — schema e migration aditiva com backf
 (E2C — administração de reservas de locação); a **E3 está concluída e publicada** em
 **`2a50965`**, que fechou o cutover da venda compartilhada; a **E4 está concluída e
 publicada** em **`c24a0c9`**, que entregou o painel operacional; e a **E5 — gate
-completo — está concluída**, com resultado **`RELEASE_CANDIDATE_READY_FOR_E6 = YES`**.
-A E5 foi etapa de certificação: não implementou feature e não publicou código.
+completo — está concluída**, com resultado **`RELEASE_CANDIDATE_READY_FOR_E6 = YES`**;
+e a **E6 — go-live — está CONCLUÍDA**.
 
-**Nenhuma feature da v1 continua pendente.** A **E6 — go-live no Render + smoke público
-— é a próxima etapa**, e não foi iniciada: nada de Render foi configurado, as quatro
-migrations continuam sem aplicação em produção e a credencial exposta na P1 continua
-sem rotação.
+## A Entrega v1 está CONCLUÍDA e EM PRODUÇÃO
+
+O release **`adabe2d`** roda em `https://dashboard-casalouzada.onrender.com`, num Web
+Service do Render (região Virginia, plano Starter, Node 24.19.0, auto-deploy **OFF**).
+As **cinco migrations estão aplicadas** no banco de produção e a **credencial exposta na
+P1 foi rotacionada e revogada** antes do go-live. **Nenhuma feature da v1 continua
+pendente.** O painel da TV fica em
+`https://dashboard-casalouzada.onrender.com/painel/<TOKEN>`.
 
 ### Estado final da faixa superior (E4, `c24a0c9`)
 
@@ -483,7 +487,7 @@ Contraste alto, espaçamento generoso, e nenhuma informação transmitida só po
 | Banco | PostgreSQL gerenciado (Supabase ou Neon) |
 | ORM | Prisma |
 | Autenticação | e-mail e senha, sessão em cookie |
-| Deploy | Vercel |
+| Deploy | **Render** — Web Service, região Virginia, plano Starter, Node 24.19.0 (a §7 previa Vercel; a decisão do E6 foi Render) |
 | Repositório | github.com/&lt;usuário&gt;/dashboard-casalouzada |
 
 Justificativa: painel e administração no mesmo projeto, plano gratuito suficiente para este
@@ -574,7 +578,7 @@ A fase foi fatiada assim:
 | F4.2 | marca oficial e assets | **concluída** — commit `7e0e35d` |
 | F4.3 | verificação 4K e microajustes | **concluída** — commit `16490f0`, mais evidência visual sem commit |
 | F4.4 | offline de navegação | **concluída** — commit `8b9fce2` |
-| F4.5 | operação em hardware real | **adiada** — retomada após o go-live da v1 (DEC-057); inventário do aparelho primeiro (DEC-049) |
+| F4.5 | operação em hardware real | **liberada para retomada** — o go-live da v1 aconteceu (DEC-057); **não iniciada**; inventário do aparelho primeiro (DEC-049) |
 
 A **F4.1** trouxe o token `--color-moldura`, o cursor oculto no painel, as hairlines
 em `cqw` e a remoção dos SVGs de scaffold.
@@ -597,13 +601,14 @@ a própria tela e a marca. Qualquer resposta abaixo de 500 passa normalmente, en
 recupera sozinha assim que a aplicação volta. Exige **provisionamento online prévio**:
 um navegador que nunca instalou o mecanismo ainda depende de rede no primeiro boot.
 
-A **operação no `Phantom Alien 4K IPTV` continua futura e está adiada** (DEC-057): a
-plataforma do aparelho ainda precisa ser comprovada (DEC-049) — o mini PC com Chrome
-em quiosque descrito na §5.1 continua sendo alternativa, não o que está em mãos. A F4
-segue **em andamento** e só se encerra com a F4.5.
+A **operação no `Phantom Alien 4K IPTV` continua não realizada**, mas deixou de estar
+adiada: com o go-live da v1 concluído, a F4.5 está **liberada para retomada** (DEC-057)
+— **não iniciada**. A plataforma do aparelho ainda precisa ser comprovada (DEC-049), e o
+mini PC com Chrome em quiosque descrito na §5.1 continua sendo alternativa, não o que
+está em mãos. A F4 segue **em andamento** e só se encerra com a F4.5.
 
-**Entrega v1** · *em andamento — prioridade imediata (DEC-057)*
-Aprovada pelo proprietário em 2026-08-14, entra **antes** da F4.5 e não abre a F5. As
+**Entrega v1** · *concluída e em produção (DEC-057)*
+Aprovada pelo proprietário em 2026-08-14, entrou **antes** da F4.5 e não abre a F5. As
 regras de produto estão nas DEC-051 a DEC-056: venda compartilhada por participações,
 propostas com status e valor próprios, saldo histórico mínimo conhecido, reservas de
 locação e a faixa superior alternando entre métricas e destaques operacionais.
@@ -615,7 +620,7 @@ locação e a faixa superior alternando entre métricas e destaques operacionais
 | E3 | venda compartilhada + métricas + **cutover final** | **concluída** — `2a50965` |
 | E4 | painel operacional A/B e novos estados | **concluída** — `c24a0c9` |
 | E5 | gate completo | **concluída** — `RELEASE_CANDIDATE_READY_FOR_E6 = YES`, sem commit de código |
-| E6 | go-live no Render + smoke test | **próxima** |
+| E6 | go-live no Render + smoke público | **concluída** — `adabe2d` no ar, 5 migrations aplicadas |
 
 A E2 saiu em três fatias: **E2A** (`c6464b5`) — enums, campos de proposta, precisão do
 saldo, `ParticipacaoVenda`, `ReservaLocacao`, migration aditiva e backfills, sem
@@ -631,10 +636,15 @@ diferentes.
 A **E4** (`c24a0c9`) foi inteiramente de apresentação: 23 caminhos, **sem schema e sem
 migration**. Ela entregou a rotação A/B da faixa superior, as duas listas operacionais,
 o "+ de" dos acumulados e a extensão do contrato de atualização e da retenção para
-transportar as listas. **Nenhuma das cinco publicações aplicou migration em produção.**
+transportar as listas. **Nenhuma das cinco publicações de código aplicou migration em
+produção** — isso ficou inteiro para o E6, como planejado.
 
-A decisão de infraestrutura/plano de produção é do E6 — nada de Render é configurado
-antes. Depois do E6, retoma-se a **F4.5**.
+A **E5** certificou o release candidate sem publicar código. A **E6** fez o go-live: a
+credencial exposta na P1 foi rotacionada e revogada, o Web Service foi criado no Render,
+os secrets foram cadastrados sem passar por linha de comando, e um único deploy manual
+do commit `adabe2d` aplicou as **quatro migrations pendentes na ordem** pelo
+`pre-deploy`, antes de o processo novo receber tráfego. Com o go-live feito, a **F4.5
+está liberada para retomada** — ainda não iniciada.
 
 **Fase 5 — Refinamentos** · *futura*
 Metas com barra de progresso, destaque do mês, comparativo com o mês anterior, fotos dos
