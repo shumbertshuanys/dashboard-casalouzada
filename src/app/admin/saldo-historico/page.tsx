@@ -5,6 +5,7 @@ import { formatarDataBR } from "@/lib/datas";
 import { formatarBRL } from "@/lib/dinheiro";
 import { prisma } from "@/lib/db";
 import {
+  ROTULOS_PRECISAO,
   ROTULOS_SALDO,
   TIPOS_SALDO_HISTORICO,
   ehTipoComValor,
@@ -35,6 +36,7 @@ export default async function PaginaSaldoHistorico() {
       tipo: true,
       quantidade: true,
       valorTotal: true,
+      precisao: true,
       dataCorte: true,
       descricao: true,
     },
@@ -69,6 +71,7 @@ export default async function PaginaSaldoHistorico() {
               <th className="py-2 pr-4 font-medium">Tipo</th>
               <th className="py-2 pr-4 font-medium">Quantidade</th>
               <th className="py-2 pr-4 font-medium">Valor total</th>
+              <th className="py-2 pr-4 font-medium">Precisão</th>
               <th className="py-2 pr-4 font-medium">Data de corte</th>
               <th className="py-2 pr-4 font-medium">Descrição</th>
               <th className="py-2 font-medium">Ações</th>
@@ -82,7 +85,7 @@ export default async function PaginaSaldoHistorico() {
                 return (
                   <tr key={tipo} className="border-b border-white/5">
                     <td className="py-3 pr-4 text-texto">{ROTULOS_SALDO[tipo]}</td>
-                    <td className="py-3 pr-4 text-texto-secundario" colSpan={4}>
+                    <td className="py-3 pr-4 text-texto-secundario" colSpan={5}>
                       Não cadastrado
                     </td>
                     <td className="py-3">
@@ -105,6 +108,9 @@ export default async function PaginaSaldoHistorico() {
                     {/* Avaliação é contagem: mostrar R$ 0,00 aqui sugeriria um
                         acumulado financeiro que não existe. */}
                     {ehTipoComValor(tipo) ? formatarBRL(saldo.valorTotal.toFixed(2)) : "não se aplica"}
+                  </td>
+                  <td className="py-3 pr-4 whitespace-nowrap text-texto-secundario">
+                    {ROTULOS_PRECISAO[saldo.precisao]}
                   </td>
                   <td className="py-3 pr-4 whitespace-nowrap text-texto-secundario">
                     {formatarDataBR(saldo.dataCorte)}

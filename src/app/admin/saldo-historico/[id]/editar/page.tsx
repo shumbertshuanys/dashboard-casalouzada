@@ -5,6 +5,7 @@ import { deDataCivil, formatarDataBR } from "@/lib/datas";
 import { formatarBRL } from "@/lib/dinheiro";
 import { prisma } from "@/lib/db";
 import {
+  ROTULOS_PRECISAO,
   ROTULOS_SALDO,
   ehIdSaldoHistoricoValido,
   ehTipoComValor,
@@ -33,6 +34,7 @@ export default async function PaginaEditarSaldo({
       tipo: true,
       quantidade: true,
       valorTotal: true,
+      precisao: true,
       dataCorte: true,
       descricao: true,
     },
@@ -67,6 +69,7 @@ export default async function PaginaEditarSaldo({
           tipo,
           quantidade: String(saldo.quantidade),
           valorTotal: ehTipoComValor(tipo) ? valorCanonico : "",
+          precisao: saldo.precisao,
           dataCorte: deDataCivil(saldo.dataCorte),
           descricao: saldo.descricao ?? "",
         }}
@@ -75,6 +78,7 @@ export default async function PaginaEditarSaldo({
           tipoRotulo: ROTULOS_SALDO[tipo],
           quantidade: saldo.quantidade,
           valorFormatado: ehTipoComValor(tipo) ? formatarBRL(valorCanonico) : null,
+          precisaoRotulo: ROTULOS_PRECISAO[saldo.precisao],
           dataFormatada: formatarDataBR(saldo.dataCorte),
         }}
       />

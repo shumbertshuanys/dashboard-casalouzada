@@ -3,10 +3,12 @@ import { describe, it } from "node:test";
 import { deDataCivil } from "@/lib/datas";
 import {
   MAX_QUANTIDADE,
+  PRECISOES_SALDO_HISTORICO,
   TIPOS_SALDO_HISTORICO,
   ehIdSaldoHistoricoValido,
   ehTipoComValor,
   ehTipoDuplicado,
+  interpretarPrecisaoSaldo,
   interpretarTipoSaldo,
   validarSaldoHistorico,
 } from "@/lib/validacao/saldo-historico";
@@ -17,8 +19,9 @@ function formulario(campos: Record<string, string>): FormData {
   return form;
 }
 
-const VENDA = { tipo: "VENDA", quantidade: "125", valorTotal: "1.250.000,00", dataCorte: "2026-08-12" };
-const GOOGLE = { tipo: "AVALIACAO_GOOGLE", quantidade: "480", dataCorte: "2026-08-12" };
+// `precisao` entrou na E2B e é obrigatória — os fixtures a carregam desde então.
+const VENDA = { tipo: "VENDA", quantidade: "125", valorTotal: "1.250.000,00", precisao: "EXATO", dataCorte: "2026-08-12" };
+const GOOGLE = { tipo: "AVALIACAO_GOOGLE", quantidade: "480", precisao: "EXATO", dataCorte: "2026-08-12" };
 
 describe("tipos suportados", () => {
   it("são exatamente venda e avaliação", () => {
@@ -52,6 +55,42 @@ describe("tipos suportados", () => {
   it("só venda carrega dinheiro", () => {
     assert.equal(ehTipoComValor("VENDA"), true);
     assert.equal(ehTipoComValor("AVALIACAO_GOOGLE"), false);
+  });
+});
+
+describe("precisão (DEC-054)", () => {
+  it("o domínio é exatamente EXATO e MINIMO_CONHECIDO", () => {
+    assert.deepEqual([...PRECISOES_SALDO_HISTORICO], ["EXATO", "MINIMO_CONHECIDO"]);
+    assert.equal(interpretarPrecisaoSaldo("EXATO"), "EXATO");
+    assert.equal(interpretarPrecisaoSaldo("MINIMO_CONHECIDO"), "MINIMO_CONHECIDO");
+  });
+
+  it("recusa qualquer valor fora do domínio", () => {
+    for (const valor of ["", "exato", "Exato", "MINIMO", "abc", null, undefined, {}, 7]) {
+      assert.equal(interpretarPrecisaoSaldo(valor), null, `${JSON.stringify(valor)}`);
+    }
+  });
+
+  it("EXATO válida a submissão", () => {
+    const r = validarSaldoHistorico(formulario({ ...VENDA, precisao: "EXATO" }));
+    assert.equal(r.ok === true && r.dados.precisao, "EXATO");
+  });
+
+  it("MINIMO_CONHECIDO válida a submissão", () => {
+    const r = validarSaldoHistorico(formulario({ ...GOOGLE, precisao: "MINIMO_CONHECIDO" }));
+    assert.equal(r.ok === true && r.dados.precisao, "MINIMO_CONHECIDO");
+  });
+
+  it("ausente ou inválida é erro de campo — nada de default silencioso", () => {
+    for (const precisao of ["", "exato", "APROXIMADO"]) {
+      const r = validarSaldoHistorico(formulario({ ...VENDA, precisao }));
+      assert.equal(r.ok, false, JSON.stringify(precisao));
+      assert.equal(
+        r.ok === false && r.erros.precisao,
+        "Escolha a precisão do saldo.",
+        JSON.stringify(precisao),
+      );
+    }
   });
 });
 
@@ -208,7 +247,7 @@ describe("tipo fixo na edição", () => {
     // Na edição o tipo vem do banco: trocar o tipo de um saldo transformaria
     // acumulado de vendas em avaliações.
     const r = validarSaldoHistorico(
-      formulario({ tipo: "AVALIACAO_GOOGLE", quantidade: "10", valorTotal: "500,00", dataCorte: "2026-08-12" }),
+      formulario({ tipo: "AVALIACAO_GOOGLE", quantidade: "10", valorTotal: "500,00", precisao: "EXATO", dataCorte: "2026-08-12" }),
       "VENDA",
     );
     assert.equal(r.ok === true && r.dados.tipo, "VENDA");
@@ -217,7 +256,7 @@ describe("tipo fixo na edição", () => {
 
   it("com tipo fixo AVALIACAO_GOOGLE o valor continua zero", () => {
     const r = validarSaldoHistorico(
-      formulario({ tipo: "VENDA", quantidade: "10", valorTotal: "999999,99", dataCorte: "2026-08-12" }),
+      formulario({ tipo: "VENDA", quantidade: "10", valorTotal: "999999,99", precisao: "EXATO", dataCorte: "2026-08-12" }),
       "AVALIACAO_GOOGLE",
     );
     assert.equal(r.ok === true && r.dados.tipo, "AVALIACAO_GOOGLE");

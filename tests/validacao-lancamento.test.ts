@@ -21,7 +21,18 @@ function formulario(campos: Record<string, string>): FormData {
   return form;
 }
 
-const BASE = { tipo: "PROPOSTA", corretorId: CORRETOR, dataReferencia: "2026-08-10" };
+// CAPTACAO_VENDA como tipo mínimo válido: desde a E2B, PROPOSTA exige status e
+// imóvel, então deixou de servir como base neutra destes testes.
+const BASE = { tipo: "CAPTACAO_VENDA", corretorId: CORRETOR, dataReferencia: "2026-08-10" };
+
+/** O mínimo válido de uma PROPOSTA desde a E2B (DEC-053). */
+const PROPOSTA_MINIMA = {
+  tipo: "PROPOSTA",
+  corretorId: CORRETOR,
+  dataReferencia: "2026-08-10",
+  statusProposta: "AGUARDANDO",
+  imovelRef: "AP-101",
+};
 
 describe("tipos", () => {
   it("são exatamente os sete do enum", () => {
@@ -181,28 +192,139 @@ describe("validarLancamento — valor por tipo", () => {
       "CAPTACAO_VENDA",
       "CAPTACAO_EXCLUSIVA",
       "CAPTACAO_LOCACAO",
-      "PROPOSTA",
       "AVALIACAO_GOOGLE",
     ]) {
       const r = validarLancamento(formulario({ ...BASE, tipo }));
       assert.equal(r.ok, true, tipo);
       assert.equal(r.ok === true && r.dados.valor, null, tipo);
     }
+    // PROPOSTA também, com os obrigatórios dela preenchidos.
+    const proposta = validarLancamento(formulario(PROPOSTA_MINIMA));
+    assert.equal(proposta.ok, true);
+    assert.equal(proposta.ok === true && proposta.dados.valor, null);
   });
 
   it("valor enviado em tipo não monetário é descartado, sem virar erro", () => {
-    // Trocar de VENDA para PROPOSTA deixa um valor órfão no payload.
-    for (const tipo of ["PROPOSTA", "CAPTACAO_VENDA", "CAPTACAO_EXCLUSIVA", "AVALIACAO_GOOGLE"]) {
+    // Trocar de VENDA para outro tipo deixa um valor órfão no payload.
+    for (const tipo of ["CAPTACAO_VENDA", "CAPTACAO_EXCLUSIVA", "AVALIACAO_GOOGLE"]) {
       const r = validarLancamento(formulario({ ...BASE, tipo, valor: "5000,00" }));
       assert.equal(r.ok, true, tipo);
       assert.equal(r.ok === true && r.dados.valor, null, tipo);
     }
+    const proposta = validarLancamento(formulario({ ...PROPOSTA_MINIMA, valor: "5000,00" }));
+    assert.equal(proposta.ok, true);
+    assert.equal(proposta.ok === true && proposta.dados.valor, null);
   });
 
   it("AVALIACAO_GOOGLE passa com o mínimo, sem valor", () => {
     const r = validarLancamento(formulario({ ...BASE, tipo: "AVALIACAO_GOOGLE" }));
     assert.equal(r.ok, true);
     assert.equal(r.ok === true && r.dados.valor, null);
+  });
+});
+
+describe("validarLancamento — proposta (DEC-053)", () => {
+  it("o mínimo válido passa: status, imóvel, sem valor", () => {
+    const r = validarLancamento(formulario(PROPOSTA_MINIMA));
+    assert.equal(r.ok, true);
+    assert.equal(r.ok === true && r.dados.statusProposta, "AGUARDANDO");
+    assert.equal(r.ok === true && r.dados.imovelRef, "AP-101");
+    assert.equal(r.ok === true && r.dados.valorProposta, null);
+    assert.equal(r.ok === true && r.dados.valor, null);
+  });
+
+  it("exige status", () => {
+    const r = validarLancamento(formulario({ ...PROPOSTA_MINIMA, statusProposta: "" }));
+    assert.equal(r.ok === false && r.erros.statusProposta, "Escolha o status da proposta.");
+  });
+
+  it("recusa status fora do domínio", () => {
+    for (const statusProposta of ["aguardando", "ACEITO", "PENDENTE", "abc"]) {
+      const r = validarLancamento(formulario({ ...PROPOSTA_MINIMA, statusProposta }));
+      assert.equal(r.ok, false, statusProposta);
+      assert.ok(r.ok === false && r.erros.statusProposta, statusProposta);
+    }
+  });
+
+  it("aceita os três status do domínio", () => {
+    for (const statusProposta of ["AGUARDANDO", "ACEITA", "REJEITADA"]) {
+      const r = validarLancamento(formulario({ ...PROPOSTA_MINIMA, statusProposta }));
+      assert.equal(r.ok === true && r.dados.statusProposta, statusProposta);
+    }
+  });
+
+  it("exige imóvel — inclusive só com whitespace", () => {
+    for (const imovelRef of ["", "   "]) {
+      const r = validarLancamento(formulario({ ...PROPOSTA_MINIMA, imovelRef }));
+      assert.equal(
+        r.ok === false && r.erros.imovelRef,
+        "Informe o imóvel da proposta.",
+        JSON.stringify(imovelRef),
+      );
+    }
+  });
+
+  it("valorProposta vazio vira null", () => {
+    const r = validarLancamento(formulario({ ...PROPOSTA_MINIMA, valorProposta: "  " }));
+    assert.equal(r.ok === true && r.dados.valorProposta, null);
+  });
+
+  it("valorProposta válido vira string decimal canônica", () => {
+    const r = validarLancamento(
+      formulario({ ...PROPOSTA_MINIMA, valorProposta: "450.000,00" }),
+    );
+    assert.equal(r.ok === true && r.dados.valorProposta, "450000.00");
+    assert.equal(typeof (r.ok === true ? r.dados.valorProposta : null), "string");
+    // O valor da proposta nunca alimenta o `valor` monetário.
+    assert.equal(r.ok === true && r.dados.valor, null);
+  });
+
+  it("valorProposta zero é erro", () => {
+    for (const valorProposta of ["0", "0,00", "0.00"]) {
+      const r = validarLancamento(formulario({ ...PROPOSTA_MINIMA, valorProposta }));
+      assert.equal(
+        r.ok === false && r.erros.valorProposta,
+        "O valor precisa ser maior que zero.",
+        valorProposta,
+      );
+    }
+  });
+
+  it("valorProposta malformado é erro", () => {
+    for (const valorProposta of ["abc", "-100", "1.5000", "1,234"]) {
+      const r = validarLancamento(formulario({ ...PROPOSTA_MINIMA, valorProposta }));
+      assert.equal(r.ok === false && r.erros.valorProposta, "Valor inválido.", valorProposta);
+    }
+  });
+
+  it("não-PROPOSTA descarta statusProposta e valorProposta forjados", () => {
+    // Um payload forjado não pode contaminar outro tipo.
+    for (const tipo of ["VENDA", "LOCACAO", "CAPTACAO_VENDA", "AVALIACAO_GOOGLE"]) {
+      const extras: Record<string, string> =
+        tipo === "VENDA" || tipo === "LOCACAO" ? { valor: "1.000,00" } : {};
+      const r = validarLancamento(
+        formulario({
+          ...BASE,
+          tipo,
+          ...extras,
+          statusProposta: "ACEITA",
+          valorProposta: "999.999,00",
+        }),
+      );
+      assert.equal(r.ok, true, tipo);
+      assert.equal(r.ok === true && r.dados.statusProposta, null, tipo);
+      assert.equal(r.ok === true && r.dados.valorProposta, null, tipo);
+    }
+  });
+
+  it("VENDA e LOCACAO continuam usando o `valor` normal", () => {
+    const venda = validarLancamento(formulario({ ...BASE, tipo: "VENDA", valor: "900.000,00" }));
+    assert.equal(venda.ok === true && venda.dados.valor, "900000.00");
+    assert.equal(venda.ok === true && venda.dados.valorProposta, null);
+
+    const locacao = validarLancamento(formulario({ ...BASE, tipo: "LOCACAO", valor: "3.500,00" }));
+    assert.equal(locacao.ok === true && locacao.dados.valor, "3500.00");
+    assert.equal(locacao.ok === true && locacao.dados.statusProposta, null);
   });
 });
 

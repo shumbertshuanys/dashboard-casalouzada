@@ -174,20 +174,22 @@ describe("campos de proposta", () => {
     assert.equal(relida.valor, null);
   });
 
-  it("sem informar, statusProposta fica NULL — não há default de coluna (E2A)", async () => {
-    const proposta = await prisma.lancamento.create({
-      data: {
-        tipo: "PROPOSTA",
-        corretorId,
-        equipeId,
-        dataReferencia: paraDataCivil("2026-08-07"),
-        imovelRef: "AP-203",
-      },
-    });
-
-    const relida = await prisma.lancamento.findUniqueOrThrow({ where: { id: proposta.id } });
-    assert.equal(relida.statusProposta, null);
-    assert.equal(relida.valorProposta, null);
+  it("sem status, o banco recusa — a E2B fechou a janela transitória da E2A", async () => {
+    // Na E2A este teste afirmava o NULL transitório; desde o CHECK da E2B,
+    // proposta sem status não entra mais (DEC-053).
+    await assert.rejects(
+      () =>
+        prisma.lancamento.create({
+          data: {
+            tipo: "PROPOSTA",
+            corretorId,
+            equipeId,
+            dataReferencia: paraDataCivil("2026-08-07"),
+            imovelRef: "AP-203",
+          },
+        }),
+      (erro: unknown) => /check|23514|proposta_campos/i.test(String((erro as Error).message)),
+    );
   });
 });
 

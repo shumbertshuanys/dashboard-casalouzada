@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import {
   POR_PAGINA,
   ROTULOS,
+  ROTULOS_STATUS_PROPOSTA,
   interpretarFiltrosLancamentos,
   interpretarPagina,
 } from "@/lib/validacao/lancamento";
@@ -62,6 +63,8 @@ export default async function PaginaLancamentos({
         tipo: true,
         dataReferencia: true,
         valor: true,
+        valorProposta: true,
+        statusProposta: true,
         imovelRef: true,
         observacao: true,
         corretor: { select: { nomeExibicao: true } },
@@ -128,7 +131,7 @@ export default async function PaginaLancamentos({
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[60rem] border-collapse text-sm">
+          <table className="w-full min-w-[66rem] border-collapse text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left text-texto-secundario">
                 <th className="py-2 pr-4 font-medium">Data</th>
@@ -136,6 +139,7 @@ export default async function PaginaLancamentos({
                 <th className="py-2 pr-4 font-medium">Corretor</th>
                 <th className="py-2 pr-4 font-medium">Equipe</th>
                 <th className="py-2 pr-4 font-medium">Valor</th>
+                <th className="py-2 pr-4 font-medium">Status</th>
                 <th className="py-2 pr-4 font-medium">Imóvel</th>
                 <th className="py-2 pr-4 font-medium">Observação</th>
                 <th className="py-2 font-medium">Ações</th>
@@ -159,8 +163,21 @@ export default async function PaginaLancamentos({
                     {/* `toFixed(2)`, não `toString()`: o Decimal do Prisma corta
                         zeros à direita, e "1250000" sem casas quebraria o
                         formatador. Também não é `Number` — um valor no topo de
-                        Decimal(14,2) não cabe exato num double. */}
-                    {lancamento.valor === null ? "—" : formatarBRL(lancamento.valor.toFixed(2))}
+                        Decimal(14,2) não cabe exato num double.
+                        PROPOSTA mostra o valor próprio dela, que é informativo
+                        e nunca soma em VGV (DEC-053). */}
+                    {lancamento.tipo === "PROPOSTA"
+                      ? lancamento.valorProposta === null
+                        ? "—"
+                        : formatarBRL(lancamento.valorProposta.toFixed(2))
+                      : lancamento.valor === null
+                        ? "—"
+                        : formatarBRL(lancamento.valor.toFixed(2))}
+                  </td>
+                  <td className="py-3 pr-4 whitespace-nowrap text-texto-secundario">
+                    {lancamento.tipo === "PROPOSTA" && lancamento.statusProposta !== null
+                      ? ROTULOS_STATUS_PROPOSTA[lancamento.statusProposta]
+                      : "—"}
                   </td>
                   <td className="py-3 pr-4 text-texto-secundario">
                     {lancamento.imovelRef ?? "—"}

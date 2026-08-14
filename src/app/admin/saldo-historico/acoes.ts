@@ -23,6 +23,7 @@ export type ValoresSaldo = {
   tipo: string;
   quantidade: string;
   valorTotal: string;
+  precisao: string;
   dataCorte: string;
   descricao: string;
 };
@@ -44,6 +45,7 @@ function valoresEnviados(form: FormData): ValoresSaldo {
     tipo: texto("tipo"),
     quantidade: texto("quantidade"),
     valorTotal: texto("valorTotal"),
+    precisao: texto("precisao"),
     dataCorte: texto("dataCorte"),
     descricao: texto("descricao"),
   };
@@ -105,6 +107,8 @@ export async function editarSaldoHistorico(
     data: {
       quantidade: validado.dados.quantidade,
       valorTotal: validado.dados.valorTotal,
+      // EXATO ↔ MINIMO_CONHECIDO nos dois sentidos (DEC-054).
+      precisao: validado.dados.precisao,
       dataCorte: validado.dados.dataCorte,
       descricao: validado.dados.descricao,
       // `tipo` fica de fora de propósito.

@@ -83,6 +83,8 @@ async function criarLancamento(
       equipeId,
       dataReferencia: paraDataCivil(data),
       valor,
+      // Desde a E2B o CHECK exige status em toda proposta.
+      ...(tipo === "PROPOSTA" ? { statusProposta: "AGUARDANDO" as const } : {}),
       criadoPor: adminId,
     },
   });
@@ -129,6 +131,10 @@ async function editar(
       corretorId: corretorIdNovo,
       equipeId: resolucao.equipeId,
       valor: monetario ? (extras.valor ?? null) : null,
+      // Como a action real: PROPOSTA exige status; outro tipo zera os campos
+      // de proposta (CHECK da E2B).
+      statusProposta: tipo === "PROPOSTA" ? "AGUARDANDO" : null,
+      valorProposta: null,
       ...(extras.data ? { dataReferencia: paraDataCivil(extras.data) } : {}),
     },
   });

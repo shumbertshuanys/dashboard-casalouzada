@@ -189,13 +189,15 @@ describe("INVARIANTE — trocar de equipe não reescreve histórico", () => {
       data: { nomeCompleto: nome("historico"), nomeExibicao: "Histórico", equipeId: equipeA },
     });
 
-    // PROPOSTA não exige valor; a data é civil, como manda o schema.
+    // PROPOSTA não exige valor; a data é civil, como manda o schema. Desde a
+    // E2B o CHECK exige status em toda proposta.
     const lancamento = await prisma.lancamento.create({
       data: {
         tipo: "PROPOSTA",
         corretorId: corretor.id,
         equipeId: equipeA,
         dataReferencia: paraDataCivil("2026-08-10"),
+        statusProposta: "AGUARDANDO",
       },
     });
     assert.equal(lancamento.equipeId, equipeA);
@@ -228,6 +230,7 @@ describe("INVARIANTE — trocar de equipe não reescreve histórico", () => {
           corretorId: corretor.id,
           equipeId: equipeA,
           dataReferencia: paraDataCivil("2026-07-01"),
+          statusProposta: "AGUARDANDO",
         },
         {
           tipo: "AVALIACAO_GOOGLE",

@@ -39,6 +39,27 @@ export function ehTipoComValor(tipo: TipoSaldoHistorico): boolean {
   return tipo === "VENDA";
 }
 
+/**
+ * Precisão do saldo (DEC-054). `EXATO` afirma o número; `MINIMO_CONHECIDO` é
+ * um piso — o proprietário sabe que houve pelo menos aquilo, sem o histórico
+ * completo. O cálculo dos acumulados não muda; a exibição "+ de" é da E4.
+ */
+export const PRECISOES_SALDO_HISTORICO = ["EXATO", "MINIMO_CONHECIDO"] as const;
+
+export type PrecisaoSaldo = (typeof PRECISOES_SALDO_HISTORICO)[number];
+
+export const ROTULOS_PRECISAO: Record<PrecisaoSaldo, string> = {
+  EXATO: "Exato",
+  MINIMO_CONHECIDO: "Mínimo conhecido",
+};
+
+/** Domínio fechado: não se confia no enum enviado pelo cliente. */
+export function interpretarPrecisaoSaldo(valor: unknown): PrecisaoSaldo | null {
+  return PRECISOES_SALDO_HISTORICO.includes(valor as PrecisaoSaldo)
+    ? (valor as PrecisaoSaldo)
+    : null;
+}
+
 /** Teto do `Int` do Prisma sobre `integer` do PostgreSQL. Limite técnico. */
 export const MAX_QUANTIDADE = 2_147_483_647;
 
@@ -52,6 +73,7 @@ export type DadosSaldoHistorico = {
   quantidade: number;
   /** String decimal canônica; `"0.00"` para avaliação. */
   valorTotal: string;
+  precisao: PrecisaoSaldo;
   dataCorte: Date;
   descricao: string | null;
 };
@@ -123,6 +145,11 @@ export function validarSaldoHistorico(
     }
   }
 
+  // Explícita, sem default silencioso: o formulário sempre envia, e um payload
+  // sem precisão (ou com valor forjado) é erro, não EXATO por acaso.
+  const precisao = interpretarPrecisaoSaldo(texto(form.get("precisao")));
+  if (precisao === null) erros.precisao = "Escolha a precisão do saldo.";
+
   const dataBruta = texto(form.get("dataCorte"));
   let dataCorte: Date | null = null;
   if (dataBruta === "") {
@@ -146,6 +173,7 @@ export function validarSaldoHistorico(
       tipo: tipo as TipoSaldoHistorico,
       quantidade,
       valorTotal,
+      precisao: precisao as PrecisaoSaldo,
       dataCorte: dataCorte as Date,
       descricao,
     },

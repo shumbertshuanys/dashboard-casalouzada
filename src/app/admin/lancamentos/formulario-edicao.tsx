@@ -2,7 +2,14 @@
 
 import { useActionState, useState } from "react";
 import { formatarBRL } from "@/lib/dinheiro";
-import { ROTULOS, TIPOS, ehTipoMonetario, interpretarTipo } from "@/lib/validacao/lancamento";
+import {
+  ROTULOS,
+  ROTULOS_STATUS_PROPOSTA,
+  STATUS_PROPOSTA,
+  TIPOS,
+  ehTipoMonetario,
+  interpretarTipo,
+} from "@/lib/validacao/lancamento";
 import type { EstadoEdicao, ValoresLancamento } from "./acoes";
 import { excluirLancamento } from "./acoes";
 
@@ -66,6 +73,8 @@ export function FormularioEdicaoLancamento({
     atuais.corretorId,
     atuais.dataReferencia,
     atuais.valor,
+    atuais.valorProposta,
+    atuais.statusProposta,
     atuais.imovelRef,
     atuais.observacao,
     estado.conflito?.equipeAtualApresentadaId ?? "",
@@ -150,6 +159,7 @@ function CamposEdicao({
   const [tipo, setTipo] = useState(atuais.tipo);
   const tipoAtual = interpretarTipo(tipo);
   const pedeValor = tipoAtual !== null && ehTipoMonetario(tipoAtual);
+  const ehProposta = tipoAtual === "PROPOSTA";
 
   return (
     <>
@@ -222,17 +232,65 @@ function CamposEdicao({
         </Campo>
       )}
 
-      <details className="rounded-md border border-white/10 px-3 py-2" open>
-        <summary className="cursor-pointer text-sm text-texto-secundario">Detalhes</summary>
-        <div className="mt-4 space-y-4">
+      {/* Mesmo contrato visual da criação: em PROPOSTA o imóvel é obrigatório
+          e sobe para a área principal, junto do status e do valor próprio da
+          proposta (DEC-053). Uma proposta legada sem imóvel abre normalmente;
+          o erro só aparece ao salvar sem preencher. */}
+      {ehProposta && (
+        <>
           <Campo rotulo="Imóvel" erro={erros?.imovelRef}>
             <input
               name="imovelRef"
               defaultValue={atuais.imovelRef}
               autoComplete="off"
+              placeholder="código ou endereço"
               className="w-full rounded-md border border-white/15 bg-fundo px-3 py-2 text-texto"
             />
           </Campo>
+
+          <Campo rotulo="Status da proposta" erro={erros?.statusProposta}>
+            <select
+              name="statusProposta"
+              defaultValue={atuais.statusProposta || "AGUARDANDO"}
+              className="w-56 rounded-md border border-white/15 bg-fundo px-3 py-2 text-texto"
+            >
+              {STATUS_PROPOSTA.map((status) => (
+                <option key={status} value={status}>
+                  {ROTULOS_STATUS_PROPOSTA[status]}
+                </option>
+              ))}
+            </select>
+          </Campo>
+
+          <Campo rotulo="Valor da proposta (opcional)" erro={erros?.valorProposta}>
+            <input
+              name="valorProposta"
+              defaultValue={atuais.valorProposta}
+              inputMode="decimal"
+              placeholder="450.000,00"
+              autoComplete="off"
+              className="w-56 rounded-md border border-white/15 bg-fundo px-3 py-2 text-texto"
+            />
+            <span className="mt-1 block text-xs text-texto-secundario">
+              informativo; não entra no VGV
+            </span>
+          </Campo>
+        </>
+      )}
+
+      <details className="rounded-md border border-white/10 px-3 py-2" open>
+        <summary className="cursor-pointer text-sm text-texto-secundario">Detalhes</summary>
+        <div className="mt-4 space-y-4">
+          {!ehProposta && (
+            <Campo rotulo="Imóvel" erro={erros?.imovelRef}>
+              <input
+                name="imovelRef"
+                defaultValue={atuais.imovelRef}
+                autoComplete="off"
+                className="w-full rounded-md border border-white/15 bg-fundo px-3 py-2 text-texto"
+              />
+            </Campo>
+          )}
           <Campo rotulo="Observação" erro={erros?.observacao}>
             <textarea
               name="observacao"

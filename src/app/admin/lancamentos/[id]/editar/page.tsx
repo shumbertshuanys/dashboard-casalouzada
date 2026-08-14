@@ -34,6 +34,8 @@ export default async function PaginaEditarLancamento({
       corretorId: true,
       dataReferencia: true,
       valor: true,
+      valorProposta: true,
+      statusProposta: true,
       imovelRef: true,
       observacao: true,
       corretor: { select: { id: true, nomeExibicao: true, nomeCompleto: true, ativo: true } },
@@ -85,6 +87,12 @@ export default async function PaginaEditarLancamento({
           corretorId: lancamento.corretorId,
           dataReferencia: deDataCivil(lancamento.dataReferencia),
           valor: valorCanonico ?? "",
+          valorProposta: lancamento.valorProposta?.toFixed(2) ?? "",
+          // O status persistido; proposta legada da janela transitória sem
+          // status abre com o padrão AGUARDANDO já selecionado.
+          statusProposta:
+            lancamento.statusProposta ??
+            (lancamento.tipo === "PROPOSTA" ? "AGUARDANDO" : ""),
           imovelRef: lancamento.imovelRef ?? "",
           observacao: lancamento.observacao ?? "",
         }}

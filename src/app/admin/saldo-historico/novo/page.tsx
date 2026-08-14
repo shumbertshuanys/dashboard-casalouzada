@@ -46,6 +46,8 @@ export default async function PaginaNovoSaldo() {
             tipo: disponiveis.length === 1 ? disponiveis[0] : "",
             quantidade: "",
             valorTotal: "",
+            // EXATO é o padrão; mínimo conhecido é escolha explícita (DEC-054).
+            precisao: "EXATO",
             // Sugestão do servidor, no fuso do escritório.
             dataCorte: hojeEmSaoPaulo(),
             descricao: "",

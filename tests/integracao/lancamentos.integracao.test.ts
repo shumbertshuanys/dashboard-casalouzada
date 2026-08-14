@@ -96,6 +96,8 @@ async function lancar(
       tipo,
       corretorId,
       equipeId: corretor.equipeId,
+      // Desde a E2B o CHECK exige status em toda proposta.
+      ...(tipo === "PROPOSTA" ? { statusProposta: "AGUARDANDO" as const } : {}),
       dataReferencia: paraDataCivil(data),
       valor,
       criadoPor: adminId,
@@ -365,13 +367,15 @@ describe("paginação", () => {
       })
     ).id;
 
-    // Datas distintas para a ordenação ser determinística.
+    // Datas distintas para a ordenação ser determinística. O status entra
+    // porque desde a E2B o CHECK exige em toda proposta.
     await prisma.lancamento.createMany({
       data: Array.from({ length: TOTAL }, (_, i) => ({
         tipo: "PROPOSTA" as const,
         corretorId: corretorP,
         equipeId: equipeA,
         dataReferencia: paraDataCivil(`2026-05-${String((i % 28) + 1).padStart(2, "0")}`),
+        statusProposta: "AGUARDANDO" as const,
         criadoPor: adminId,
       })),
     });

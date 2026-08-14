@@ -31,12 +31,31 @@ export type TipoLancamento = (typeof TIPOS)[number];
 
 /**
  * Só estes dois carregam dinheiro — é o que a seção 3 do PLANO chama de
- * "preenchido apenas em vendas e locações".
+ * "preenchido apenas em vendas e locações". PROPOSTA fica de fora de
+ * propósito: `valorProposta` é campo próprio e nunca vira VGV (DEC-053).
  */
 export const TIPOS_MONETARIOS: readonly TipoLancamento[] = ["VENDA", "LOCACAO"];
 
 export function ehTipoMonetario(tipo: TipoLancamento): boolean {
   return TIPOS_MONETARIOS.includes(tipo);
+}
+
+/** Os três estados do pipeline de uma proposta (DEC-053). */
+export const STATUS_PROPOSTA = ["AGUARDANDO", "ACEITA", "REJEITADA"] as const;
+
+export type StatusPropostaLancamento = (typeof STATUS_PROPOSTA)[number];
+
+export const ROTULOS_STATUS_PROPOSTA: Record<StatusPropostaLancamento, string> = {
+  AGUARDANDO: "Aguardando",
+  ACEITA: "Aceita",
+  REJEITADA: "Rejeitada",
+};
+
+/** Domínio fechado: nada além dos três chega ao Prisma. */
+export function interpretarStatusProposta(valor: unknown): StatusPropostaLancamento | null {
+  return STATUS_PROPOSTA.includes(valor as StatusPropostaLancamento)
+    ? (valor as StatusPropostaLancamento)
+    : null;
 }
 
 /** Rótulos de tela. `CAPTACAO_VENDA` e `CAPTACAO_EXCLUSIVA` são linhas distintas. */
@@ -68,6 +87,10 @@ export type DadosLancamento = {
   dataReferencia: Date;
   /** String decimal canônica, ou `null` nos tipos não monetários. */
   valor: string | null;
+  /** String decimal canônica; só em PROPOSTA, e mesmo lá opcional (DEC-053). */
+  valorProposta: string | null;
+  /** Obrigatório em PROPOSTA; `null` nos demais tipos. */
+  statusProposta: StatusPropostaLancamento | null;
   imovelRef: string | null;
   observacao: string | null;
 };
@@ -148,6 +171,40 @@ export function validarLancamento(form: FormData): ResultadoLancamento {
   const imovelRef = opcional(form.get("imovelRef"));
   const observacao = opcional(form.get("observacao"));
 
+  // Os campos de proposta só existem em PROPOSTA. Nos demais tipos, o que
+  // vier no payload é zerado sem virar erro — um payload forjado não pode
+  // contaminar outro tipo, e trocar de PROPOSTA para outro tipo no meio do
+  // preenchimento não é erro de quem está lançando (DEC-053).
+  let statusProposta: StatusPropostaLancamento | null = null;
+  let valorProposta: string | null = null;
+
+  if (tipo === "PROPOSTA") {
+    statusProposta = interpretarStatusProposta(texto(form.get("statusProposta")));
+    if (statusProposta === null) {
+      erros.statusProposta = "Escolha o status da proposta.";
+    }
+
+    // Opcional, mas quando vem precisa ser dinheiro válido e positivo.
+    const brutoProposta = texto(form.get("valorProposta"));
+    if (brutoProposta !== "") {
+      const canonico = normalizarValorBR(brutoProposta);
+      if (canonico === null) {
+        erros.valorProposta = "Valor inválido.";
+      } else if (ehZero(canonico)) {
+        erros.valorProposta = "O valor precisa ser maior que zero.";
+      } else {
+        valorProposta = canonico;
+      }
+    }
+
+    // O imóvel é o que identifica a proposta na operação e na TV. Obrigatório
+    // em novas submissões e edições; a proposta legada sem imóvel continua
+    // válida no banco enquanto não for editada (DEC-053).
+    if (imovelRef === null) {
+      erros.imovelRef = "Informe o imóvel da proposta.";
+    }
+  }
+
   if (Object.keys(erros).length > 0) return { ok: false, erros };
 
   return {
@@ -157,6 +214,8 @@ export function validarLancamento(form: FormData): ResultadoLancamento {
       corretorId,
       dataReferencia: dataReferencia as Date,
       valor,
+      valorProposta,
+      statusProposta,
       imovelRef,
       observacao,
     },

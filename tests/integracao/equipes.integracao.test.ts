@@ -205,6 +205,8 @@ describe("equipe — desativar e reativar", () => {
           corretorId: corretor.id,
           equipeId: equipe.id,
           dataReferencia: paraDataCivil("2026-08-12"),
+          // Desde a E2B o CHECK exige status em toda proposta.
+          statusProposta: "AGUARDANDO",
         },
       });
       lancamentoId = lancamento.id;

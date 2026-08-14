@@ -63,6 +63,10 @@ export default async function PaginaNovoLancamento() {
             // navegador pode estar em outro fuso e gravaria o dia errado.
             dataReferencia: hojeEmSaoPaulo(),
             valor: "",
+            valorProposta: "",
+            // Toda proposta nova começa aguardando; se o tipo escolhido não
+            // for PROPOSTA, o campo nem é renderizado.
+            statusProposta: "AGUARDANDO",
             imovelRef: "",
             observacao: "",
           }}

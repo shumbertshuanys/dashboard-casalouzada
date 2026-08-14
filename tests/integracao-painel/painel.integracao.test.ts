@@ -189,6 +189,9 @@ async function criarFixture(): Promise<void> {
         equipeId: idDaEquipe[evento.equipe],
         dataReferencia: paraDataCivil(evento.dia),
         valor: evento.valor,
+        // Desde a E2B o CHECK exige status em toda proposta. As métricas não
+        // olham este campo: a contagem independe do status (DEC-053).
+        ...(evento.tipo === "PROPOSTA" ? { statusProposta: "AGUARDANDO" as const } : {}),
       },
     });
   }

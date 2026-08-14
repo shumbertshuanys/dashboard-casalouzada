@@ -28,6 +28,8 @@ export type ValoresLancamento = {
   corretorId: string;
   dataReferencia: string;
   valor: string;
+  valorProposta: string;
+  statusProposta: string;
   imovelRef: string;
   observacao: string;
 };
@@ -51,6 +53,8 @@ function valoresEnviados(form: FormData): ValoresLancamento {
     corretorId: texto("corretorId"),
     dataReferencia: texto("dataReferencia"),
     valor: texto("valor"),
+    valorProposta: texto("valorProposta"),
+    statusProposta: texto("statusProposta"),
     imovelRef: texto("imovelRef"),
     observacao: texto("observacao"),
   };
@@ -87,6 +91,10 @@ export async function criarLancamento(
       equipeId: decisao.equipeId,
       dataReferencia: validado.dados.dataReferencia,
       valor: validado.dados.valor,
+      // Do resultado validado, nunca do FormData: no não-PROPOSTA os dois já
+      // chegam `null`, e payload forjado não contamina outro tipo (DEC-053).
+      valorProposta: validado.dados.valorProposta,
+      statusProposta: validado.dados.statusProposta,
       imovelRef: validado.dados.imovelRef,
       observacao: validado.dados.observacao,
       criadoPor: administrador.id,
@@ -96,7 +104,9 @@ export async function criarLancamento(
   revalidatePath(ROTA);
 
   // Sem redirecionar: a tela é de lançamento em sequência. Tipo e data ficam,
-  // o resto é limpo pelo formulário.
+  // o resto é limpo pelo formulário. Se o tipo mantido for PROPOSTA, o status
+  // volta ao padrão AGUARDANDO — uma ACEITA registrada agora não pode
+  // contaminar a próxima proposta digitada.
   const enviados = valoresEnviados(form);
   return {
     sucesso: "Lançamento registrado.",
@@ -105,6 +115,8 @@ export async function criarLancamento(
       dataReferencia: enviados.dataReferencia,
       corretorId: "",
       valor: "",
+      valorProposta: "",
+      statusProposta: enviados.tipo === "PROPOSTA" ? "AGUARDANDO" : "",
       imovelRef: "",
       observacao: "",
     },
@@ -246,8 +258,12 @@ export async function editarLancamento(
       corretorId: validado.dados.corretorId,
       equipeId: resolucao.equipeId,
       dataReferencia: validado.dados.dataReferencia,
-      // Tipo não monetário zera o valor: não sobra valor órfão.
+      // Tipo não monetário zera o valor: não sobra valor órfão. O mesmo vale
+      // para os campos de proposta — PROPOSTA → outro tipo grava `null` nos
+      // dois, e outro tipo → PROPOSTA exige status/imóvel na validação.
       valor: validado.dados.valor,
+      valorProposta: validado.dados.valorProposta,
+      statusProposta: validado.dados.statusProposta,
       imovelRef: validado.dados.imovelRef,
       observacao: validado.dados.observacao,
       // `criadoPor` fica de fora: a autoria é de quem registrou o evento.

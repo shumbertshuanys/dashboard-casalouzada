@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import {
+  PRECISOES_SALDO_HISTORICO,
+  ROTULOS_PRECISAO,
   ROTULOS_SALDO,
   ehTipoComValor,
   interpretarTipoSaldo,
@@ -27,6 +29,7 @@ export type ResumoSaldo = {
   tipoRotulo: string;
   quantidade: number;
   valorFormatado: string | null;
+  precisaoRotulo: string;
   dataFormatada: string;
 };
 
@@ -51,7 +54,7 @@ export function FormularioSaldo({
   const [estado, enviar, enviando] = useActionState(acao, VAZIO);
   const atuais = estado.valores ?? valoresIniciais;
 
-  const chave = [atuais.tipo, atuais.quantidade, atuais.valorTotal, atuais.dataCorte, atuais.descricao].join("|");
+  const chave = [atuais.tipo, atuais.quantidade, atuais.valorTotal, atuais.precisao, atuais.dataCorte, atuais.descricao].join("|");
 
   return (
     <div className="max-w-xl space-y-8">
@@ -159,6 +162,24 @@ function Campos({
         </Campo>
       )}
 
+      <Campo rotulo="Precisão do saldo" erro={erros?.precisao}>
+        <select
+          name="precisao"
+          defaultValue={atuais.precisao}
+          className="w-64 rounded-md border border-white/15 bg-fundo px-3 py-2 text-texto"
+        >
+          {PRECISOES_SALDO_HISTORICO.map((precisao) => (
+            <option key={precisao} value={precisao}>
+              {ROTULOS_PRECISAO[precisao]}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-xs text-texto-secundario">
+          &ldquo;Mínimo conhecido&rdquo;: use quando você sabe que houve pelo menos este
+          total, mas não possui o histórico completo.
+        </span>
+      </Campo>
+
       <Campo rotulo="Data de corte" erro={erros?.dataCorte}>
         <input
           name="dataCorte"
@@ -192,6 +213,7 @@ function ZonaDeExclusao({ resumo }: { resumo: ResumoSaldo }) {
       `Tipo: ${resumo.tipoRotulo}`,
       `Quantidade: ${resumo.quantidade}`,
       ...(resumo.valorFormatado ? [`Valor total: ${resumo.valorFormatado}`] : []),
+      `Precisão: ${resumo.precisaoRotulo}`,
       `Data de corte: ${resumo.dataFormatada}`,
       "",
       "O saldo de abertura será removido. Os lançamentos não são apagados.",
