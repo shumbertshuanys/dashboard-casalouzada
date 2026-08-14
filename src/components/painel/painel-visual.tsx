@@ -1,4 +1,5 @@
 import { Jost } from "next/font/google";
+import Image from "next/image";
 import type { ApresentacaoPainel } from "@/lib/apresentacao-painel";
 import { decidirAreaEquipes } from "./decidir-area-equipes";
 import { FaixaBig } from "./faixa-big";
@@ -59,7 +60,22 @@ export function PainelVisual({
       <div className={estilos.tv}>
         <div className={estilos.conteudo}>
           <div className={estilos.topo}>
-            <div className={estilos.marca}>CASA LOUZADA</div>
+            {/* A marca oficial substitui o wordmark tipográfico (DEC-047). O lockup
+                já contém símbolo e nome, então não há texto `CASA LOUZADA` ao lado:
+                os dois juntos fariam a identidade competir com ela mesma.
+                `unoptimized` serve o PNG oficial como está — a marca não pode ser
+                reprocessada. O tamanho vem do CSS, em `cqw`; width/height aqui são
+                só as dimensões intrínsecas, que reservam a proporção. */}
+            <div className={estilos.marca}>
+              <Image
+                src="/marca/casa-louzada-horizontal-claro.png"
+                alt="Casa Louzada"
+                width={2511}
+                height={297}
+                className={estilos.marcaImagem}
+                unoptimized
+              />
+            </div>
             <div className={estilos.periodo}>
               {apresentacao.periodo}
               {/* Discreto de propósito: quem passa pelo escritório lê os números,

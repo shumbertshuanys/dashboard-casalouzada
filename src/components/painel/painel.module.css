@@ -52,17 +52,27 @@
   gap: 1.1cqw;
 }
 
+/* `center` em vez do `baseline` que servia ao wordmark tipográfico: a baseline de
+   uma imagem é a borda de baixo dela, não uma baseline tipográfica, então o logo
+   ficava ~3cqw/100 acima do centro óptico do período. Centrar alinha os dois. */
 .topo {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
 }
+/* Container da marca oficial (DEC-047). Já não desenha tipografia: o lockup é um
+   PNG e traz o nome dentro dele. `flex` remove o espaço de linha que o `inline`
+   reservaria abaixo da imagem. */
 .marca {
-  font-size: 1.15cqw;
-  font-weight: 400;
-  letter-spacing: 0.42em;
-  color: var(--color-texto);
+  display: flex;
+}
+/* A altura repete o `font-size: 1.15cqw` do wordmark que existia aqui, para a
+   marca ocupar aproximadamente a mesma faixa vertical de antes. `width: auto`
+   mantém a proporção original do arquivo — a marca não pode ser distorcida. */
+.marcaImagem {
+  height: 1.15cqw;
+  width: auto;
 }
 .periodo {
   font-size: 0.84cqw;
