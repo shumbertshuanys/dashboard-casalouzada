@@ -19,7 +19,8 @@ por URL**, em seis etapas (E1 a E6, ver §9): ajustes funcionais aprovados — v
 compartilhada, propostas com status, saldo mínimo conhecido, reservas de locação e a
 faixa superior alternada —, gate completo e go-live provisório no Render. Depois da
 entrega, a F4.5 é retomada. **Nada dessas novidades está implementado ainda**: a E1
-é documental, e schema e código continuam no modelo anterior.
+— os contratos, documental — está **concluída e publicada em `078f360`**, e schema e
+código continuam no modelo anterior até a E2.
 
 Desde a F3.5 a tela da TV está ligada, e desde a F3.6 ela se mantém sozinha:
 `/painel/[token]` valida o token e, só então, faz a leitura inicial no servidor —
@@ -139,18 +140,25 @@ cá, um registro por corretor participante.
 `UNIQUE (lancamento_id, corretor_id)` e `UNIQUE (lancamento_id, ordem)`. Toda VENDA
 tem pelo menos uma participação (garantido por transação na aplicação).
 
-**Contrato excludente:** depois da E2, toda `VENDA` fica com
-`Lancamento.corretorId = NULL` e `Lancamento.equipeId = NULL` — o crédito mora
-exclusivamente nas participações; os tipos não-VENDA continuam exigindo os dois
-campos e nunca usam participações. A E2 protege isso com um CHECK semanticamente
-equivalente a `(tipo = 'VENDA' AND ambos NULL) OR (tipo <> 'VENDA' AND ambos NOT
-NULL)`. Backfill em sequência: criar a estrutura; copiar corretor/equipe de cada
-VENDA para uma participação de `ordem = 1`; provar que toda VENDA tem exatamente
-uma; tornar os campos nullable; gravar `NULL` neles em todas as VENDA; validar o
-CHECK — o histórico só sai dos campos antigos depois de materializado na
-participação. Crédito e divisão de VGV: DEC-052 — empresa conta a venda e o valor
-uma vez; cada participante recebe +1 e sua fração igualitária exata; cada equipe
-distinta recebe +1 e a soma das frações dos seus participantes.
+**Contrato excludente no estado final:** depois do **cutover da E3**, toda `VENDA`
+fica com `Lancamento.corretorId = NULL` e `Lancamento.equipeId = NULL` — o crédito
+mora exclusivamente nas participações; os tipos não-VENDA continuam exigindo os dois
+campos e nunca usam participações. O cutover protege isso com um CHECK
+semanticamente equivalente a `(tipo = 'VENDA' AND ambos NULL) OR (tipo <> 'VENDA'
+AND ambos NOT NULL)`.
+
+**Sequenciamento (DEC-051):** a **E2 é aditiva** — cria a estrutura, faz o backfill
+inicial (uma participação `ordem = 1` por VENDA existente) e o prova, mas **mantém**
+os campos antigos `NOT NULL`, preenchidos e como fonte executável, sem o CHECK final
+e **sem UI de múltiplos participantes**, porque a métrica ainda não sabe
+interpretá-los. A **E3 faz o cutover atômico**: completa idempotentemente a
+participação de qualquer VENDA criada entre E2 e E3, prova cobertura integral,
+adapta aplicação e métricas, torna os campos nullable, grava `NULL` nas VENDA e
+valida o CHECK. A dualidade da transição é temporária e controlada; o histórico só
+sai dos campos antigos depois de materializado na participação. Crédito e divisão de
+VGV: DEC-052 — empresa conta a venda e o valor uma vez; cada participante recebe +1
+e sua fração igualitária exata; cada equipe distinta recebe +1 e a soma das frações
+dos seus participantes.
 
 #### `lancamentos` — campos novos de proposta (DEC-053)
 
@@ -513,10 +521,10 @@ locação e a faixa superior alternando entre métricas e destaques operacionais
 
 | Etapa | Escopo | Estado |
 |---|---|---|
-| E1 | contratos e modelo de dados | **documental — em revisão**, sem código |
-| E2 | migration + administração | futura |
-| E3 | métricas | futura |
-| E4 | painel operacional A/B | futura |
+| E1 | contratos e modelo de dados | **concluída** — `078f360`, sem código |
+| E2 | migration **aditiva** + admin de propostas, saldo e reservas | **próxima** |
+| E3 | venda compartilhada + métricas + **cutover final** | futura |
+| E4 | painel operacional A/B e novos estados | futura |
 | E5 | gate completo | futura |
 | E6 | go-live no Render + smoke test | futura |
 

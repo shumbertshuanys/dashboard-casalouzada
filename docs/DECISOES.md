@@ -1222,20 +1222,19 @@ hard delete de lançamento já existente leva as participações junto;
 `corretorId` e `equipeId` com `onDelete: Restrict`, como o resto do histórico
 (DEC-007).
 
-**Sobre `Lancamento.corretorId` e `Lancamento.equipeId`.** Os dois se tornam
-opcionais no schema, e o contrato final é **excludente**: depois da E2, toda `VENDA`
-tem os dois campos **`NULL`**, e todo o crédito e a autoria histórica da venda moram
+**Sobre `Lancamento.corretorId` e `Lancamento.equipeId`.** O **estado final** é
+**excludente**: depois do **cutover da E3**, toda `VENDA` tem os dois campos
+**`NULL`**, e todo o crédito e a autoria histórica da venda moram
 **exclusivamente** em `ParticipacaoVenda` — cada participação com `corretorId`,
 `equipeId` histórico e `ordem`. Os demais tipos continuam usando exclusivamente os
 dois campos do lançamento, obrigatórios como sempre, e **nunca** usam
-`ParticipacaoVenda`. Não existe estado intermediário permanente: manter os campos
-antigos preenchidos numa VENDA seria uma segunda representação do mesmo crédito, e
-duas representações permanentes divergem. Pelo mesmo motivo foi rejeitado espelhar o
-participante de ordem 1 nos campos antigos; e foi rejeitado generalizar
+`ParticipacaoVenda`. Não existe estado **permanente** de duas fontes: manter os
+campos antigos preenchidos numa VENDA seria uma segunda representação do mesmo
+crédito, e duas representações permanentes divergem. Pelo mesmo motivo foi rejeitado
+espelhar o participante de ordem 1 nos campos antigos; e foi rejeitado generalizar
 participações para todos os tipos, que não têm o caso de uso.
 
-A migration da E2 deve garantir o contrato com um `CHECK` **semanticamente**
-equivalente a:
+O cutover garante o estado final com um `CHECK` **semanticamente** equivalente a:
 
 ```text
 (tipo = 'VENDA'  AND corretor_id IS NULL     AND equipe_id IS NULL)
@@ -1243,23 +1242,43 @@ OR
 (tipo <> 'VENDA' AND corretor_id IS NOT NULL AND equipe_id IS NOT NULL)
 ```
 
-A sintaxe SQL exata é decisão da E2, conforme os nomes reais de enum e colunas — o
-que está fixado aqui é o contrato. As FKs atuais continuam `Restrict` quando os
-campos estão preenchidos.
+A sintaxe SQL exata é decisão da fatia que o instala, conforme os nomes reais de
+enum e colunas — o que está fixado aqui é o contrato. As FKs atuais continuam
+`Restrict` quando os campos estão preenchidos.
 
-**Backfill — sequência obrigatória.** A informação histórica não se perde: ela só
-sai dos campos antigos **depois** de materializada na participação.
+**Sequenciamento — E2 aditiva, E3 cutover.** O código de métricas em produção lê
+`Lancamento.corretorId`/`equipeId`; zerá-los antes de a camada de cálculo consumir
+participações quebraria o painel. Por isso o corte é dividido, e a **representação
+dupla durante a transição é temporária e controlada** — a proibição acima vale para
+o estado final permanente, não para a janela entre E2 e E3.
 
-1. criar a estrutura de `ParticipacaoVenda`;
+**E2 — aditiva, sem cutover:**
+
+1. criar a estrutura de `ParticipacaoVenda`, com as unicidades e FKs;
 2. para cada `VENDA` existente, copiar `Lancamento.corretorId` e
-   `Lancamento.equipeId` para **uma** participação de `ordem = 1`;
-3. **provar** que toda `VENDA` existente tem exatamente uma participação criada;
-4. tornar `Lancamento.corretorId`/`equipeId` nullable;
-5. gravar `NULL` nos dois campos de **todas** as `VENDA`;
-6. aplicar e validar o `CHECK` estrutural acima.
+   `Lancamento.equipeId` para **uma** participação de `ordem = 1` (backfill inicial);
+3. **provar** o backfill inicial;
+4. **manter** os campos antigos `NOT NULL`, preenchidos e como fonte executável —
+   o `CHECK` final **não** é instalado na E2, e a administração **não** expõe UI de
+   múltiplos participantes ainda: registrar venda compartilhada antes de a métrica
+   saber interpretá-la produziria número errado na TV.
 
-Nenhuma venda desaparece, nenhuma muda de equipe, e nenhum "resíduo" fica para
-trás: ao final, `ParticipacaoVenda` é a única fonte de crédito de VENDA.
+**E3 — cutover atômico**, junto com a administração multi-participante, o cálculo
+(DEC-052), a leitura e os testes:
+
+5. criar participação de `ordem = 1` para qualquer `VENDA` **ainda sem** participação
+   — cobre, de forma idempotente, vendas criadas entre E2 e E3, usando os campos
+   históricos ainda preenchidos;
+6. **provar cobertura integral**;
+7. adaptar aplicação e métricas para consumir participações;
+8. tornar `Lancamento.corretorId`/`equipeId` nullable;
+9. gravar `NULL` nos dois campos de **todas** as `VENDA`;
+10. aplicar e validar o `CHECK` estrutural acima.
+
+A informação histórica não se perde em nenhum passo: ela só sai dos campos antigos
+**depois** de materializada na participação. Nenhuma venda desaparece, nenhuma muda
+de equipe, e nenhum "resíduo" fica para trás: ao final da E3, `ParticipacaoVenda` é
+a única fonte de crédito de VENDA.
 
 **Edição.** Editar uma venda passa a gerir participações. O fluxo de conflito de
 equipe da Q7 (DEC-034) permanece como está para os tipos de participante único; para
@@ -1278,7 +1297,7 @@ nunca é derivada do corretor em tempo de consulta**; muda só a entidade que ca
 snapshot.
 
 **Fonte.** Decisão do proprietário em 2026-08-14; `PLANO.md` §3.
-**invariante futura — implementação começa na E2**
+**invariante futura — estrutura e backfill inicial na E2; cutover final na E3**
 
 ### DEC-052 — Crédito e VGV da venda compartilhada
 
@@ -1316,7 +1335,8 @@ percentual manual, que é fonte de erro e de negociação que o painel não arbi
 **Preserva.** DEC-013 — a regra mora inteira em `src/lib/metricas.ts`, numa fonte
 única; leitura e apresentação não somam, não dividem e não deduplicam venda.
 DEC-036/DEC-004 — acumulados e períodos não mudam de fórmula: a empresa continua
-somando `V` uma vez.
+somando `V` uma vez. A implementação deste cálculo entra **junto com o cutover da
+E3** (DEC-051): até lá o código atual segue lendo os campos do lançamento.
 
 **Fonte.** Decisão do proprietário em 2026-08-14, com o exemplo canônico da venda de
 R$ 900.000 com participantes A e B da equipe X e C da equipe Y (empresa: 1 venda e
@@ -1463,10 +1483,10 @@ Ordem de entrega aprovada:
 
 | Etapa | Escopo |
 |---|---|
-| E1 | contratos e modelo de dados (documental) |
-| E2 | migration + administração |
-| E3 | métricas |
-| E4 | painel operacional A/B |
+| E1 | contratos e modelo de dados — **concluída em `078f360`** |
+| E2 | migration **aditiva** + administração de propostas, saldo e reservas |
+| E3 | venda compartilhada + métricas + **cutover final** (DEC-051) |
+| E4 | painel operacional A/B e apresentação dos novos estados |
 | E5 | gate completo |
 | E6 | go-live no Render + smoke test |
 

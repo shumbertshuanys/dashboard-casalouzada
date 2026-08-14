@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `36ab199` — `docs: encerra fase 4.4` |
+| Commit de referência | `078f360` — `docs: define contratos da entrega v1` |
 | Data do handoff | 2026-08-14 |
 
 ## Estado executivo
@@ -116,12 +116,14 @@ A **F4 — Identidade e modo TV está em andamento**, e isto é o que está prov
 A **F4 como um todo continua em andamento**: ela só se encerra com a F4.5.
 
 A frente ativa agora é a **Entrega v1**, em seis etapas (E1 a E6). A **E1 — contratos
-e modelo de dados** é exclusivamente documental e está registrada neste handoff e nas
-**DEC-051 a DEC-057**: venda compartilhada por participações, propostas com status e
-valor próprios, saldo histórico mínimo conhecido, reservas de locação, faixa superior
-alternando A/B e o go-live provisório antes da F4.5. **Nada disso está
+e modelo de dados — está concluída e publicada em `078f360`**, registrada neste
+handoff e nas **DEC-051 a DEC-057**: venda compartilhada por participações, propostas
+com status e valor próprios, saldo histórico mínimo conhecido, reservas de locação,
+faixa superior alternando A/B e o go-live provisório antes da F4.5. **Nada disso está
 implementado**: schema, código, testes e painel continuam exatamente no modelo
-anterior, e a primeira implementação é a E2.
+anterior, e a primeira implementação é a **E2 — migration aditiva + administração**.
+O cutover da venda compartilhada é da **E3** (DEC-051): a E2 não zera campo nenhum e
+não expõe venda multi-participante.
 
 ## Fases
 
@@ -151,10 +153,10 @@ anterior, e a primeira implementação é a E2.
 | F4.4 — Offline de navegação | **Concluída** | `8b9fce2` |
 | F4.5 — Operação em hardware real | **Adiada** | retomada após o go-live da v1 (DEC-057) |
 | **F4 — Identidade e modo TV** | **Em andamento** | `8b9fce2` |
-| E1 — Contratos e modelo de dados da v1 | **Documental — em revisão** | DEC-051 a DEC-057; sem código |
-| E2 — Migration + administração | **Futura** | — |
-| E3 — Métricas | **Futura** | — |
-| E4 — Painel operacional A/B | **Futura** | — |
+| E1 — Contratos e modelo de dados da v1 | **Concluída** | `078f360` — DEC-051 a DEC-057; sem código |
+| E2 — Migration aditiva + admin (propostas, saldo, reservas) | **Próxima** | sem cutover de VENDA |
+| E3 — Venda compartilhada + métricas + cutover final | **Futura** | — |
+| E4 — Painel operacional A/B e novos estados | **Futura** | — |
 | E5 — Gate completo | **Futura** | — |
 | E6 — Go-live no Render + smoke test | **Futura** | — |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
@@ -1316,12 +1318,14 @@ F4.5 é retomada depois do go-live. Ver as Pendências e a seção Entrega v1 ab
 
 Aprovada pelo proprietário em **2026-08-14** e registrada nas **DEC-051 a DEC-057**.
 
-**A E1 é exclusivamente documental.** Nada abaixo existe em código: o schema não tem
-`participacoes_venda`, `reservas_locacao`, `valor_proposta`, `status_proposta` nem
-`precisao`; a validação continua descartando valor de proposta; o núcleo de métricas
-continua creditando venda por `Lancamento.corretorId`/`equipeId`; e a faixa superior
-do painel continua estática. **A próxima ação, após aprovação desta E1, é a E2 —
-migration + administração.**
+**A E1 foi exclusivamente documental e está concluída e publicada em `078f360`**
+(com a correção de sequenciamento E1.1 registrada em seguida). Nada abaixo existe em
+código: o schema não tem `participacoes_venda`, `reservas_locacao`,
+`valor_proposta`, `status_proposta` nem `precisao`; a validação continua descartando
+valor de proposta; o núcleo de métricas continua creditando venda por
+`Lancamento.corretorId`/`equipeId`; e a faixa superior do painel continua estática.
+**A próxima implementação é a E2 — migration aditiva + administração de propostas,
+saldo e reservas.** O cutover da venda compartilhada é da E3.
 
 ### Venda compartilhada (DEC-051, DEC-052)
 
@@ -1333,25 +1337,30 @@ migration + administração.**
   `UNIQUE (lancamento_id, ordem)`. Toda VENDA tem **pelo menos um** participante,
   garantido por transação na aplicação e coberto por integração — "no mínimo um
   filho" não tem constraint declarativa simples.
-- **Contrato excludente para os campos antigos.** Depois da E2, toda `VENDA` tem
-  `Lancamento.corretorId = NULL` e `Lancamento.equipeId = NULL`: o crédito e a
+- **Contrato excludente no estado final.** Depois do **cutover da E3**, toda `VENDA`
+  tem `Lancamento.corretorId = NULL` e `Lancamento.equipeId = NULL`: o crédito e a
   autoria histórica moram **exclusivamente** em `ParticipacaoVenda` (corretor,
   equipe histórica e ordem). Os demais tipos continuam usando exclusivamente os dois
-  campos do lançamento, obrigatórios, e nunca usam participações. A E2 protege isso
-  com um `CHECK` semanticamente equivalente a
+  campos do lançamento, obrigatórios, e nunca usam participações. O cutover protege
+  isso com um `CHECK` semanticamente equivalente a
   `(tipo = 'VENDA' AND corretor_id IS NULL AND equipe_id IS NULL) OR
   (tipo <> 'VENDA' AND corretor_id IS NOT NULL AND equipe_id IS NOT NULL)` —
-  sintaxe exata na E2; FKs continuam `Restrict` quando preenchidas. Foram rejeitados
-  o espelhamento do participante de ordem 1 nos campos antigos e a permanência dos
-  valores legados após o backfill (duas representações permanentes do mesmo crédito
-  divergem), além das participações genéricas para todos os tipos.
-- **Backfill (E2), em sequência obrigatória:** criar a estrutura; copiar
-  `corretorId`/`equipeId` de cada VENDA existente para uma participação de
-  `ordem = 1`; **provar** que toda VENDA tem exatamente uma participação; tornar os
-  dois campos nullable; gravar `NULL` neles em todas as VENDA; aplicar e validar o
-  `CHECK`. A informação histórica só sai dos campos antigos **depois** de
-  materializada na participação — nenhuma venda some ou muda de equipe, e nenhum
-  resíduo permanece.
+  sintaxe exata na fatia que o instala; FKs continuam `Restrict` quando preenchidas.
+  Foram rejeitados o espelhamento do participante de ordem 1 nos campos antigos e a
+  permanência **permanente** dos valores legados (duas representações permanentes do
+  mesmo crédito divergem), além das participações genéricas para todos os tipos.
+- **Sequenciamento E2 aditiva → E3 cutover (DEC-051).** O código atual de métricas
+  lê os campos do lançamento; zerá-los antes de a camada de cálculo consumir
+  participações quebraria o painel. A **E2** cria a estrutura, faz o **backfill
+  inicial** (uma participação `ordem = 1` por VENDA existente) e o prova, mas
+  **mantém** os campos antigos `NOT NULL`, preenchidos e como fonte executável — sem
+  o `CHECK` final e **sem UI de múltiplos participantes**. A **E3** faz o cutover
+  atômico: completa idempotentemente a participação de qualquer VENDA criada entre
+  E2 e E3, **prova cobertura integral**, adapta aplicação e métricas, torna os
+  campos nullable, grava `NULL` em todas as VENDA e valida o `CHECK`. A dualidade da
+  transição é **temporária e controlada**; o histórico só sai dos campos antigos
+  depois de materializado na participação — nenhuma venda some ou muda de equipe, e
+  nenhum resíduo permanece no estado final.
 - **Contagem:** empresa soma **+1 venda e o valor integral uma única vez**; cada
   participante recebe **+1 vendido e sua fração igualitária**; cada **equipe
   distinta** nas participações recebe **+1 vendido** e o VGV igual à **soma das
@@ -1436,10 +1445,14 @@ O que a E2/E3/E4 terá de tocar, levantado arquivo por arquivo:
 
 ### Ordem de entrega e deploy (DEC-057)
 
-E1 (esta, documental) → E2 (migration + administração) → E3 (métricas) → E4 (painel
-A/B) → E5 (gate completo) → E6 (go-live no Render + smoke test). O go-live
-provisório precede a F4.5; plano/infraestrutura de produção se decide no E6, e nada
-de Render foi configurado. Depois do E6, retoma-se a F4.5. F5 não está iniciada.
+E1 (contratos, **concluída em `078f360`**) → E2 (migration **aditiva** + admin de
+propostas, saldo e reservas — sem cutover de VENDA) → E3 (venda compartilhada +
+métricas + **cutover final**) → E4 (painel A/B e novos estados) → E5 (gate completo)
+→ E6 (go-live no Render + smoke test). O go-live provisório precede a F4.5;
+plano/infraestrutura de produção se decide no E6, e nada de Render foi configurado.
+Depois do E6, retoma-se a F4.5. F5 não está iniciada. Se o transporte de
+precisão/listas para o painel exigir preparação já na E3, a dependência é registrada
+lá — o desenho visual continua sendo da E4.
 
 ## Pendências
 
@@ -1448,8 +1461,9 @@ de Render foi configurado. Depois do E6, retoma-se a F4.5. F5 não está iniciad
 2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
    antes de ativar lá a versão correspondente, com gate apropriado.
 3. **Entrega v1 (E2 a E6)**: implementar o modelo e as regras aprovadas na E1
-   (DEC-051 a DEC-057) — migration com backfill, administração, métricas, painel
-   A/B, gate completo e go-live no Render.
+   (DEC-051 a DEC-057) — migration **aditiva** com backfill inicial e administração
+   (E2), venda compartilhada com métricas e cutover final (E3), painel A/B (E4),
+   gate completo (E5) e go-live no Render (E6).
 4. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas e a
    **F4.5 adiada** até o go-live da v1 (DEC-057). O que falta nela, objetivamente:
    - o **hardware alvo é o `Phantom Alien 4K IPTV`**;
