@@ -18,9 +18,27 @@ está ADIADA, não cancelada** (DEC-057). A prioridade imediata é a **entrega d
 por URL**, em seis etapas (E1 a E6, ver §9): ajustes funcionais aprovados — venda
 compartilhada, propostas com status, saldo mínimo conhecido, reservas de locação e a
 faixa superior alternada —, gate completo e go-live provisório no Render. Depois da
-entrega, a F4.5 é retomada. **Nada dessas novidades está implementado ainda**: a E1
-— os contratos, documental — está **concluída e publicada em `078f360`**, e schema e
-código continuam no modelo anterior até a E2.
+entrega, a F4.5 é retomada.
+
+A **E1 — contratos, documental — está concluída** (`078f360`), e a **E2 está
+concluída e publicada** em três commits: **`c6464b5`** (E2A — schema e migration
+aditiva com backfills), **`fe00fd2`** (E2B — administração de propostas e precisão do
+saldo) e **`18a6599`** (E2C — administração de reservas de locação). A **E3 é a
+próxima etapa**.
+
+### Estado transitório da VENDA
+
+A E2 criou `ParticipacaoVenda` e fez o backfill inicial, mas **a venda compartilhada
+não está pronta**. Hoje, e até o cutover da E3:
+
+- `Lancamento.corretorId` e `Lancamento.equipeId` continuam **`NOT NULL`**;
+- toda `VENDA` continua com os dois campos preenchidos;
+- o código executável e as métricas continuam creditando venda por esses campos;
+- **não existe UI de venda com múltiplos participantes**;
+- **não existe divisão igualitária de VGV em execução** (DEC-052);
+- o **CHECK final da DEC-051 não foi instalado**, e nenhum campo de VENDA foi zerado.
+
+Tudo isso é da **E3**.
 
 Desde a F3.5 a tela da TV está ligada, e desde a F3.6 ela se mantém sozinha:
 `/painel/[token]` valida o token e, só então, faz a leitura inicial no servidor —
@@ -118,12 +136,14 @@ Entra apenas nos big numbers acumulados. Nunca nos períodos.
 > recebem saldo, e existe no máximo uma linha por tipo, garantida por índice
 > único. Ver DEC-035.
 
-### Aprovado para a v1, ainda NÃO implementado (E1 → E2)
+### Estrutura da Entrega v1 — implantada na E2, cutover pendente na E3
 
-Modelo conceitual aprovado em 2026-08-14 (DEC-051 a DEC-055). A migration é da E2 —
-o schema atual continua exatamente como descrito acima.
+Modelo aprovado em 2026-08-14 (DEC-051 a DEC-055). **As quatro estruturas abaixo
+existem no schema e no banco local de teste desde a E2** (`c6464b5`, `fe00fd2`,
+`18a6599`); o que continua pendente está marcado em cada bloco, e o cutover da VENDA é
+da E3.
 
-#### `participacoes_venda` (nova — DEC-051)
+#### `participacoes_venda` (DEC-051) — **existe; cutover na E3**
 
 Uma venda comercial continua sendo **um** lançamento `VENDA`; o crédito passa para
 cá, um registro por corretor participante.
@@ -139,6 +159,11 @@ cá, um registro por corretor participante.
 
 `UNIQUE (lancamento_id, corretor_id)` e `UNIQUE (lancamento_id, ordem)`. Toda VENDA
 tem pelo menos uma participação (garantido por transação na aplicação).
+
+**Estado real (E2A, `c6464b5`).** Tabela criada com as duas unicidades e as FKs
+(`Cascade` para o lançamento, `Restrict` para corretor e equipe); o backfill inicial
+gravou **uma participação `ordem = 1` por VENDA existente**, com cobertura provada. O
+estado final ainda depende da E3.
 
 **Contrato excludente no estado final:** depois do **cutover da E3**, toda `VENDA`
 fica com `Lancamento.corretorId = NULL` e `Lancamento.equipeId = NULL` — o crédito
@@ -160,7 +185,7 @@ VGV: DEC-052 — empresa conta a venda e o valor uma vez; cada participante rece
 e sua fração igualitária exata; cada equipe distinta recebe +1 e a soma das frações
 dos seus participantes.
 
-#### `lancamentos` — campos novos de proposta (DEC-053)
+#### `lancamentos` — campos de proposta (DEC-053) — **implementado**
 
 | Campo | Tipo | Observação |
 |---|---|---|
@@ -168,12 +193,19 @@ dos seus participantes.
 | status_proposta | enum? | `AGUARDANDO` (padrão) / `ACEITA` / `REJEITADA`; **obrigatório em `PROPOSTA`, `NULL` nos demais** |
 
 Em `PROPOSTA`, imóvel é obrigatório (novas submissões) e o `valor` do lançamento
-permanece `NULL`. A integridade é da aplicação e, quando viável, de proteção
-equivalente no banco (E2). Toda proposta conta na métrica mensal qualquer que seja o
-status; só `AGUARDANDO` entra na lista operacional da TV. Backfill: existentes
-recebem `AGUARDANDO`.
+permanece `NULL`. Toda proposta conta na métrica mensal qualquer que seja o status; só
+`AGUARDANDO` entra na lista operacional da TV.
 
-#### `saldo_historico` — precisão (DEC-054)
+**Estado real.** Os dois campos existem desde a E2A (`c6464b5`), com backfill de
+`AGUARDANDO` nas propostas existentes. A **administração** foi entregue na E2B
+(`fe00fd2`): status e valor próprio no formulário e na listagem, imóvel exigido pela
+aplicação em criação **e** edição, e campos de proposta forçados a `NULL` nos demais
+tipos. A integridade também é do banco — a migration `20260814210000_contrato_proposta`
+instalou o `CHECK` correspondente, que **de propósito não exige `imovel_ref`**: a
+proposta histórica sem imóvel continua válida enquanto não for editada. A lista
+operacional "Propostas em andamento" na TV continua sendo da E4.
+
+#### `saldo_historico` — precisão (DEC-054) — **implementado; "+ de" pendente**
 
 | Campo | Tipo | Observação |
 |---|---|---|
@@ -186,7 +218,12 @@ administrador. `MINIMO_CONHECIDO` é um piso: o cálculo não muda, e a apresent
 prefixa o acumulado com "+ de" (ex.: "+ de 527", "+ de R$ 800 mi"). Saldo continua
 entrando somente nos acumulados.
 
-#### `reservas_locacao` (nova — DEC-055)
+**Estado real.** O campo existe desde a E2A (`c6464b5`), com backfill `EXATO`, e a
+E2B (`fe00fd2`) levou a precisão ao admin: ela é escolhida na criação e alterável nos
+dois sentidos na edição, e aparece na listagem. **A apresentação "+ de" ainda não
+existe no painel** — é da E4.
+
+#### `reservas_locacao` (DEC-055) — **modelo e administração implementados**
 
 Reserva não é produção: não usa `Lancamento`, não conta em Locados, VGV ou ranking.
 
@@ -205,6 +242,13 @@ Reserva não é produção: não usa `Lancamento`, não conta em Locados, VGV ou
 Quando vira negócio: registra-se a `LOCACAO` normalmente e a reserva é marcada
 `FINALIZADA` — sem automação implícita na v1. A TV mostra só `ATIVA`, mais recentes
 primeiro, no máximo 3.
+
+**Estado real.** A tabela existe desde a E2A (`c6464b5`) e ganhou administração na E2C
+(`18a6599`): listagem, criação, edição e mudança explícita de status em
+`/admin/reservas-locacao`. Toda reserva nasce `ATIVA`; a equipe é snapshot lido pelo
+servidor na criação e imutável na edição; **não há hard delete** — `CANCELADA` é o
+estado de uma reserva que deixou de valer; e finalizar **não cria `LOCACAO`
+automaticamente**. **A lista de reservas `ATIVA` na TV ainda não existe** — é da E4.
 
 ### `metas` — não entra na v1
 
@@ -522,11 +566,17 @@ locação e a faixa superior alternando entre métricas e destaques operacionais
 | Etapa | Escopo | Estado |
 |---|---|---|
 | E1 | contratos e modelo de dados | **concluída** — `078f360`, sem código |
-| E2 | migration **aditiva** + admin de propostas, saldo e reservas | **próxima** |
-| E3 | venda compartilhada + métricas + **cutover final** | futura |
+| E2 | migration **aditiva** + admin de propostas, saldo e reservas | **concluída** — `c6464b5` + `fe00fd2` + `18a6599` |
+| E3 | venda compartilhada + métricas + **cutover final** | **próxima** |
 | E4 | painel operacional A/B e novos estados | futura |
 | E5 | gate completo | futura |
 | E6 | go-live no Render + smoke test | futura |
+
+A E2 saiu em três fatias: **E2A** (`c6464b5`) — enums, campos de proposta, precisão do
+saldo, `ParticipacaoVenda`, `ReservaLocacao`, migration aditiva e backfills, sem
+cutover; **E2B** (`fe00fd2`) — administração de propostas e precisão do saldo, mais o
+`CHECK` de integridade da proposta; **E2C** (`18a6599`) — administração de reservas de
+locação. Nenhuma das três aplicou migration em produção.
 
 A decisão de infraestrutura/plano de produção é do E6 — nada de Render é configurado
 antes. Depois do E6, retoma-se a **F4.5**.

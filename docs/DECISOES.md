@@ -1297,7 +1297,18 @@ nunca é derivada do corretor em tempo de consulta**; muda só a entidade que ca
 snapshot.
 
 **Fonte.** Decisão do proprietário em 2026-08-14; `PLANO.md` §3.
-**invariante futura — estrutura e backfill inicial na E2; cutover final na E3**
+
+**Estado de implementação.** A **E2A está implementada em `c6464b5`**: a tabela
+`ParticipacaoVenda` existe com as duas unicidades e as FKs (`Cascade` para o
+lançamento, `Restrict` para corretor e equipe), e o backfill inicial gravou uma
+participação `ordem = 1` por VENDA existente, com cobertura provada em integração.
+
+**Mas a decisão não está implementada como um todo.** `Lancamento.corretorId` e
+`Lancamento.equipeId` continuam **`NOT NULL`**, preenchidos, e são **a fonte
+executável** do crédito de venda; não existe UI multi-participante; o `CHECK` final
+acima **não** foi instalado; nenhum campo de VENDA foi zerado. Os passos 5 a 10 do
+cutover permanecem na **E3**.
+**parcialmente implementada — estrutura e backfill na E2A (`c6464b5`); cutover na E3**
 
 ### DEC-052 — Crédito e VGV da venda compartilhada
 
@@ -1342,6 +1353,11 @@ E3** (DEC-051): até lá o código atual segue lendo os campos do lançamento.
 R$ 900.000 com participantes A e B da equipe X e C da equipe Y (empresa: 1 venda e
 R$ 900 mil; cada corretor: 1 venda e R$ 300 mil; equipe X: 1 venda e R$ 600 mil;
 equipe Y: 1 venda e R$ 300 mil).
+
+**Estado de implementação.** **Pendente.** A E2 criou o modelo onde esse crédito vai
+morar (`c6464b5`), mas a divisão igualitária, o crédito por participante e por equipe e
+o elenco derivado de participações **não existem em código**: `src/lib/metricas.ts`
+continua creditando venda por `Lancamento.corretorId`/`equipeId`.
 **invariante futura — cálculo na E3, sobre o modelo da E2**
 
 ### DEC-053 — Proposta tem status e valor próprios, fora do VGV
@@ -1384,7 +1400,17 @@ concluída.
 operacional é regra de domínio no núcleo.
 
 **Fonte.** Decisão do proprietário em 2026-08-14.
-**invariante futura — implementação na E2 (modelo/admin) e E3/E4 (painel)**
+
+**Estado de implementação.** A parte E2 está implementada. **Schema e backfill em
+`c6464b5`** (colunas `valor_proposta` e `status_proposta`, propostas existentes com
+`AGUARDANDO`); **administração e integridade em `fe00fd2`** — status obrigatório e
+editável entre os três estados, `valorProposta` opcional e fora de qualquer agregado
+monetário, imóvel exigido em criação e edição, campos zerados nos demais tipos, e o
+`CHECK` `lancamentos_proposta_campos_check` no banco. O `CHECK` **não exige
+`imovel_ref`** de propósito: a proposta legada sem imóvel continua válida como
+histórico, conforme esta decisão. A lista operacional "Propostas em andamento" da TV
+continua pendente.
+**implementada na E2 (`c6464b5` + `fe00fd2`); lista operacional da TV na E4**
 
 ### DEC-054 — Saldo histórico pode ser mínimo conhecido
 
@@ -1414,7 +1440,14 @@ possui, ou deixar o acumulado indisponível (DEC-037) — e "+ de 500" é a verd
 ele tem.
 
 **Fonte.** Decisão do proprietário em 2026-08-14; DEC-035; DEC-036; DEC-043.
-**invariante futura — implementação na E2 (modelo/admin) e E3/E4 (painel)**
+
+**Estado de implementação.** **Campo e backfill em `c6464b5`** — `precisao` existe com
+default `EXATO`, e toda linha anterior à migration recebeu `EXATO`. **Administração em
+`fe00fd2`**: a precisão é escolhida na criação e alterável entre `EXATO` e
+`MINIMO_CONHECIDO` nos dois sentidos, aparece na listagem e é exigida pela validação,
+sem default silencioso. **A apresentação "+ de" continua pendente** — o painel não a
+desenha.
+**implementada na E2 (`c6464b5` + `fe00fd2`); apresentação "+ de" na E4**
 
 ### DEC-055 — Reserva de locação é entidade operacional, não produção
 
@@ -1442,7 +1475,17 @@ métricas de produção — uma reserva pode não virar contrato.
 (snapshot de equipe no fato) e DEC-014 (reserva não conta como desempenho).
 
 **Fonte.** Decisão do proprietário em 2026-08-14.
-**invariante futura — implementação na E2 (modelo/admin) e E3/E4 (painel)**
+
+**Estado de implementação.** **Modelo em `c6464b5`** (tabela `reservas_locacao` e o
+enum `status_reserva_locacao`); **administração em `18a6599`**, em
+`/admin/reservas-locacao`. Comportamento implementado: reserva **nasce `ATIVA`** —
+não há campo de status na criação, e a action grava o valor explicitamente; a **equipe
+é snapshot** lido do corretor pelo servidor no momento da criação, e corretor e equipe
+são **imutáveis na edição**; o status é editável entre os três estados, nos dois
+sentidos; **não há hard delete** no admin — `CANCELADA` é o estado de uma reserva que
+deixou de valer; e **finalizar não cria `LOCACAO`**, nem qualquer outro lançamento. A
+lista de reservas `ATIVA` na TV continua pendente.
+**implementada na E2 (`c6464b5` + `18a6599`); lista da TV na E4**
 
 ### DEC-056 — A faixa superior alterna entre métricas e destaques operacionais
 
@@ -1471,6 +1514,11 @@ e a alternância preserva os acumulados sem disputar espaço com eles.
 
 **Fonte.** Decisão do proprietário em 2026-08-14; DEC-013; DEC-014; DEC-053;
 DEC-055.
+
+**Estado de implementação.** **Pendente.** A faixa superior continua estática, com a
+Tela A apenas. Os dados que a Tela B vai listar já existem no modelo desde a E2
+(propostas com status, reservas com status), mas nem a seleção no núcleo, nem o
+transporte pelo contrato de atualização, nem a rotação A/B foram escritos.
 **invariante futura — implementação na E4, sobre E2/E3**
 
 ### DEC-057 — O go-live provisório por URL precede a F4.5
@@ -1484,8 +1532,8 @@ Ordem de entrega aprovada:
 | Etapa | Escopo |
 |---|---|
 | E1 | contratos e modelo de dados — **concluída em `078f360`** |
-| E2 | migration **aditiva** + administração de propostas, saldo e reservas |
-| E3 | venda compartilhada + métricas + **cutover final** (DEC-051) |
+| E2 | migration **aditiva** + administração de propostas, saldo e reservas — **concluída em `c6464b5`, `fe00fd2` e `18a6599`** |
+| E3 | venda compartilhada + métricas + **cutover final** (DEC-051) — **próxima** |
 | E4 | painel operacional A/B e apresentação dos novos estados |
 | E5 | gate completo |
 | E6 | go-live no Render + smoke test |

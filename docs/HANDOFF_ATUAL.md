@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `078f360` — `docs: define contratos da entrega v1` |
+| Commit de referência | `18a659995c8d967c6663b43fab991ffd01ca6a2a` — `feat: adiciona admin de reservas de locacao` |
 | Data do handoff | 2026-08-14 |
 
 ## Estado executivo
@@ -119,11 +119,31 @@ A frente ativa agora é a **Entrega v1**, em seis etapas (E1 a E6). A **E1 — c
 e modelo de dados — está concluída e publicada em `078f360`**, registrada neste
 handoff e nas **DEC-051 a DEC-057**: venda compartilhada por participações, propostas
 com status e valor próprios, saldo histórico mínimo conhecido, reservas de locação,
-faixa superior alternando A/B e o go-live provisório antes da F4.5. **Nada disso está
-implementado**: schema, código, testes e painel continuam exatamente no modelo
-anterior, e a primeira implementação é a **E2 — migration aditiva + administração**.
-O cutover da venda compartilhada é da **E3** (DEC-051): a E2 não zera campo nenhum e
-não expõe venda multi-participante.
+faixa superior alternando A/B e o go-live provisório antes da F4.5.
+
+A **E2 está CONCLUÍDA E PUBLICADA**, em três fatias:
+
+**E2A — `c6464b5`.** Enums novos (`StatusProposta`, `PrecisaoSaldoHistorico`,
+`StatusReservaLocacao`), `Lancamento.valorProposta`/`statusProposta`,
+`SaldoHistorico.precisao`, e as tabelas `ParticipacaoVenda` e `ReservaLocacao`.
+Migration **aditiva** (`20260814150000_entrega_v1_aditiva`) com os backfills: uma
+participação `ordem = 1` por VENDA existente, `AGUARDANDO` nas propostas e `EXATO` nos
+saldos. **Sem cutover de VENDA.**
+
+**E2B — `fe00fd2`.** Administração de propostas: status `AGUARDANDO`/`ACEITA`/
+`REJEITADA` e `valorProposta` no formulário e na listagem, imóvel obrigatório em
+criação e edição, e o `CHECK` de integridade da proposta na migration
+`20260814210000_contrato_proposta`. Precisão do saldo (`EXATO` /
+`MINIMO_CONHECIDO`) no admin.
+
+**E2C — `18a6599`.** Administração de reservas de locação: listagem, criação sempre
+`ATIVA`, snapshot de equipe lido pelo servidor, edição de status entre os três
+estados, **sem hard delete** e **sem `LOCACAO` automática**.
+
+A **próxima etapa é a E3 — venda compartilhada + métricas + cutover final**, que
+**não** foi iniciada. O cutover da venda compartilhada é dela (DEC-051): a E2 não zerou
+campo nenhum e não expõe venda multi-participante — `Lancamento.corretorId` e
+`equipeId` continuam `NOT NULL`, preenchidos e como fonte executável das métricas.
 
 ## Fases
 
@@ -154,8 +174,11 @@ não expõe venda multi-participante.
 | F4.5 — Operação em hardware real | **Adiada** | retomada após o go-live da v1 (DEC-057) |
 | **F4 — Identidade e modo TV** | **Em andamento** | `8b9fce2` |
 | E1 — Contratos e modelo de dados da v1 | **Concluída** | `078f360` — DEC-051 a DEC-057; sem código |
-| E2 — Migration aditiva + admin (propostas, saldo, reservas) | **Próxima** | sem cutover de VENDA |
-| E3 — Venda compartilhada + métricas + cutover final | **Futura** | — |
+| E2A — Schema e migration aditiva + backfills | **Concluída** | `c6464b5` — sem cutover de VENDA |
+| E2B — Admin de propostas + precisão do saldo | **Concluída** | `fe00fd2` — inclui o CHECK da proposta |
+| E2C — Admin de reservas de locação | **Concluída** | `18a6599` |
+| **E2 — Migration aditiva + admin (propostas, saldo, reservas)** | **Concluída** | `c6464b5` + `fe00fd2` + `18a6599` |
+| E3 — Venda compartilhada + métricas + cutover final | **Próxima** | não iniciada |
 | E4 — Painel operacional A/B e novos estados | **Futura** | — |
 | E5 — Gate completo | **Futura** | — |
 | E6 — Go-live no Render + smoke test | **Futura** | — |
@@ -252,6 +275,27 @@ permanece creditado onde foi registrado.
 - **Sete tipos**, com `CAPTACAO_VENDA` e `CAPTACAO_EXCLUSIVA` independentes
   (DEC-003). Só `VENDA` e `LOCACAO` carregam valor; nos outros cinco ele é `null`.
 
+#### Propostas (E2B, `fe00fd2`)
+
+`PROPOSTA` tem dois campos próprios, e eles só existem nela:
+
+- **`statusProposta`** — `AGUARDANDO` / `ACEITA` / `REJEITADA`, **obrigatório**. Uma
+  proposta nova abre com `AGUARDANDO` selecionado, e o status é editável entre os três
+  a qualquer momento.
+- **`valorProposta`** — dinheiro **opcional**, em campo separado de `valor`. Ele é
+  informativo e **não é VGV**: não entra em nenhum agregado monetário. O `valor` do
+  lançamento continua `NULL` em proposta.
+- **Imóvel obrigatório** em proposta nova **e** na edição de uma proposta. A **proposta
+  histórica sem imóvel continua válida** e editável em status — o `CHECK` do banco não
+  exige `imovel_ref` de propósito.
+- Em qualquer tipo que **não** seja `PROPOSTA`, os dois campos são gravados como
+  `NULL`; payload forjado não contamina outro tipo, e trocar o tipo de um lançamento
+  limpa os campos.
+
+A listagem mostra o status numa coluna própria e usa `valorProposta` na coluna de
+valor quando o lançamento é uma proposta. **A TV ainda não lista propostas
+`AGUARDANDO`** — isso é da E4.
+
 ### Saldo histórico — `/admin/saldo-historico`
 
 Somente `VENDA` e `AVALIACAO_GOOGLE`, com **no máximo uma linha por tipo**, garantida
@@ -261,6 +305,46 @@ um saldo cadastrado não muda.
 
 **Ausência é diferente de zero**: um tipo sem linha aparece como "Não cadastrado",
 nunca como `0`, e nenhuma linha zerada é criada automaticamente.
+
+**Precisão do saldo (E2B, `fe00fd2`).** Cada linha tem `precisao` — `EXATO` ou
+`MINIMO_CONHECIDO` (DEC-054). A criação e a edição administrativas suportam os dois, e
+a troca vale nos dois sentidos; a precisão é exigida na validação, sem default
+silencioso, e aparece na listagem e na confirmação de exclusão. Todas as linhas
+existentes receberam `EXATO` no backfill da E2A — **nenhum saldo virou mínimo
+conhecido sozinho**.
+
+**O painel ainda NÃO desenha "+ de".** A apresentação do piso é trabalho futuro da
+Entrega v1 (E4); hoje a precisão só existe no modelo e na administração.
+
+### Reservas de locação — `/admin/reservas-locacao`
+
+Entregue na E2C (`18a6599`). Reserva é operação, não produção (DEC-055): não usa
+`Lancamento` e não conta em Locados, VGV ou ranking.
+
+- **Listagem** com data, imóvel, corretor, equipe, status e observação, ordenada por
+  data decrescente e, no desempate, por criação decrescente. Sem filtros e sem
+  paginação nesta fatia. Estado vazio: "Nenhuma reserva de locação cadastrada."
+- **Nova reserva** em `/admin/reservas-locacao/novo`: o operador escolhe o corretor,
+  o imóvel, a data e uma observação opcional. **Não há campo de status** — toda reserva
+  **nasce `ATIVA`**, gravada explicitamente pela action.
+- **Corretor e equipe são snapshot da criação.** O servidor reconsulta o corretor
+  imediatamente antes do insert e grava a equipe atual dele; a equipe nunca vem do
+  formulário, e `criadoPor` vem da guarda administrativa. Só corretor ativo de equipe
+  ativa recebe reserva nova.
+- **Edição** em `/admin/reservas-locacao/[id]/editar`: mudam apenas imóvel, status,
+  data e observação. **Corretor e equipe são somente leitura e imutáveis** — o UPDATE
+  não os toca, nem `criadoPor`. Um corretor ou uma equipe que tenham sido inativados
+  **depois** não bloqueiam a edição: a reserva precisa continuar finalizável,
+  cancelável e corrigível.
+- **Status** entre `ATIVA`, `FINALIZADA` e `CANCELADA`, editável nos dois sentidos —
+  não há máquina terminal na v1, então uma finalização por engano volta a `ATIVA`.
+- **Não há hard delete.** `CANCELADA` é o estado de uma reserva que deixou de valer, e
+  o registro fica.
+- **Finalizar uma reserva não cria `LOCACAO`.** Não existe automação entre as duas
+  coisas: quando o negócio fecha, o operador registra a locação separadamente, como um
+  lançamento normal.
+
+A lista de reservas `ATIVA` na TV **não existe** — é da E4.
 
 ## Equipe histórica na edição de lançamento (Q7)
 
@@ -296,7 +380,7 @@ mês, trimestre, ano, quadro mensal ou ranking. Essa regra de cálculo é da F3
 
 ## Rotas existentes
 
-Dezessete páginas versionadas, mais uma Route Handler:
+Vinte páginas versionadas, mais uma Route Handler:
 
 | Área | Rotas |
 |---|---|
@@ -304,25 +388,48 @@ Dezessete páginas versionadas, mais uma Route Handler:
 | Administração | `/admin`, `/admin/equipes`, `/admin/equipes/novo`, `/admin/equipes/[id]/editar` |
 | | `/admin/corretores`, `/admin/corretores/novo`, `/admin/corretores/[id]/editar` |
 | | `/admin/lancamentos`, `/admin/lancamentos/novo`, `/admin/lancamentos/[id]/editar` |
+| | `/admin/reservas-locacao`, `/admin/reservas-locacao/novo`, `/admin/reservas-locacao/[id]/editar` (desde a E2C) |
 | | `/admin/saldo-historico`, `/admin/saldo-historico/novo`, `/admin/saldo-historico/[id]/editar` |
 | Painel | `/painel/[token]` (dados reais, desde a F3.5), `/painel/[token]/dados` (Route Handler de atualização, desde a F3.6), `/preview` (protótipo com dados fictícios) |
+
+Esse número é a contagem de páginas versionadas e **não** é o mesmo que o `next build`
+reporta: o build atual fecha em **23 rotas**, porque conta também `/_not-found` e
+`/icon.png`, além da própria Route Handler.
 
 Não existe `src/app/api/` — a única Route Handler é `GET /painel/[token]/dados`,
 criada na F3.6 ao lado da página que a consome.
 
 ## Migrations
 
-Duas migrations versionadas:
+Quatro migrations versionadas:
 
 1. `20260811014943_inicial` — cinco tabelas e o enum `tipo_lancamento`.
 2. `20260812120000_saldo_historico_tipo_unico` — troca o índice simples de
    `saldo_historico.tipo` por um índice **único**. Estrutural: nenhuma coluna,
    tabela, trigger ou dado.
+3. `20260814150000_entrega_v1_aditiva` (E2A, `c6464b5`) — **aditiva**. Cria os enums
+   `status_proposta`, `precisao_saldo_historico` e `status_reserva_locacao`; as
+   colunas `lancamentos.valor_proposta` e `lancamentos.status_proposta`; a coluna
+   `saldo_historico.precisao` com default `EXATO`; e as tabelas
+   `participacoes_venda` e `reservas_locacao`, com unicidades, FKs e índices. Faz os
+   backfills: uma participação `ordem = 1` por VENDA existente, `AGUARDANDO` nas
+   propostas e `EXATO` nos saldos. **Não** torna campo nenhum nullable, **não** zera
+   `corretor_id`/`equipe_id` e **não** instala o CHECK da DEC-051.
+4. `20260814210000_contrato_proposta` (E2B, `fe00fd2`) — backfill defensivo de
+   `AGUARDANDO` em proposta sem status e o `CHECK`
+   `lancamentos_proposta_campos_check`: em `PROPOSTA`, status obrigatório, `valor`
+   `NULL` e `valor_proposta` positivo quando presente; nos demais tipos, os dois
+   campos de proposta `NULL`. **De propósito não exige `imovel_ref`** — a proposta
+   legada sem imóvel continua válida (DEC-053).
 
-> **A segunda migration foi testada e aplicada somente no `casalouzada_test`.** Ela
-> está versionada no Git, e publicar no Git **não é** aplicar em produção. Antes de
-> ativar em produção a versão correspondente, ela precisa ser aplicada lá com gate
-> apropriado. Ver Pendências.
+> **Estado de produção.** A migration `20260812120000_saldo_historico_tipo_unico` foi
+> testada e aplicada somente no `casalouzada_test`, e **não há evidência de aplicação
+> em produção**. As migrations da E2A e da E2B foram igualmente aplicadas e testadas
+> **apenas no banco local de teste**; **nenhuma migration remota foi executada** nas
+> publicações da E2 — nem em Supabase, nem em qualquer outro ambiente. Publicar no Git
+> **não é** aplicar em produção. Portanto, antes do go-live (E6), existe **gate
+> operacional de migrations de produção** para as três: `20260812120000`,
+> `20260814150000` e `20260814210000`. Ver Pendências.
 
 ## Testes
 
@@ -567,10 +674,12 @@ Não se pode dizer que a situação de credenciais esteja saneada hoje.
 
 ## O que ainda NÃO está implementado
 
-Levantado arquivo por arquivo na árvore em `888f779` e atualizado pelos quatro
-commits seguintes: `f49f912` alterou dois arquivos CSS e removeu cinco SVGs de
-scaffold, `7e0e35d` trouxe os assets da marca e o favicon, `16490f0` acrescentou uma
-propriedade a `painel.module.css` e `8b9fce2` criou o mecanismo offline.
+Levantado arquivo por arquivo na árvore em `888f779` e atualizado pelos commits
+seguintes: `f49f912` alterou dois arquivos CSS e removeu cinco SVGs de scaffold,
+`7e0e35d` trouxe os assets da marca e o favicon, `16490f0` acrescentou uma propriedade
+a `painel.module.css`, `8b9fce2` criou o mecanismo offline, e as três fatias da E2
+(`c6464b5`, `fe00fd2`, `18a6599`) trouxeram o modelo aditivo da entrega v1 e a
+administração de propostas, precisão de saldo e reservas.
 
 **A F3 está concluída.** A TV mostra os números reais e os mantém atualizados
 sozinha. O que continua não existindo:
@@ -610,10 +719,16 @@ sozinha. O que continua não existindo:
 | Largura dos quadros estável sob nome longo | **existe** — `min-width: 0` em `.quadro` | F4.3 feita |
 | Comportamento offline de navegação | **existe** — Service Worker e tela institucional, sem guardar números (DEC-048) | F4.4 feita |
 | Persistência de métricas em disco | ausente **por decisão** (DEC-048) | — |
-| `ParticipacaoVenda` / venda compartilhada | ausente — aprovado na E1 (DEC-051, DEC-052) | E2/E3 |
-| Status e valor de proposta | ausentes — aprovados na E1 (DEC-053) | E2 |
-| Precisão do saldo histórico ("+ de") | ausente — aprovada na E1 (DEC-054) | E2/E3 |
-| `ReservaLocacao` | ausente — aprovada na E1 (DEC-055) | E2 |
+| `ParticipacaoVenda` — tabela, unicidades e backfill inicial | **existe** — E2A (`c6464b5`) | E2 feita |
+| Crédito compartilhado em execução (divisão de VGV, DEC-052) | ausente — a fonte executável ainda é `Lancamento.corretorId`/`equipeId` | E3 |
+| UI de venda com múltiplos participantes | ausente | E3 |
+| Cutover da VENDA (campos nullable, `NULL`, CHECK da DEC-051) | ausente — nenhum campo foi zerado | E3 |
+| Status e valor de proposta — modelo e administração | **existem** — E2A + E2B (`fe00fd2`), com CHECK de integridade | E2 feita |
+| Lista operacional de propostas `AGUARDANDO` na TV | ausente (DEC-053, DEC-056) | E4 |
+| Precisão do saldo histórico — modelo e administração | **existem** — `EXATO` / `MINIMO_CONHECIDO` (E2A + E2B) | E2 feita |
+| Apresentação "+ de" no painel | ausente (DEC-054) | E4 |
+| `ReservaLocacao` — modelo e administração | **existem** — E2A + E2C (`18a6599`) | E2 feita |
+| Lista de reservas `ATIVA` na TV | ausente (DEC-055, DEC-056) | E4 |
 | Faixa superior alternando A/B | ausente — aprovada na E1 (DEC-056) | E4 |
 | Deploy no Render | ausente — decisão de infraestrutura é do E6 (DEC-057) | E6 |
 | Inventário e operação do `Phantom Alien 4K IPTV` | não realizados (DEC-049) — **fatia adiada** (DEC-057) | F4.5 |
@@ -1319,13 +1434,49 @@ F4.5 é retomada depois do go-live. Ver as Pendências e a seção Entrega v1 ab
 Aprovada pelo proprietário em **2026-08-14** e registrada nas **DEC-051 a DEC-057**.
 
 **A E1 foi exclusivamente documental e está concluída e publicada em `078f360`**
-(com a correção de sequenciamento E1.1 registrada em seguida). Nada abaixo existe em
-código: o schema não tem `participacoes_venda`, `reservas_locacao`,
-`valor_proposta`, `status_proposta` nem `precisao`; a validação continua descartando
-valor de proposta; o núcleo de métricas continua creditando venda por
-`Lancamento.corretorId`/`equipeId`; e a faixa superior do painel continua estática.
-**A próxima implementação é a E2 — migration aditiva + administração de propostas,
-saldo e reservas.** O cutover da venda compartilhada é da E3.
+(com a correção de sequenciamento E1.1 registrada em seguida). O texto desta seção é o
+**contrato de produto** aprovado ali; o que dele já existe em código veio com a E2.
+
+**O que a E2 implantou:** o schema tem `participacoes_venda`, `reservas_locacao`,
+`lancamentos.valor_proposta`, `lancamentos.status_proposta` e
+`saldo_historico.precisao`, com os backfills feitos; a administração de propostas,
+precisão de saldo e reservas de locação está no ar.
+
+**O que continua pendente:** o núcleo de métricas ainda credita venda por
+`Lancamento.corretorId`/`equipeId` — a divisão igualitária da DEC-052 não está em
+execução e não há UI multi-participante (E3) —, e a faixa superior do painel continua
+estática, sem "+ de", sem lista de propostas `AGUARDANDO` e sem lista de reservas
+`ATIVA` (E4).
+
+### Baseline do fechamento da E2
+
+Medido sobre a árvore que veio a ser publicada em `18a6599` — a fatia E2C —, **antes**
+do commit. A publicação **não** reexecutou suíte nenhuma: ela publicou os **mesmos
+bytes auditados**, o que os caminhos staged comprovaram.
+
+| Comando | Resultado verificado |
+|---|---|
+| `npx prisma validate` | exit 0 |
+| `npx prisma generate` | exit 0 |
+| `npm test` | 503 testes, 137 suítes, 0 falhas |
+| `npm run test:fusos` | 503/503 em `UTC`, `America/Sao_Paulo` e `Asia/Tokyo` |
+| `npm run test:integracao` | 123 testes, 45 suítes, 0 falhas |
+| `npm run test:integracao:painel` | 35 testes, 12 suítes, 0 falhas |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `tsx scripts/banco-teste.ts npm run build` | exit 0, 23 rotas |
+| `git diff --check` | exit 0 |
+
+A integração foi executada **três vezes consecutivas com resultado verde** depois da
+correção de uma fixture concorrente: o teste de unicidade sob concorrência de
+`saldo-historico.integracao.test.ts` disputava a unique `saldo_historico.tipo` com a
+suíte da entrega v1, porque ambos usavam `LOCACAO` e os arquivos rodam em paralelo. A
+correção trocou o tipo daquele teste para `CAPTACAO_EXCLUSIVA`, sem remover ou relaxar
+asserção alguma.
+
+As três fatias da E2 foram publicadas em `c6464b5`, `fe00fd2` e `18a6599`; os
+baselines intermediários de E2A e E2B não são repetidos aqui — o que vale como
+snapshot do fechamento é a tabela acima.
 
 ### Venda compartilhada (DEC-051, DEC-052)
 
@@ -1423,31 +1574,45 @@ são regra de domínio e moram no núcleo (DEC-013); o contrato de leitura/atual
 da F3.6 (DEC-044 a DEC-046) será estendido para transportar as listas — desenho na
 E3/E4.
 
-### Incompatibilidades mapeadas com o modelo atual
+### Incompatibilidades mapeadas — o que a E2 resolveu e o que resta
 
-O que a E2/E3/E4 terá de tocar, levantado arquivo por arquivo:
+Levantamento arquivo por arquivo feito na E1, atualizado pelo que a E2 publicou:
 
-- `prisma/schema.prisma` — `corretorId`/`equipeId` `NOT NULL`, sem participações,
-  sem reservas, sem status/valor de proposta, sem precisão de saldo;
-- `src/lib/validacao/lancamento.ts` — `TIPOS_MONETARIOS` descarta valor de PROPOSTA
-  e não conhece múltiplos participantes;
-- `src/app/admin/lancamentos/*` — criação/edição assumem um corretor por evento, e a
-  edição resolve equipe pelo fluxo Q7 (que permanece para os tipos de participante
-  único);
+**Resolvido pela E2:**
+
+- `prisma/schema.prisma` — tem `ParticipacaoVenda`, `ReservaLocacao`,
+  `valorProposta`, `statusProposta` e `precisao`, com os enums correspondentes
+  (`c6464b5`);
+- `src/lib/validacao/lancamento.ts` — conhece o domínio de `statusProposta` e trata
+  `valorProposta` como campo próprio, fora de `TIPOS_MONETARIOS` (`fe00fd2`);
+- `src/app/admin/lancamentos/*` — criação e edição gravam status e valor de proposta
+  e exigem imóvel em `PROPOSTA` (`fe00fd2`);
+- `src/app/admin/saldo-historico/*` — criação e edição gravam a precisão (`fe00fd2`);
+- `src/app/admin/reservas-locacao/*` — administração completa das reservas
+  (`18a6599`).
+
+**Continua pendente:**
+
+- `prisma/schema.prisma` — `Lancamento.corretorId`/`equipeId` ainda são `NOT NULL` e
+  não há o CHECK final da DEC-051 (E3);
+- `src/lib/validacao/lancamento.ts` e `src/app/admin/lancamentos/*` — ainda assumem
+  **um** corretor por evento; a edição resolve equipe pelo fluxo Q7, que permanece
+  para os tipos de participante único (E3);
 - `src/lib/metricas.ts` — `LancamentoMetrica` carrega um `corretorId`/`equipeId`;
   rankings e elenco (DEC-038) creditam pelo lançamento; a divisão de frações não
-  existe;
+  existe (E3);
 - `src/lib/metricas-prisma.ts` / `leitura-painel.ts` /
   `contrato-atualizacao-painel.ts` / `retencao-painel.ts` — não leem participações,
-  reservas nem listas operacionais;
-- `src/lib/apresentacao-painel.ts` — não conhece "+ de" nem as listas da Tela B;
-- `src/components/painel/*` — faixa superior estática, sem rotação A/B.
+  reservas nem listas operacionais (E3/E4);
+- `src/lib/apresentacao-painel.ts` — não conhece "+ de" nem as listas da Tela B (E4);
+- `src/components/painel/*` — faixa superior estática, sem rotação A/B (E4).
 
 ### Ordem de entrega e deploy (DEC-057)
 
 E1 (contratos, **concluída em `078f360`**) → E2 (migration **aditiva** + admin de
-propostas, saldo e reservas — sem cutover de VENDA) → E3 (venda compartilhada +
-métricas + **cutover final**) → E4 (painel A/B e novos estados) → E5 (gate completo)
+propostas, saldo e reservas — sem cutover de VENDA; **concluída em `c6464b5`,
+`fe00fd2` e `18a6599`**) → E3 (venda compartilhada + métricas + **cutover final** —
+**próxima, não iniciada**) → E4 (painel A/B e novos estados) → E5 (gate completo)
 → E6 (go-live no Render + smoke test). O go-live provisório precede a F4.5;
 plano/infraestrutura de produção se decide no E6, e nada de Render foi configurado.
 Depois do E6, retoma-se a F4.5. F5 não está iniciada. Se o transporte de
@@ -1458,12 +1623,15 @@ lá — o desenho visual continua sendo da E4.
 
 1. **Rotacionar a credencial de produção exposta na P1.** Risco aceito pelo
    proprietário, mas não resolvido.
-2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
-   antes de ativar lá a versão correspondente, com gate apropriado.
-3. **Entrega v1 (E2 a E6)**: implementar o modelo e as regras aprovadas na E1
-   (DEC-051 a DEC-057) — migration **aditiva** com backfill inicial e administração
-   (E2), venda compartilhada com métricas e cutover final (E3), painel A/B (E4),
-   gate completo (E5) e go-live no Render (E6).
+2. **Aplicar as migrations pendentes em produção**, com gate apropriado, antes de
+   ativar lá a versão correspondente: `20260812120000_saldo_historico_tipo_unico`,
+   `20260814150000_entrega_v1_aditiva` e `20260814210000_contrato_proposta`. As três
+   estão versionadas no Git e foram exercitadas **somente** no banco local de teste;
+   nenhuma migration remota foi executada. É gate do E6.
+3. **Entrega v1 (E3 a E6)**: a E1 e a E2 estão concluídas (`078f360`; `c6464b5` +
+   `fe00fd2` + `18a6599`). Falta implementar venda compartilhada com métricas e
+   cutover final (E3), painel A/B com "+ de" e listas operacionais (E4), gate completo
+   (E5) e go-live no Render (E6).
 4. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas e a
    **F4.5 adiada** até o go-live da v1 (DEC-057). O que falta nela, objetivamente:
    - o **hardware alvo é o `Phantom Alien 4K IPTV`**;
