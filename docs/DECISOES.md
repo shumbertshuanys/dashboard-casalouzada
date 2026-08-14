@@ -1589,8 +1589,8 @@ Ordem de entrega aprovada:
 | E2 | migration **aditiva** + administração de propostas, saldo e reservas — **concluída em `c6464b5`, `fe00fd2` e `18a6599`** |
 | E3 | venda compartilhada + métricas + **cutover final** (DEC-051) — **concluída em `2a50965`** |
 | E4 | painel operacional A/B e apresentação dos novos estados — **concluída em `c24a0c9`** |
-| E5 | gate completo — **próxima** |
-| E6 | go-live no Render + smoke test |
+| E5 | gate completo — **concluída**: `RELEASE_CANDIDATE_READY_FOR_E6 = YES`, sem commit de código |
+| E6 | go-live no Render + smoke público — **próxima, não iniciada** |
 
 Depois da entrega, retoma-se a F4.5. A escolha de plano/infraestrutura de produção é
 do E6 — nada de Render é configurado antes dele. F5 continua futura e não se declara
@@ -1604,4 +1604,12 @@ do aparelho físico pode vir depois sem atrasar isso.
 continua **em andamento** e só se encerra com a F4.5.
 
 **Fonte.** Decisão do proprietário em 2026-08-14.
+
+**Estado de implementação.** As cinco primeiras etapas estão concluídas. A **E5**
+certificou o release candidate — `RELEASE_CANDIDATE_READY_FOR_E6 = YES` — sem
+implementar feature e sem publicar código. Resta o **E6**, que é operação, não produto:
+rotação da credencial exposta, variáveis finais de produção, aplicação das quatro
+migrations pendentes na ordem, configuração do serviço, deploy, smoke público e
+validação da URL. **Nada disso foi executado**, e nenhuma dessas afirmações deve ser
+lida como feita. Depois do E6, retoma-se a F4.5.
 **em vigor — fechamento no E6, com a F4.5 retomada em seguida**

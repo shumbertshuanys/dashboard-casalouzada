@@ -24,9 +24,15 @@ A **E1 — contratos, documental — está concluída** (`078f360`); a **E2 est�
 em três commits — **`c6464b5`** (E2A — schema e migration aditiva com backfills),
 **`fe00fd2`** (E2B — administração de propostas e precisão do saldo) e **`18a6599`**
 (E2C — administração de reservas de locação); a **E3 está concluída e publicada** em
-**`2a50965`**, que fechou o cutover da venda compartilhada; e a **E4 está concluída e
-publicada** em **`c24a0c9`**, que entregou o painel operacional. A **E5 — gate completo —
-é a próxima etapa**, e não foi iniciada.
+**`2a50965`**, que fechou o cutover da venda compartilhada; a **E4 está concluída e
+publicada** em **`c24a0c9`**, que entregou o painel operacional; e a **E5 — gate
+completo — está concluída**, com resultado **`RELEASE_CANDIDATE_READY_FOR_E6 = YES`**.
+A E5 foi etapa de certificação: não implementou feature e não publicou código.
+
+**Nenhuma feature da v1 continua pendente.** A **E6 — go-live no Render + smoke público
+— é a próxima etapa**, e não foi iniciada: nada de Render foi configurado, as quatro
+migrations continuam sem aplicação em produção e a credencial exposta na P1 continua
+sem rotação.
 
 ### Estado final da faixa superior (E4, `c24a0c9`)
 
@@ -608,8 +614,8 @@ locação e a faixa superior alternando entre métricas e destaques operacionais
 | E2 | migration **aditiva** + admin de propostas, saldo e reservas | **concluída** — `c6464b5` + `fe00fd2` + `18a6599` |
 | E3 | venda compartilhada + métricas + **cutover final** | **concluída** — `2a50965` |
 | E4 | painel operacional A/B e novos estados | **concluída** — `c24a0c9` |
-| E5 | gate completo | **próxima** |
-| E6 | go-live no Render + smoke test | futura |
+| E5 | gate completo | **concluída** — `RELEASE_CANDIDATE_READY_FOR_E6 = YES`, sem commit de código |
+| E6 | go-live no Render + smoke test | **próxima** |
 
 A E2 saiu em três fatias: **E2A** (`c6464b5`) — enums, campos de proposta, precisão do
 saldo, `ParticipacaoVenda`, `ReservaLocacao`, migration aditiva e backfills, sem

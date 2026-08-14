@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `c24a0c92a81d6c8b09c20efe74fb1e6fc81ddb19` — `feat: adiciona painel operacional da entrega v1` |
+| Commit de referência | `6d55617a8580a7d9458c1069ac304f76b6033e4f` — `docs: encerra etapa E4 da entrega v1` |
 | Data do handoff | 2026-08-14 |
 
 ## Estado executivo
@@ -39,8 +39,9 @@ as janelas da F3.1 e **continuam puras**: recebem os dados já lidos e não conh
 Prisma, banco nem ambiente. Nem a F3.3 nem a F3.4 alteraram uma linha delas.
 
 `src/lib/metricas-prisma.ts` é a fronteira banco → domínio, entregue pela F3.3. Ela
-lê as quatro tabelas, converte cada linha para os tipos da F3.2 e chama as duas
-entradas puras — sem duplicar nenhum cálculo. A entrada é
+lê **cinco** tabelas — as quatro da F3.3 mais `reservas_locacao`, que a E4 acrescentou
+em leitura independente —, converte cada linha para os tipos da F3.2 e chama as
+entradas puras, sem duplicar nenhum cálculo. A entrada é
 `obterMetricasPainel(prisma, agora?)`.
 
 `src/lib/apresentacao-painel.ts` é a camada de apresentação, entregue pela F3.4. Ela
@@ -195,7 +196,15 @@ saldo de `VENDA` qualifica imóveis vendidos **e** VGV acumulado; a de
 quadro mensal ou ranking, e `SEM_SALDO_HISTORICO` continua `—`, nunca "+ de —" — o tipo
 do acumulado tornou isso inexprimível, porque o ramo sem valor não carrega precisão.
 
-A **próxima etapa é a E5 — gate completo**, que **não** foi iniciada.
+A **E5 — gate completo — está CONCLUÍDA**, com resultado
+**`RELEASE_CANDIDATE_READY_FOR_E6 = YES`**. Ela é etapa de **certificação**: não
+implementou feature, não criou commit de código e terminou com a árvore byte a byte
+como começou. **Nenhuma feature da v1 continua pendente antes do E6** — o contrato de
+produto das DEC-051 a DEC-056 está inteiramente implementado e provado.
+
+A **próxima etapa é a E6 — go-live no Render + smoke público**, que **não** foi
+iniciada. Nada de Render foi configurado, nenhuma migration foi aplicada em produção e
+a credencial exposta na P1 continua sem rotação.
 
 ## Fases
 
@@ -232,8 +241,8 @@ A **próxima etapa é a E5 — gate completo**, que **não** foi iniciada.
 | **E2 — Migration aditiva + admin (propostas, saldo, reservas)** | **Concluída** | `c6464b5` + `fe00fd2` + `18a6599` |
 | E3 — Venda compartilhada + métricas + cutover final | **Concluída** | `2a50965` — publicação atômica |
 | E4 — Painel operacional A/B e novos estados | **Concluída** | `c24a0c9` — publicação atômica, sem migration |
-| E5 — Gate completo | **Próxima** | não iniciada |
-| E6 — Go-live no Render + smoke test | **Futura** | — |
+| E5 — Gate completo | **Concluída** | `RELEASE_CANDIDATE_READY_FOR_E6 = YES` — sem commit de código |
+| E6 — Go-live no Render + smoke test | **Próxima** | não iniciada |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
@@ -752,6 +761,18 @@ acidentalmente em transcript** por um erro de tratamento de erro. Estado atual:
 - isso não bloqueia mais o trabalho, mas **continua sendo pendência operacional**.
 
 Não se pode dizer que a situação de credenciais esteja saneada hoje.
+
+**O que a auditoria da E5 provou — e o que ela não provou.** A varredura de segredos
+cobriu os 129 arquivos versionados e o **histórico inteiro** do repositório: nenhum
+`.env` real está versionado hoje **nem esteve em commit algum**; o único arquivo `.env*`
+rastreado é o `.env.example`, cujo `AUTH_SECRET`, `PAINEL_TOKEN` e senha de seed estão
+**vazios** e cujas connection strings são template, sem host de nuvem. Nenhum JWT, chave
+de nuvem ou senha literal foi encontrado. O único hash bcrypt em código é o de descarte
+de `src/lib/auth.ts`, deliberado, usado para gastar tempo quando o e-mail não existe.
+
+**Isso não elimina a pendência acima.** A credencial da P1 vazou **fora do Git**, em
+transcript, e continua **sem rotação**. Repositório limpo e credencial rotacionada são
+duas afirmações diferentes, e só a primeira está provada.
 
 ## O que ainda NÃO está implementado
 
@@ -1726,6 +1747,83 @@ alteração de árvore entre elas — 49/14/0 nas três.
 A **verificação visual 4K foi concluída** e é parte do gate desta etapa, não um extra:
 foi ela, e só ela, que expôs o deslocamento de layout descrito acima.
 
+### E5 — gate final e certificação do release candidate · concluída
+
+Etapa de **certificação**, executada sobre o estado publicado em `6d55617`. Não
+implementou feature, **não criou commit de código** e terminou com a árvore byte a byte
+como começou. Resultado: **`RELEASE_CANDIDATE_READY_FOR_E6 = YES`**.
+
+Antes de medir, ficou provado que **entre a E4 (`c24a0c9`) e o estado auditado só
+mudaram os três Markdown** — é isso que autoriza transportar a evidência visual 4K da
+E4 para este release candidate sem remedi-la.
+
+#### Baseline do fechamento da E5
+
+| Comando | Resultado verificado |
+|---|---|
+| `npx prisma validate` | exit 0 |
+| `npx prisma generate` | exit 0 |
+| cadeia fresca de migrations (LOCAL) | 5 migrations na ordem, seed OK, `migrate status` **"Database schema is up to date!"** |
+| `npm test` | 606 testes, 152 suítes, 0 falhas, 0 pulados |
+| `npm run test:fusos` | `UTC` 606/606/0 · `America/Sao_Paulo` 606/606/0 · `Asia/Tokyo` 606/606/0 |
+| `npm run test:integracao` | **3 rodadas consecutivas**: 156/51/0, 156/51/0, 156/51/0 |
+| `npm run test:integracao:painel` | **3 rodadas consecutivas**: 49/14/0, 49/14/0, 49/14/0 |
+| `npx tsc --noEmit` | exit 0, sem saída |
+| `npm run lint` | exit 0, **zero warnings** |
+| `tsx scripts/banco-teste.ts npm run build` | exit 0, 23 rotas |
+| smoke local do build de produção | **PASS** |
+| 11 invariantes | **11/11 PASS** |
+| contratos da v1 (DEC-051 a DEC-056) | **PASS** |
+| `git diff --check` | exit 0 |
+| working tree | vazio, antes e depois |
+
+A cadeia de migrations foi exercitada do zero **somente no banco local de teste**,
+`127.0.0.1:5432/casalouzada_test`, pelo wrapper que valida o destino antes de conectar.
+
+#### Smoke local do build de produção
+
+Processo `next start` efêmero, porta local, banco local, encerrado ao fim. O token do
+painel foi lido pelo próprio script e **nunca impresso**.
+
+| Requisição | Resultado |
+|---|---|
+| `GET /preview` | 200 |
+| `GET /admin` sem sessão | redireciona para o login, preservando o destino |
+| `GET /login` | 200 |
+| `GET /painel/<token inválido>` | 404 |
+| `GET /painel/<token inválido>/dados` | 404 |
+| `GET /painel/<token local válido>` | 200, com `X-Robots-Tag: noindex, nofollow, noarchive` e meta robots noindex |
+| `GET /painel/<token local válido>/dados` | 200, `Cache-Control: no-store`, contrato com **cinco blocos** — `acumulados`, `equipes`, `periodos`, `propostas`, `reservas` |
+| assets institucionais do offline (`offline.html`, `sw.js`, marca) | 200, 200, 200 |
+
+Com o banco recém-resetado, a resposta trouxe os três acumulados em
+`SEM_SALDO_HISTORICO` e as duas listas em `OK` com zero itens — **ausência não virou
+zero, e lista vazia não virou `0`**. É a prova em runtime da DEC-014.
+
+**Observação registrada, não defeito.** O token aparece no HTML de `/painel/<token>`:
+é o parâmetro de rota serializado no payload RSC para o componente cliente lê-lo por
+`useParams`. Quem tem o HTML já tem a URL — não há exposição além do desenho aprovado
+na DEC-009.
+
+#### O que a E5 auditou por código, além dos testes
+
+- **camadas** — `metricas-prisma.ts` não tem `reduce`, `sort`, `groupBy`, `aggregate`,
+  `take`, `orderBy` nem literal de status; `apresentacao-painel.ts` não recalcula; os
+  componentes do painel não filtram, não ordenam e não cortam. Não há segunda fonte de
+  verdade;
+- **mock isolado** — `mock-painel.ts` é importado **exclusivamente** por `/preview`; as
+  duas rotas reais importam apenas `prisma`, `lerPainel`, `tokenPainelConfere` e os
+  componentes;
+- **constraints vivas no banco** — `lancamentos_venda_credito_check` e
+  `lancamentos_proposta_campos_check` presentes; `RESTRICT` em corretor e equipe de
+  `lancamentos`, `participacoes_venda` e `reservas_locacao`; `CASCADE` só da participação
+  para o lançamento; uniques de `participacoes_venda` e de `saldo_historico.tipo`;
+- **reservas** — **nenhum `.delete`/`deleteMany` em toda a área administrativa** e
+  nenhum `lancamento.create`: sem hard delete e sem `LOCACAO` automática;
+- **CSS do painel** — **zero declarações estruturais em px**; as ocorrências de `px` são
+  todas comentário. 72 usos de `cqw`;
+- **marcadores** — nenhum `TODO`/`FIXME`/`HACK`/`XXX` real em código executável.
+
 ### Venda compartilhada (DEC-051, DEC-052)
 
 - **Uma venda comercial = um lançamento `VENDA`**, sempre — nunca uma linha por
@@ -1878,12 +1976,13 @@ E1 (contratos, **concluída em `078f360`**) → E2 (migration **aditiva** + admi
 propostas, saldo e reservas — sem cutover de VENDA; **concluída em `c6464b5`,
 `fe00fd2` e `18a6599`**) → E3 (venda compartilhada + métricas + **cutover final** —
 **concluída em `2a50965`**) → E4 (painel A/B e novos estados — **concluída em
-`c24a0c9`**) → E5 (gate completo — **próxima, não iniciada**) → E6 (go-live no Render +
-smoke test). O go-live provisório precede a F4.5; plano/infraestrutura de produção se
-decide no E6, e nada de Render foi configurado. Depois do E6, retoma-se a F4.5. F5 não
-está iniciada. O transporte de precisão e das listas operacionais para o painel não
-exigiu preparação na E3: o contrato de leitura ficou intocado até a E4, que fez o
-desenho inteiro sem tocar schema nem migration.
+`c24a0c9`**) → E5 (gate completo — **concluída**, `RELEASE_CANDIDATE_READY_FOR_E6 =
+YES`) → E6 (go-live no Render + smoke público — **próxima, não iniciada**). O go-live
+provisório precede a F4.5; plano/infraestrutura de produção se decide no E6, e nada de
+Render foi configurado. Depois do E6, retoma-se a F4.5, que continua **adiada**. F5
+continua futura e não está iniciada. O transporte de precisão e das listas
+operacionais para o painel não exigiu preparação na E3: o contrato de leitura ficou
+intocado até a E4, que fez o desenho inteiro sem tocar schema nem migration.
 
 ## Pendências
 
@@ -1898,9 +1997,20 @@ desenho inteiro sem tocar schema nem migration.
    foi executada** em nenhuma publicação. É gate do E6. A do cutover zera colunas e o
    runtime que a acompanha exige o estado novo — ela e o deploy do código têm de ir na
    mesma janela.
-3. **Entrega v1 (E5 e E6)**: a E1, a E2, a E3 e a E4 estão concluídas (`078f360`;
-   `c6464b5` + `fe00fd2` + `18a6599`; `2a50965`; `c24a0c9`). O contrato de produto está
-   inteiramente implementado; faltam o gate completo (E5) e o go-live no Render (E6).
+3. **Entrega v1 (E6)**: E1 a E5 estão concluídas (`078f360`; `c6464b5` + `fe00fd2` +
+   `18a6599`; `2a50965`; `c24a0c9`; e a E5, certificação sem commit de código). O
+   contrato de produto está inteiramente implementado e o release candidate está
+   certificado — **`RELEASE_CANDIDATE_READY_FOR_E6 = YES`**. Falta apenas o **E6**, cujas
+   sete pendências abaixo são **bloqueantes do go-live**, nesta ordem:
+   1. **rotacionar a credencial de produção exposta anteriormente** (item 1 acima);
+   2. definir e cadastrar os valores finais das variáveis de produção;
+   3. **aplicar as quatro migrations pendentes** no banco de produção (item 2 acima);
+   4. configurar o serviço no Render;
+   5. deploy;
+   6. smoke público;
+   7. validar a URL final.
+   Nenhuma delas foi executada. Publicar no Git e passar no gate local **não é**
+   go-live.
 4. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas e a
    **F4.5 adiada** até o go-live da v1 (DEC-057). O que falta nela, objetivamente:
    - o **hardware alvo é o `Phantom Alien 4K IPTV`**;
@@ -1915,6 +2025,38 @@ Pendências de informação herdadas do plano: número máximo de corretores por
 (dimensiona a altura dos quadros) e valores iniciais do saldo histórico. A terceira —
 arquivos da marca em alta resolução — **está encerrada**: os PNGs oficiais foram
 fornecidos em 2026-08-13 e integrados pela F4.2 em `7e0e35d`.
+
+### Render — política operacional do E6 (plano, não execução)
+
+Registrado na E5 como **plano**. **Nenhuma configuração de Render foi executada**, nenhum
+serviço foi criado e nenhum plano ou instance type foi escolhido.
+
+- **Claude Code é o operador** da configuração e do deploy no E6;
+- **as autenticações interativas são do proprietário**, feitas por ele quando
+  solicitadas — o agente não cria conta, não autentica e não guarda credencial;
+- **secrets não vão para documentação, log ou conversa**, em hipótese alguma. O que se
+  registra é nome de variável, nunca valor;
+- a **ausência de `engines` no `package.json`** permanece **decisão operacional do E6**:
+  sem ela a plataforma escolhe a versão de Node por conta própria. O E5 não editou o
+  arquivo, de propósito;
+- ambiente local medido na E5, para subsidiar essa decisão: **Node v24.19.0**,
+  **npm 11.17.0**.
+
+**Variáveis exigidas pelo código, por momento de uso** — nomes apenas:
+
+| Variável | Build | Runtime | `migrate deploy` | Secret |
+|---|:--:|:--:|:--:|:--:|
+| `DATABASE_URL` | fallback do datasource | **sim** | fallback | **sim** |
+| `DIRECT_URL` | — | — | **sim** — o pooler em modo transaction derruba os advisory locks do schema engine | **sim** |
+| `AUTH_SECRET` | — | **sim**, mínimo 32 caracteres | — | **sim** |
+| `PAINEL_TOKEN` | — | **sim** | — | **sim** |
+| `SEED_ADMIN_NOME` / `_EMAIL` / `_SENHA` | — | — | só no seed inicial | **sim** (senha) |
+| `TROCA_SENHA_EMAIL` / `_NOVA` | — | — | só no script manual | **sim** |
+| `NODE_ENV` | plataforma | plataforma — controla o `secure` do cookie | — | não |
+
+Comandos já existentes e relevantes ao E6: `build` (`next build`), `start`
+(`next start`), `postinstall` (`prisma generate`), `db:deploy`
+(`prisma migrate deploy`) e `db:seed` (`prisma db seed`).
 
 ### Observações para a validação da F4.5
 
