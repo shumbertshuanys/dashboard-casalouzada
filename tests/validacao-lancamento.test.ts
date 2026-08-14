@@ -34,6 +34,29 @@ const PROPOSTA_MINIMA = {
   imovelRef: "AP-101",
 };
 
+/** Segundo e terceiro corretores, para os testes de elenco da venda. */
+const CORRETOR_B = "0f3f2b6a-51b5-4a7f-9d8c-2e0a5b7c4d31";
+const CORRETOR_C = "7a1e9c44-3d2b-4e6a-8f5b-1c9d0e2f3a4b";
+
+/**
+ * Uma VENDA mínima desde a E3: o crédito é a lista de participantes, e
+ * `corretorId` não é lido (DEC-051). `participanteId` repete no FormData, como
+ * o formulário envia.
+ */
+function formularioVenda(
+  participantes: readonly string[],
+  extras: Record<string, string> = {},
+): FormData {
+  const form = formulario({
+    tipo: "VENDA",
+    dataReferencia: "2026-08-10",
+    valor: "900.000,00",
+    ...extras,
+  });
+  for (const id of participantes) form.append("participanteId", id);
+  return form;
+}
+
 describe("tipos", () => {
   it("são exatamente os sete do enum", () => {
     assert.deepEqual([...TIPOS], [
@@ -97,7 +120,8 @@ describe("validarLancamento — um evento por submissão", () => {
 describe("validarLancamento — corretor", () => {
   it("aceita UUID canônico", () => {
     const r = validarLancamento(formulario(BASE));
-    assert.equal(r.ok === true && r.dados.corretorId, CORRETOR);
+    // `BASE` é CAPTACAO_VENDA: o ramo de participante único da união.
+    assert.equal(r.ok === true && r.dados.tipo !== "VENDA" && r.dados.corretorId, CORRETOR);
   });
 
   it("recusa ausente", () => {
@@ -148,13 +172,13 @@ describe("validarLancamento — data", () => {
 
 describe("validarLancamento — valor por tipo", () => {
   it("VENDA exige valor", () => {
-    const r = validarLancamento(formulario({ ...BASE, tipo: "VENDA" }));
+    const r = validarLancamento(formularioVenda([CORRETOR], { valor: "" }));
     assert.equal(r.ok === false && r.erros.valor, "Informe o valor.");
   });
 
   it("VENDA recusa zero em qualquer grafia", () => {
     for (const valor of ["0", "0,00", "0.00", "0,0", "000"]) {
-      const r = validarLancamento(formulario({ ...BASE, tipo: "VENDA", valor }));
+      const r = validarLancamento(formularioVenda([CORRETOR], { valor }));
       assert.equal(
         r.ok === false && r.erros.valor,
         "O valor precisa ser maior que zero.",
@@ -164,9 +188,7 @@ describe("validarLancamento — valor por tipo", () => {
   });
 
   it("VENDA aceita o formato brasileiro e guarda a canônica", () => {
-    const r = validarLancamento(
-      formulario({ ...BASE, tipo: "VENDA", valor: "1.250.000,00" }),
-    );
+    const r = validarLancamento(formularioVenda([CORRETOR], { valor: "1.250.000,00" }));
     assert.equal(r.ok === true && r.dados.valor, "1250000.00");
     // String, nunca número: Decimal(14,2) não sobrevive a um double.
     assert.equal(typeof (r.ok === true ? r.dados.valor : null), "string");
@@ -174,7 +196,7 @@ describe("validarLancamento — valor por tipo", () => {
 
   it("VENDA recusa valor malformado", () => {
     for (const valor of ["abc", "-100", "1.5000", "1,234"]) {
-      const r = validarLancamento(formulario({ ...BASE, tipo: "VENDA", valor }));
+      const r = validarLancamento(formularioVenda([CORRETOR], { valor }));
       assert.equal(r.ok === false && r.erros.valor, "Valor inválido.", valor);
     }
   });
@@ -299,17 +321,18 @@ describe("validarLancamento — proposta (DEC-053)", () => {
 
   it("não-PROPOSTA descarta statusProposta e valorProposta forjados", () => {
     // Um payload forjado não pode contaminar outro tipo.
+    const forjados = { statusProposta: "ACEITA", valorProposta: "999.999,00" };
     for (const tipo of ["VENDA", "LOCACAO", "CAPTACAO_VENDA", "AVALIACAO_GOOGLE"]) {
-      const extras: Record<string, string> =
-        tipo === "VENDA" || tipo === "LOCACAO" ? { valor: "1.000,00" } : {};
+      // Venda credita por participante; os demais, por corretor único.
       const r = validarLancamento(
-        formulario({
-          ...BASE,
-          tipo,
-          ...extras,
-          statusProposta: "ACEITA",
-          valorProposta: "999.999,00",
-        }),
+        tipo === "VENDA"
+          ? formularioVenda([CORRETOR], forjados)
+          : formulario({
+              ...BASE,
+              tipo,
+              ...(tipo === "LOCACAO" ? { valor: "1.000,00" } : {}),
+              ...forjados,
+            }),
       );
       assert.equal(r.ok, true, tipo);
       assert.equal(r.ok === true && r.dados.statusProposta, null, tipo);
@@ -318,13 +341,91 @@ describe("validarLancamento — proposta (DEC-053)", () => {
   });
 
   it("VENDA e LOCACAO continuam usando o `valor` normal", () => {
-    const venda = validarLancamento(formulario({ ...BASE, tipo: "VENDA", valor: "900.000,00" }));
+    const venda = validarLancamento(formularioVenda([CORRETOR]));
     assert.equal(venda.ok === true && venda.dados.valor, "900000.00");
     assert.equal(venda.ok === true && venda.dados.valorProposta, null);
 
     const locacao = validarLancamento(formulario({ ...BASE, tipo: "LOCACAO", valor: "3.500,00" }));
     assert.equal(locacao.ok === true && locacao.dados.valor, "3500.00");
     assert.equal(locacao.ok === true && locacao.dados.statusProposta, null);
+  });
+});
+
+describe("validarLancamento — participantes da venda (DEC-051)", () => {
+  it("aceita um participante e devolve a lista", () => {
+    const r = validarLancamento(formularioVenda([CORRETOR]));
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.ok === true && r.dados.tipo === "VENDA" && r.dados.participanteIds, [
+      CORRETOR,
+    ]);
+  });
+
+  it("preserva a ordem em que o formulário enviou os participantes", () => {
+    // A posição é a `ordem` da participação — decisão do proprietário.
+    const r = validarLancamento(formularioVenda([CORRETOR_C, CORRETOR, CORRETOR_B]));
+    assert.deepEqual(r.ok === true && r.dados.tipo === "VENDA" && r.dados.participanteIds, [
+      CORRETOR_C,
+      CORRETOR,
+      CORRETOR_B,
+    ]);
+  });
+
+  it("exige pelo menos um participante", () => {
+    const r = validarLancamento(formularioVenda([]));
+    assert.equal(
+      r.ok === false && r.erros.participanteIds,
+      "Escolha pelo menos um participante da venda.",
+    );
+  });
+
+  it("ignora linhas em branco do formulário", () => {
+    const r = validarLancamento(formularioVenda(["", CORRETOR, "  "]));
+    assert.deepEqual(r.ok === true && r.dados.tipo === "VENDA" && r.dados.participanteIds, [
+      CORRETOR,
+    ]);
+  });
+
+  it("recusa participante que não é UUID", () => {
+    const r = validarLancamento(formularioVenda([CORRETOR, "abc"]));
+    assert.equal(r.ok === false && r.erros.participanteIds, "Participante inválido.");
+  });
+
+  it("recusa o mesmo corretor duas vezes", () => {
+    const r = validarLancamento(formularioVenda([CORRETOR, CORRETOR_B, CORRETOR]));
+    assert.equal(
+      r.ok === false && r.erros.participanteIds,
+      "O mesmo corretor não pode participar duas vezes da mesma venda.",
+    );
+  });
+
+  it("não lê `corretorId` numa venda, nem quando o payload o traz", () => {
+    // O crédito da venda não passa mais pelo lançamento: um `corretorId`
+    // forjado não entra no domínio validado e não vira participante.
+    const r = validarLancamento(formularioVenda([CORRETOR_B], { corretorId: CORRETOR }));
+    assert.equal(r.ok, true);
+    if (r.ok !== true || r.dados.tipo !== "VENDA") return;
+    assert.deepEqual(r.dados.participanteIds, [CORRETOR_B]);
+    assert.equal("corretorId" in r.dados, false);
+  });
+
+  it("não lê equipe nem ordem do cliente", () => {
+    const r = validarLancamento(
+      formularioVenda([CORRETOR], { equipeId: EQUIPE, ordem: "7" }),
+    );
+    assert.equal(r.ok, true);
+    if (r.ok !== true || r.dados.tipo !== "VENDA") return;
+    assert.equal("equipeId" in r.dados, false);
+    assert.equal("ordem" in r.dados, false);
+  });
+
+  it("os demais tipos continuam exigindo um corretor e não leem participantes", () => {
+    const form = formulario(BASE);
+    form.append("participanteId", CORRETOR_B);
+    const r = validarLancamento(form);
+    assert.equal(r.ok, true);
+    if (r.ok !== true || r.dados.tipo === "VENDA") return;
+    assert.equal(r.dados.corretorId, CORRETOR);
+    assert.equal("participanteIds" in r.dados, false);
   });
 });
 

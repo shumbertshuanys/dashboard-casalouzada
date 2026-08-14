@@ -49,12 +49,15 @@ function decimal(inteiro: string, centavos = "00"): DecimalFalso {
   };
 }
 
+type LinhaParticipacao = { corretorId: string; equipeId: string; ordem: number };
+
 type LinhaLancamento = {
   tipo: TipoEventoMetrica;
-  corretorId: string;
-  equipeId: string;
+  corretorId: string | null;
+  equipeId: string | null;
   dataReferencia: Date;
   valor: DecimalFalso | null;
+  participacoes: LinhaParticipacao[];
 };
 
 type LinhaSaldo = {
@@ -67,6 +70,11 @@ type LinhaSaldo = {
 /** Linha do banco e o objeto de domínio que ela deve virar, criados juntos. */
 type Par<Linha, Dominio> = { linha: Linha; dominio: Dominio };
 
+/**
+ * Depois do cutover, VENDA e evento individual têm formas diferentes no banco:
+ * a venda traz os campos antigos `NULL` e o crédito nas participações; os
+ * demais tipos trazem corretor e equipe e nenhuma participação (DEC-051).
+ */
 function lancamento(
   tipo: TipoEventoMetrica,
   corretorId: string,
@@ -76,20 +84,60 @@ function lancamento(
   centavos = "00",
 ): Par<LinhaLancamento, LancamentoMetrica> {
   const dataReferencia = paraDataCivil(dia);
+  const valor = inteiro === null ? null : `${inteiro}.${centavos}`;
+  const valorDecimal = inteiro === null ? null : decimal(inteiro, centavos);
+
+  if (tipo === "VENDA") {
+    return {
+      linha: {
+        tipo,
+        corretorId: null,
+        equipeId: null,
+        dataReferencia,
+        valor: valorDecimal,
+        participacoes: [{ corretorId, equipeId, ordem: 1 }],
+      },
+      dominio: {
+        tipo,
+        dataReferencia,
+        valor,
+        participacoes: [{ corretorId, equipeId, ordem: 1 }],
+      },
+    };
+  }
+
+  return {
+    linha: { tipo, corretorId, equipeId, dataReferencia, valor: valorDecimal, participacoes: [] },
+    dominio: { tipo, corretorId, equipeId, dataReferencia, valor },
+  };
+}
+
+/** Venda compartilhada: uma linha, N participações na ordem informada. */
+function vendaCompartilhada(
+  dia: string,
+  inteiro: string,
+  participantes: readonly { corretorId: string; equipeId: string }[],
+  centavos = "00",
+): Par<LinhaLancamento, LancamentoMetrica> {
+  const dataReferencia = paraDataCivil(dia);
+  const participacoes = participantes.map((participante, indice) => ({
+    ...participante,
+    ordem: indice + 1,
+  }));
   return {
     linha: {
-      tipo,
-      corretorId,
-      equipeId,
+      tipo: "VENDA",
+      corretorId: null,
+      equipeId: null,
       dataReferencia,
-      valor: inteiro === null ? null : decimal(inteiro, centavos),
+      valor: decimal(inteiro, centavos),
+      participacoes,
     },
     dominio: {
-      tipo,
-      corretorId,
-      equipeId,
+      tipo: "VENDA",
       dataReferencia,
-      valor: inteiro === null ? null : `${inteiro}.${centavos}`,
+      valor: `${inteiro}.${centavos}`,
+      participacoes,
     },
   };
 }
@@ -435,6 +483,74 @@ describe("T8 — erro de domínio não vira INDISPONIVEL", () => {
 
     await assert.rejects(() => obterMetricasPainel(prisma, AGORA));
     assert.equal(chamadas.lancamento.length, 1);
+  });
+});
+
+describe("venda compartilhada atravessa a fronteira sem cálculo (DEC-051)", () => {
+  const COMPARTILHADA = vendaCompartilhada("2026-08-14", "900000", [
+    { corretorId: "c1", equipeId: "e1" },
+    { corretorId: "c2", equipeId: "e1" },
+    { corretorId: "c3", equipeId: "e3" },
+  ]);
+
+  it("mapeia as participações aninhadas preservando corretor, equipe e ordem", async () => {
+    const { prisma } = criarPrismaFalso({ ...LEITURAS_BASE, lancamentos: [COMPARTILHADA.linha] });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    // A fronteira não divide, não deduplica e não conta: o que ela devolve é o
+    // que o núcleo puro produz sobre exatamente o mesmo domínio.
+    const esperado = calcularMetricasEquipes(
+      [COMPARTILHADA.dominio],
+      CORRETORES,
+      EQUIPES,
+      AGORA,
+    );
+    assert.deepEqual(resultado.equipes, { estadoLeitura: "OK", dados: esperado });
+  });
+
+  it("a venda entra uma vez nos números da empresa", async () => {
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_BASE,
+      lancamentos: [COMPARTILHADA.linha],
+      saldos: [],
+    });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(resultado.empresa.periodos.estadoLeitura, "OK");
+    if (resultado.empresa.periodos.estadoLeitura !== "OK") return;
+    assert.equal(resultado.empresa.periodos.dados.quadroMensal.VENDA, 1);
+    assert.equal(resultado.empresa.periodos.dados.vgvPeriodos.mensal, "900000.00");
+  });
+
+  it("recusa VENDA com o crédito antigo preenchido em vez de calcular torto", async () => {
+    const corrompida = {
+      ...COMPARTILHADA.linha,
+      corretorId: "c1",
+      equipeId: "e1",
+    };
+    const { prisma } = criarPrismaFalso({ ...LEITURAS_BASE, lancamentos: [corrompida] });
+
+    await assert.rejects(() => obterMetricasPainel(prisma, AGORA), /crédito antigo/);
+  });
+
+  it("recusa VENDA sem participação", async () => {
+    const semElenco = { ...COMPARTILHADA.linha, participacoes: [] };
+    const { prisma } = criarPrismaFalso({ ...LEITURAS_BASE, lancamentos: [semElenco] });
+
+    await assert.rejects(() => obterMetricasPainel(prisma, AGORA), /sem participação/);
+  });
+
+  it("recusa não-VENDA sem corretor ou equipe", async () => {
+    const individualQuebrado = {
+      ...lancamento("LOCACAO", "c2", "e2", "2026-08-04", "3500").linha,
+      corretorId: null,
+    };
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_BASE,
+      lancamentos: [individualQuebrado],
+    });
+
+    await assert.rejects(() => obterMetricasPainel(prisma, AGORA), /sem corretor ou equipe/);
   });
 });
 

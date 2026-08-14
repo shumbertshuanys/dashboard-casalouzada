@@ -23,18 +23,37 @@ const AGORA = new Date("2026-08-15T15:00:00.000Z");
 
 let sequencia = 0;
 
-/** Um lançamento com o mínimo que o cálculo precisa; ids não importam aqui. */
+/**
+ * Um lançamento com o mínimo que o cálculo precisa; ids não importam aqui.
+ *
+ * Venda nasce com **um** participante — é o caso de sempre, e o que os testes
+ * da empresa exercitam. A venda compartilhada tem suíte própria em
+ * `tests/venda-compartilhada.test.ts`.
+ */
 function lancamento(
   tipo: TipoEventoMetrica,
   diaCivil: string,
   valor: string | null = null,
 ): LancamentoMetrica {
   sequencia += 1;
+  const dataReferencia = paraDataCivil(diaCivil);
+
+  if (tipo === "VENDA") {
+    return {
+      tipo,
+      dataReferencia,
+      valor,
+      participacoes: [
+        { corretorId: `corretor-${sequencia}`, equipeId: `equipe-${sequencia}`, ordem: 1 },
+      ],
+    };
+  }
+
   return {
     tipo,
     corretorId: `corretor-${sequencia}`,
     equipeId: `equipe-${sequencia}`,
-    dataReferencia: paraDataCivil(diaCivil),
+    dataReferencia,
     valor,
   };
 }
@@ -570,7 +589,12 @@ describe("período corrente segue São Paulo, não UTC", () => {
 // F3.2B — equipes e rankings
 // ---------------------------------------------------------------------------
 
-/** Lançamento com corretor e equipe explícitos: aqui os ids são o teste. */
+/**
+ * Lançamento com corretor e equipe explícitos: aqui os ids são o teste.
+ *
+ * Em VENDA o par (corretor, equipe) vira a participação de ordem 1 — a forma
+ * que a E3 dá ao crédito de venda de participante único (DEC-051).
+ */
 function evento(
   tipo: TipoEventoMetrica,
   diaCivil: string,
@@ -578,7 +602,12 @@ function evento(
   equipeId: string,
   valor: string | null = null,
 ): LancamentoMetrica {
-  return { tipo, corretorId, equipeId, dataReferencia: paraDataCivil(diaCivil), valor };
+  const dataReferencia = paraDataCivil(diaCivil);
+
+  if (tipo === "VENDA") {
+    return { tipo, dataReferencia, valor, participacoes: [{ corretorId, equipeId, ordem: 1 }] };
+  }
+  return { tipo, corretorId, equipeId, dataReferencia, valor };
 }
 
 function corretor(

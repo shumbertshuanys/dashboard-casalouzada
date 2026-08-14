@@ -72,7 +72,7 @@ async function criarCorretor(sufixo: string, equipeId: string, ativo = true) {
 async function criarLancamento(
   corretorId: string,
   equipeId: string,
-  tipo: "VENDA" | "LOCACAO" | "PROPOSTA" | "CAPTACAO_LOCACAO" = "PROPOSTA",
+  tipo: "LOCACAO" | "PROPOSTA" | "CAPTACAO_LOCACAO" = "PROPOSTA",
   valor: string | null = null,
   data = "2026-08-10",
 ) {
@@ -95,7 +95,7 @@ async function editar(
   id: string,
   corretorIdNovo: string,
   escolha: string | null,
-  extras: { tipo?: "VENDA" | "PROPOSTA" | "CAPTACAO_LOCACAO"; valor?: string | null; data?: string } = {},
+  extras: { tipo?: "LOCACAO" | "PROPOSTA" | "CAPTACAO_LOCACAO"; valor?: string | null; data?: string } = {},
 ) {
   const atual = await prisma.lancamento.findUniqueOrThrow({
     where: { id },
@@ -112,17 +112,22 @@ async function editar(
     if (!permitido.ok) return { gravou: false as const, motivo: permitido.erro };
   }
 
+  // Esta suíte só exercita tipos de participante único, onde os dois campos
+  // são obrigatórios; venda credita por participação e tem suíte própria.
+  const corretorIdAnterior = atual.corretorId as string;
+  const equipeIdArmazenada = atual.equipeId as string;
+
   const resolucao = resolverEquipeDoLancamento({
-    corretorIdAnterior: atual.corretorId,
-    equipeIdArmazenada: atual.equipeId,
+    corretorIdAnterior,
+    equipeIdArmazenada,
     corretorIdNovo,
-    equipeAtualDoNovoCorretor: novo?.equipeId ?? atual.equipeId,
+    equipeAtualDoNovoCorretor: novo?.equipeId ?? equipeIdArmazenada,
     escolha,
   });
   if (!resolucao.ok) return { gravou: false as const, motivo: resolucao.erro };
 
   const tipo = extras.tipo ?? atual.tipo;
-  const monetario = tipo === "VENDA";
+  const monetario = tipo === "LOCACAO";
 
   await prisma.lancamento.update({
     where: { id },
@@ -153,7 +158,7 @@ describe("banco de teste", () => {
 describe("edição sem troca de corretor — equipe intocada", () => {
   it("editar só o valor mantém equipeId", async () => {
     const c = await criarCorretor("valor", equipeA);
-    const l = await criarLancamento(c.id, equipeA, "VENDA", "100000.00");
+    const l = await criarLancamento(c.id, equipeA, "LOCACAO", "100000.00");
 
     await prisma.lancamento.update({ where: { id: l.id }, data: { valor: "250000.00" } });
 
@@ -303,9 +308,9 @@ describe("ESCOLHA OBSOLETA — hidden do browser não é autoridade", () => {
 });
 
 describe("troca de tipo descarta valor", () => {
-  it("VENDA → PROPOSTA zera o valor", async () => {
+  it("LOCACAO → PROPOSTA zera o valor", async () => {
     const c = await criarCorretor("vp", equipeA);
-    const l = await criarLancamento(c.id, equipeA, "VENDA", "500000.00");
+    const l = await criarLancamento(c.id, equipeA, "LOCACAO", "500000.00");
     assert.equal(l.valor?.toFixed(2), "500000.00");
 
     const r = await editar(l.id, c.id, null, { tipo: "PROPOSTA" });
@@ -389,7 +394,7 @@ describe("autoria e corretor inativo", () => {
 describe("exclusão — hard delete de uma linha", () => {
   it("remove exatamente o lançamento escolhido e nada mais", async () => {
     const c = await criarCorretor("del", equipeA);
-    const x = await criarLancamento(c.id, equipeA, "VENDA", "700000.00", "2026-04-01");
+    const x = await criarLancamento(c.id, equipeA, "LOCACAO", "700000.00", "2026-04-01");
     const y = await criarLancamento(c.id, equipeA, "PROPOSTA", null, "2026-04-02");
 
     // Asserções por identidade, não por contagem global: as suítes de

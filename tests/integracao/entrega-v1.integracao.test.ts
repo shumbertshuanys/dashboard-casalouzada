@@ -26,7 +26,12 @@ const PREFIXO = "__E2A_TESTE_";
 const nome = (sufixo: string) => `${PREFIXO}${sufixo}`;
 
 async function limpar(cliente: PrismaClient): Promise<void> {
-  // Participações caem por Cascade junto com os lançamentos.
+  // Participações caem por Cascade junto com os lançamentos — mas uma venda não
+  // tem `corretor` no lançamento desde o cutover, então o alcance por
+  // participação vem primeiro; sem ele a FK `Restrict` seguraria o corretor.
+  await cliente.lancamento.deleteMany({
+    where: { participacoes: { some: { corretor: { nomeCompleto: { startsWith: PREFIXO } } } } },
+  });
   await cliente.lancamento.deleteMany({
     where: { corretor: { nomeCompleto: { startsWith: PREFIXO } } },
   });
@@ -72,12 +77,17 @@ after(async () => {
   await prisma.$disconnect();
 });
 
+/**
+ * Uma venda no estado final da E3: os campos antigos `NULL`, porque o crédito
+ * mora nas participações (DEC-051). O CHECK do cutover recusaria qualquer outra
+ * forma — e é isso que os testes abaixo exercitam ao criar as participações.
+ */
 async function criarVenda(): Promise<string> {
   const venda = await prisma.lancamento.create({
     data: {
       tipo: "VENDA",
-      corretorId,
-      equipeId,
+      corretorId: null,
+      equipeId: null,
       dataReferencia: paraDataCivil("2026-08-05"),
       valor: "900000.00",
     },

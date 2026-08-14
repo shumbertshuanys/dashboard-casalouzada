@@ -81,9 +81,8 @@ export function ehIdLancamentoValido(valor: unknown): valor is string {
   return typeof valor === "string" && UUID_CANONICO.test(valor);
 }
 
-export type DadosLancamento = {
-  tipo: TipoLancamento;
-  corretorId: string;
+/** O que os dois contratos têm em comum. */
+type DadosComuns = {
   dataReferencia: Date;
   /** String decimal canônica, ou `null` nos tipos não monetários. */
   valor: string | null;
@@ -95,7 +94,34 @@ export type DadosLancamento = {
   observacao: string | null;
 };
 
-export type CampoLancamento = keyof DadosLancamento;
+/**
+ * Uma venda: o crédito é a lista de participantes, na ordem em que o operador
+ * os informou (DEC-051). Não tem `corretorId` — depois do cutover da E3 a venda
+ * não credita ninguém pelo lançamento.
+ */
+export type DadosVenda = DadosComuns & {
+  tipo: "VENDA";
+  /** Ids na ordem do formulário; a posição vira a `ordem` da participação. */
+  participanteIds: string[];
+};
+
+/** Qualquer outro tipo: um corretor, como sempre foi. */
+export type DadosEventoIndividual = DadosComuns & {
+  tipo: Exclude<TipoLancamento, "VENDA">;
+  corretorId: string;
+};
+
+export type DadosLancamento = DadosVenda | DadosEventoIndividual;
+
+/**
+ * As chaves que podem receber mensagem de erro. `participanteIds` é a da venda;
+ * `corretorId` continua a dos demais tipos.
+ */
+export type CampoLancamento =
+  | keyof DadosComuns
+  | "tipo"
+  | "corretorId"
+  | "participanteIds";
 export type ErrosLancamento = Partial<Record<CampoLancamento, string>>;
 
 export type ResultadoLancamento =
@@ -126,11 +152,19 @@ export function validarLancamento(form: FormData): ResultadoLancamento {
   const tipo = interpretarTipo(texto(form.get("tipo")));
   if (tipo === null) erros.tipo = "Escolha o tipo do lançamento.";
 
-  const corretorId = texto(form.get("corretorId"));
-  if (corretorId === "") {
-    erros.corretorId = "Escolha o corretor.";
-  } else if (!ehIdCorretorValido(corretorId)) {
-    erros.corretorId = "Corretor inválido.";
+  // Em VENDA o crédito é a lista de participantes, na ordem em que vieram do
+  // formulário; nos demais tipos continua o corretor único (DEC-051).
+  const ehVenda = tipo === "VENDA";
+  const participanteIds = ehVenda ? lerParticipantes(form, erros) : [];
+
+  let corretorId = "";
+  if (!ehVenda) {
+    corretorId = texto(form.get("corretorId"));
+    if (corretorId === "") {
+      erros.corretorId = "Escolha o corretor.";
+    } else if (!ehIdCorretorValido(corretorId)) {
+      erros.corretorId = "Corretor inválido.";
+    }
   }
 
   const dataBruta = texto(form.get("dataReferencia"));
@@ -207,19 +241,56 @@ export function validarLancamento(form: FormData): ResultadoLancamento {
 
   if (Object.keys(erros).length > 0) return { ok: false, erros };
 
+  const comuns = {
+    dataReferencia: dataReferencia as Date,
+    valor,
+    valorProposta,
+    statusProposta,
+    imovelRef,
+    observacao,
+  };
+
+  if (tipo === "VENDA") {
+    return { ok: true, dados: { ...comuns, tipo, participanteIds } };
+  }
+
   return {
     ok: true,
-    dados: {
-      tipo: tipo as TipoLancamento,
-      corretorId,
-      dataReferencia: dataReferencia as Date,
-      valor,
-      valorProposta,
-      statusProposta,
-      imovelRef,
-      observacao,
-    },
+    dados: { ...comuns, tipo: tipo as Exclude<TipoLancamento, "VENDA">, corretorId },
   };
+}
+
+/**
+ * Os participantes de uma venda, na ordem em que o formulário os enviou.
+ *
+ * `getAll` preserva a ordem dos campos do formulário, e é ela que decide a
+ * `ordem` de cada participação — decisão do proprietário: primeiro da lista,
+ * ordem 1. Nem `equipeId` nem `ordem` são lidos do cliente: a equipe sai da
+ * consulta do servidor e a ordem, da posição validada aqui.
+ *
+ * Campo em branco é linha não preenchida do formulário e some sem virar erro;
+ * o que sobra é que precisa ser um conjunto válido.
+ */
+function lerParticipantes(form: FormData, erros: ErrosLancamento): string[] {
+  const ids = form
+    .getAll("participanteId")
+    .map((valor) => (typeof valor === "string" ? valor.trim() : ""))
+    .filter((valor) => valor !== "");
+
+  if (ids.length === 0) {
+    erros.participanteIds = "Escolha pelo menos um participante da venda.";
+    return [];
+  }
+  if (ids.some((id) => !ehIdCorretorValido(id))) {
+    erros.participanteIds = "Participante inválido.";
+    return [];
+  }
+  if (new Set(ids).size !== ids.length) {
+    erros.participanteIds = "O mesmo corretor não pode participar duas vezes da mesma venda.";
+    return [];
+  }
+
+  return ids;
 }
 
 /* ------------------------------------------------------------------ */

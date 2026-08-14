@@ -14,7 +14,8 @@ export const metadata: Metadata = {
 export default async function PaginaNovoLancamento() {
   await exigirAdministradorAtivo();
 
-  // Só corretores ativos podem receber lançamento novo. A action reconsulta.
+  // Só corretores ativos podem receber lançamento novo — e, numa venda, só os
+  // de equipe ativa. A action reconsulta os dois casos.
   const corretores = await prisma.corretor.findMany({
     where: { ativo: true },
     orderBy: [{ nomeExibicao: "asc" }, { nomeCompleto: "asc" }],
@@ -59,6 +60,7 @@ export default async function PaginaNovoLancamento() {
           valoresIniciais={{
             tipo: "",
             corretorId: "",
+            participanteIds: [],
             // O dia nasce no servidor, no fuso do escritório: o relógio do
             // navegador pode estar em outro fuso e gravaria o dia errado.
             dataReferencia: hojeEmSaoPaulo(),

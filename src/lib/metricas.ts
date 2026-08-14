@@ -18,6 +18,15 @@
  * São duas entradas independentes: `calcularMetricasEmpresa` para os números da
  * empresa (F3.2A) e `calcularMetricasEquipes` para os quadros das equipes
  * (F3.2B). Nenhuma das duas lê banco — a leitura é da F3.3.
+ *
+ * Desde a E3, venda tem crédito próprio: uma `VENDA` é **um** evento com N
+ * participações, e o crédito mora nelas (DEC-051). A empresa continua contando
+ * a venda e o valor **uma vez**; cada participante recebe +1 e a sua fração
+ * igualitária; cada equipe recebe a soma das frações dos seus participantes
+ * (DEC-052). Não existe total por equipe no painel v1 — os quadros mostram
+ * rankings por corretor —, então a regra "a equipe conta a venda uma vez"
+ * aparece aqui como o VGV da equipe **não** repetir o valor integral quando ela
+ * tem mais de um participante na mesma venda.
  */
 
 import { anoCorrente, type JanelaCivil, mesCorrente, trimestreCorrente } from "@/lib/datas";
@@ -38,21 +47,66 @@ export type TipoEventoMetrica = (typeof TIPOS_EVENTO)[number];
 /** Só os tipos que têm saldo de abertura (DEC-035). */
 export type TipoSaldoMetrica = Extract<TipoEventoMetrica, "VENDA" | "AVALIACAO_GOOGLE">;
 
+/** Todos os tipos menos VENDA — os que creditam um corretor só. */
+export type TipoEventoIndividual = Exclude<TipoEventoMetrica, "VENDA">;
+
 /**
- * O lançamento como o cálculo precisa dele — não o modelo Prisma inteiro.
+ * O crédito de um participante numa venda (DEC-051).
+ *
+ * `equipeId` é o **snapshot** da equipe no momento do fato, nunca a lotação
+ * atual do corretor. `ordem` começa em 1, é contígua dentro da venda e decide
+ * quem recebe os centavos residuais da divisão (DEC-052).
+ */
+export type ParticipacaoMetrica = {
+  corretorId: string;
+  equipeId: string;
+  ordem: number;
+};
+
+/**
+ * Uma venda: **um** evento, com o crédito nas participações (DEC-051).
+ *
+ * Não tem `corretorId` nem `equipeId` de propósito — depois do cutover da E3
+ * esses campos são `NULL` no banco para toda VENDA, e o tipo impede que algum
+ * cálculo volte a creditar venda por eles.
+ */
+export type VendaMetrica = {
+  tipo: "VENDA";
+  /** Data civil do fato: meia-noite UTC do dia, como em `datas.ts`. */
+  dataReferencia: Date;
+  /** String decimal canônica; `null` é venda sem valor, que não soma calada. */
+  valor: string | null;
+  participacoes: readonly ParticipacaoMetrica[];
+};
+
+/**
+ * Qualquer evento que não seja venda: um corretor, uma equipe.
  *
  * `equipeId` é a equipe **gravada no evento**, e é sempre ela que credita a
  * produção — nunca a lotação atual do corretor (DEC-002).
  */
-export type LancamentoMetrica = {
-  tipo: TipoEventoMetrica;
+export type EventoIndividualMetrica = {
+  tipo: TipoEventoIndividual;
   corretorId: string;
   equipeId: string;
-  /** Data civil do fato: meia-noite UTC do dia, como em `datas.ts`. */
   dataReferencia: Date;
   /** String decimal canônica, ou `null` nos tipos que não têm valor. */
   valor: string | null;
 };
+
+/**
+ * O lançamento como o cálculo precisa dele — não o modelo Prisma inteiro.
+ *
+ * União discriminada por `tipo`: acessar `corretorId` numa venda não compila, e
+ * acessar `participacoes` num evento individual também não. É o tipo que impede
+ * a dualidade de crédito que a E3 veio eliminar.
+ */
+export type LancamentoMetrica = VendaMetrica | EventoIndividualMetrica;
+
+/** Estreita a união pelo discriminante. */
+export function ehVenda(lancamento: LancamentoMetrica): lancamento is VendaMetrica {
+  return lancamento.tipo === "VENDA";
+}
 
 /** O saldo de abertura de um tipo, autoritativo até o próprio corte (DEC-036). */
 export type SaldoHistoricoMetrica = {
@@ -224,15 +278,88 @@ function deCentavos(centavos: bigint): string {
  * na tela indicando que falta dado. Falhar aqui deixa a decisão para a camada de
  * leitura, que sabe transformar falha em política de exibição.
  */
-function valorDaVenda(lancamento: LancamentoMetrica): string {
-  if (lancamento.valor === null) {
-    const dia = lancamento.dataReferencia.toISOString().slice(0, 10);
+function valorDaVenda(venda: VendaMetrica): string {
+  if (venda.valor === null) {
+    const dia = venda.dataReferencia.toISOString().slice(0, 10);
     throw new Error(
-      `Lançamento de VENDA sem valor não pode entrar no VGV: corretor ${lancamento.corretorId}, ` +
-        `data de referência ${dia}.`,
+      `Lançamento de VENDA sem valor não pode entrar no VGV: data de referência ${dia}, ` +
+        `${venda.participacoes.length} participante(s).`,
     );
   }
-  return lancamento.valor;
+  return venda.valor;
+}
+
+/**
+ * Exige a estrutura que a DEC-051 garante no banco e na aplicação: pelo menos
+ * um participante, ordem inteira, contígua de 1 a N, sem repetição, e nenhum
+ * corretor duas vezes na mesma venda.
+ *
+ * Estrutura inválida **lança**. Creditar mesmo assim distribuiria dinheiro por
+ * uma lista que não fecha — e uma venda sem participação nenhuma creditaria
+ * ninguém em silêncio, que é pior do que falhar alto.
+ */
+export function validarParticipacoesDaVenda(
+  participacoes: readonly ParticipacaoMetrica[],
+  origem: string,
+): void {
+  if (participacoes.length === 0) {
+    throw new Error(`Venda sem participação não credita ninguém: ${origem}.`);
+  }
+
+  const ordens = new Set<number>();
+  const corretores = new Set<string>();
+
+  for (const participacao of participacoes) {
+    const { ordem } = participacao;
+    if (!Number.isInteger(ordem) || ordem < 1 || ordem > participacoes.length) {
+      throw new Error(
+        `Ordem de participação fora de 1..${participacoes.length} em ${origem}: ${ordem}.`,
+      );
+    }
+    if (ordens.has(ordem)) {
+      throw new Error(`Ordem de participação repetida em ${origem}: ${ordem}.`);
+    }
+    if (corretores.has(participacao.corretorId)) {
+      throw new Error(
+        `Corretor repetido na mesma venda em ${origem}: ${participacao.corretorId}.`,
+      );
+    }
+    ordens.add(ordem);
+    corretores.add(participacao.corretorId);
+  }
+}
+
+/**
+ * A divisão igualitária do valor de uma venda, em centavos exatos (DEC-052).
+ *
+ * Divisão inteira e resto: os `resto` primeiros participantes, por `ordem`
+ * crescente, recebem um centavo a mais. `R$ 100,00` entre três dá
+ * `33,34 / 33,33 / 33,33`, e a soma das frações é **exatamente** o valor — é
+ * essa invariante que faz o VGV das equipes recompor o total da venda.
+ *
+ * A fração não é persistida em lugar nenhum: deriva de (valor, N, ordem) aqui,
+ * toda vez. Devolve um mapa por `ordem`, que é única dentro da venda.
+ */
+export function dividirValorDaVenda(
+  valor: string,
+  participacoes: readonly ParticipacaoMetrica[],
+  origem: string,
+): Map<number, string> {
+  validarParticipacoesDaVenda(participacoes, origem);
+
+  const centavos = paraCentavos(valor, origem);
+  const total = BigInt(participacoes.length);
+  const base = centavos / total;
+  const resto = centavos % total;
+
+  const fracoes = new Map<number, string>();
+  for (const participacao of participacoes) {
+    // A ordem é contígua de 1 a N, então exatamente `resto` participantes
+    // satisfazem esta comparação — nem um a mais, nem um a menos.
+    const extra = BigInt(participacao.ordem) <= resto ? BigInt(1) : BigInt(0);
+    fracoes.set(participacao.ordem, deCentavos(base + extra));
+  }
+  return fracoes;
 }
 
 /**
@@ -253,29 +380,45 @@ function dentroDaJanela(janela: JanelaCivil, data: Date): boolean {
 }
 
 /**
- * Só o que veio **depois** do corte. O corte é inclusivo no saldo, então um
- * evento exatamente em `dataCorte` já está representado ali e não soma de novo
+ * As vendas posteriores ao corte. O corte é inclusivo no saldo, então uma venda
+ * exatamente em `dataCorte` já está representada ali e não soma de novo
  * (DEC-036).
  */
-function posterioresAoCorte(
+function vendasPosterioresAoCorte(
   lancamentos: readonly LancamentoMetrica[],
-  tipo: TipoSaldoMetrica,
   dataCorte: Date,
-): LancamentoMetrica[] {
+): VendaMetrica[] {
   return lancamentos.filter(
-    (lancamento) => lancamento.tipo === tipo && lancamento.dataReferencia > dataCorte,
+    (lancamento): lancamento is VendaMetrica =>
+      ehVenda(lancamento) && lancamento.dataReferencia > dataCorte,
   );
 }
 
-/** VGV de uma janela: só `VENDA`, só lançamentos, saldo com participação zero. */
+/** Mesma regra de corte, para os tipos em que só a contagem importa. */
+function contarPosterioresAoCorte(
+  lancamentos: readonly LancamentoMetrica[],
+  tipo: TipoSaldoMetrica,
+  dataCorte: Date,
+): number {
+  return lancamentos.filter(
+    (lancamento) => lancamento.tipo === tipo && lancamento.dataReferencia > dataCorte,
+  ).length;
+}
+
+/**
+ * VGV de uma janela: só `VENDA`, só lançamentos, saldo com participação zero.
+ *
+ * Uma venda entra **uma vez**, pelo valor integral, qualquer que seja o número
+ * de participantes — a empresa não infla com o tamanho do elenco (DEC-052).
+ */
 function vgvDaJanela(
   lancamentos: readonly LancamentoMetrica[],
   janela: JanelaCivil,
   origem: string,
 ): string {
   const vendas = lancamentos.filter(
-    (lancamento) =>
-      lancamento.tipo === "VENDA" && dentroDaJanela(janela, lancamento.dataReferencia),
+    (lancamento): lancamento is VendaMetrica =>
+      ehVenda(lancamento) && dentroDaJanela(janela, lancamento.dataReferencia),
   );
   return somar(vendas.map(valorDaVenda), origem);
 }
@@ -321,11 +464,11 @@ export function calcularMetricasEmpresa(
   const saldoAvaliacao = saldos.find((saldo) => saldo.tipo === "AVALIACAO_GOOGLE");
 
   const vendasPosteriores = saldoVenda
-    ? posterioresAoCorte(lancamentos, "VENDA", saldoVenda.dataCorte)
+    ? vendasPosterioresAoCorte(lancamentos, saldoVenda.dataCorte)
     : [];
   const avaliacoesPosteriores = saldoAvaliacao
-    ? posterioresAoCorte(lancamentos, "AVALIACAO_GOOGLE", saldoAvaliacao.dataCorte)
-    : [];
+    ? contarPosterioresAoCorte(lancamentos, "AVALIACAO_GOOGLE", saldoAvaliacao.dataCorte)
+    : 0;
 
   const semSaldo = { estado: "SEM_SALDO_HISTORICO", valor: null } as const;
 
@@ -346,7 +489,7 @@ export function calcularMetricasEmpresa(
           }
         : semSaldo,
       avaliacoes: saldoAvaliacao
-        ? { estado: "OK", valor: saldoAvaliacao.quantidade + avaliacoesPosteriores.length }
+        ? { estado: "OK", valor: saldoAvaliacao.quantidade + avaliacoesPosteriores }
         : semSaldo,
     },
 
@@ -416,23 +559,93 @@ function compararDinheiroDesc(a: string, b: string): number {
 }
 
 /**
+ * Um crédito de produção dentro de uma equipe: quem produziu, de que tipo, e —
+ * só em venda — quanto de VGV cabe àquele participante.
+ *
+ * É a forma normalizada que unifica os dois modelos de crédito: um evento
+ * individual gera **um** crédito, para o corretor gravado nele; uma venda gera
+ * **um crédito por participação daquela equipe**, cada um com a sua fração.
+ */
+type CreditoDaEquipe = {
+  corretorId: string;
+  tipo: TipoEventoMetrica;
+  /** Fração canônica da venda; `null` em todo tipo que não é VENDA. */
+  vgv: string | null;
+};
+
+/**
+ * Os créditos do mês que pertencem a uma equipe.
+ *
+ * Para eventos individuais, pertencer é `Lancamento.equipeId` — a equipe
+ * gravada no fato (DEC-002). Para vendas, é ter **pelo menos uma participação**
+ * com o snapshot daquela equipe (DEC-051): a venda entra no quadro da equipe
+ * uma vez por participante dela, nunca pela lotação atual de ninguém.
+ *
+ * Duas pessoas da mesma equipe geram dois créditos — cada participante recebe o
+ * seu +1 (DEC-052) —, mas cada um com **a sua fração**: o VGV que a equipe
+ * recebe é a soma das frações dos seus participantes, não o valor da venda
+ * repetido. A soma das frações de todas as equipes é exatamente o valor.
+ */
+function creditosDaEquipe(
+  equipeId: string,
+  lancamentosDoMes: readonly LancamentoMetrica[],
+): CreditoDaEquipe[] {
+  const creditos: CreditoDaEquipe[] = [];
+
+  for (const lancamento of lancamentosDoMes) {
+    if (!ehVenda(lancamento)) {
+      if (lancamento.equipeId === equipeId) {
+        creditos.push({ corretorId: lancamento.corretorId, tipo: lancamento.tipo, vgv: null });
+      }
+      continue;
+    }
+
+    const dia = lancamento.dataReferencia.toISOString().slice(0, 10);
+    const origem = `venda de ${dia}`;
+    // Validada antes do filtro por equipe, de propósito: uma venda sem
+    // participação nenhuma não pode passar despercebida só porque não credita
+    // esta equipe — ela não credita equipe alguma.
+    validarParticipacoesDaVenda(lancamento.participacoes, origem);
+
+    const daEquipe = lancamento.participacoes.filter(
+      (participacao) => participacao.equipeId === equipeId,
+    );
+    if (daEquipe.length === 0) continue;
+
+    const fracoes = dividirValorDaVenda(valorDaVenda(lancamento), lancamento.participacoes, origem);
+    for (const participacao of daEquipe) {
+      creditos.push({
+        corretorId: participacao.corretorId,
+        tipo: "VENDA",
+        // `ordem` é chave da divisão e a validação já garantiu que existe.
+        vgv: fracoes.get(participacao.ordem) as string,
+      });
+    }
+  }
+
+  return creditos;
+}
+
+/**
  * O elenco mensal de uma equipe: a união dos corretores **ativos** lotados nela
- * hoje com os corretores **ativos** que tenham lançamento do mês creditado a ela
- * (DEC-038).
+ * hoje com os corretores **ativos** que tenham produção do mês creditada a ela
+ * (DEC-038, estendida pela DEC-052).
+ *
+ * "Produção creditada" já chega resolvida nos créditos: para venda, isso quer
+ * dizer participação com o snapshot desta equipe — um participante ativo entra
+ * no elenco da equipe da participação, mesmo lotado hoje em outra.
  *
  * A união é por `id`, e sai sem repetição porque cada corretor aparece uma vez
  * na lista de entrada. Corretor inativo não entra em elenco nenhum (DEC-006) —
- * seus eventos continuam contando nos totais da empresa, que são calculados dos
- * lançamentos e não passam por aqui.
+ * sua participação continua existindo e continua contando nos totais da
+ * empresa, que são calculados dos lançamentos e não passam por aqui.
  */
 function elencoDaEquipe(
   equipe: EquipeMetrica,
   corretores: readonly CorretorMetrica[],
-  lancamentosDaEquipeNoMes: readonly LancamentoMetrica[],
+  creditos: readonly CreditoDaEquipe[],
 ): CorretorMetrica[] {
-  const produziramNoMes = new Set(
-    lancamentosDaEquipeNoMes.map((lancamento) => lancamento.corretorId),
-  );
+  const produziramNoMes = new Set(creditos.map((credito) => credito.corretorId));
 
   return corretores.filter(
     (corretor) =>
@@ -443,14 +656,14 @@ function elencoDaEquipe(
 /** Os oito rankings de uma equipe, já ordenados. */
 function rankingsDaEquipe(
   elenco: readonly CorretorMetrica[],
-  lancamentosDaEquipeNoMes: readonly LancamentoMetrica[],
+  creditos: readonly CreditoDaEquipe[],
   nomeDaEquipe: string,
 ): RankingsDaEquipe {
-  const porCorretor = new Map<string, LancamentoMetrica[]>();
-  for (const lancamento of lancamentosDaEquipeNoMes) {
-    const lista = porCorretor.get(lancamento.corretorId);
-    if (lista) lista.push(lancamento);
-    else porCorretor.set(lancamento.corretorId, [lancamento]);
+  const porCorretor = new Map<string, CreditoDaEquipe[]>();
+  for (const credito of creditos) {
+    const lista = porCorretor.get(credito.corretorId);
+    if (lista) lista.push(credito);
+    else porCorretor.set(credito.corretorId, [credito]);
   }
 
   // Corretor ativo sem evento aparece com zero real: o elenco inteiro é
@@ -461,7 +674,7 @@ function rankingsDaEquipe(
         corretorId: corretor.id,
         nomeExibicao: corretor.nomeExibicao,
         valor: (porCorretor.get(corretor.id) ?? []).filter(
-          (lancamento) => lancamento.tipo === TIPO_DA_CONTAGEM[chave],
+          (credito) => credito.tipo === TIPO_DA_CONTAGEM[chave],
         ).length,
       })),
       (a, b) => b.valor - a.valor,
@@ -473,8 +686,8 @@ function rankingsDaEquipe(
       nomeExibicao: corretor.nomeExibicao,
       valor: somar(
         (porCorretor.get(corretor.id) ?? [])
-          .filter((lancamento) => lancamento.tipo === "VENDA")
-          .map(valorDaVenda),
+          .filter((credito) => credito.tipo === "VENDA")
+          .map((credito) => credito.vgv as string),
         `ranking de VGV da equipe ${nomeDaEquipe}`,
       ),
     })),
@@ -531,9 +744,10 @@ export function calcularMetricasEquipes(
     estadoPeriodoMensal,
     estadoEquipes: "OK",
     equipes: ordenadas.map((equipe) => {
-      // O crédito é sempre por `Lancamento.equipeId` (DEC-002).
-      const daEquipe = doMes.filter((lancamento) => lancamento.equipeId === equipe.id);
-      const elenco = elencoDaEquipe(equipe, corretores, daEquipe);
+      // O crédito é o do fato: `Lancamento.equipeId` nos eventos individuais
+      // (DEC-002) e `ParticipacaoVenda.equipeId` nas vendas (DEC-051).
+      const creditos = creditosDaEquipe(equipe.id, doMes);
+      const elenco = elencoDaEquipe(equipe, corretores, creditos);
 
       return {
         id: equipe.id,
@@ -544,7 +758,7 @@ export function calcularMetricasEquipes(
         totalCorretores: corretores.filter(
           (corretor) => corretor.ativo && corretor.equipeId === equipe.id,
         ).length,
-        rankings: rankingsDaEquipe(elenco, daEquipe, equipe.nome),
+        rankings: rankingsDaEquipe(elenco, creditos, equipe.nome),
       };
     }),
   };

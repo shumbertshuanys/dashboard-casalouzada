@@ -18,6 +18,12 @@ const PREFIXO = "__F23_TESTE_";
 const nome = (sufixo: string) => `${PREFIXO}${sufixo}`;
 
 async function limpar(cliente: PrismaClient): Promise<void> {
+  // Desde o cutover uma venda não tem `corretor` no lançamento: o vínculo com o
+  // corretor é a participação. Sem apagar por ela, a FK `Restrict` da
+  // participação impediria a remoção do corretor logo abaixo.
+  await cliente.lancamento.deleteMany({
+    where: { participacoes: { some: { corretor: { nomeCompleto: { startsWith: PREFIXO } } } } },
+  });
   await cliente.lancamento.deleteMany({
     where: { corretor: { nomeCompleto: { startsWith: PREFIXO } } },
   });
@@ -80,7 +86,13 @@ after(async () => {
   await prisma.$disconnect();
 });
 
-/** Cria um lançamento do jeito que a action cria: equipe vinda do corretor. */
+/**
+ * Cria um lançamento do jeito que a action cria: equipe vinda do corretor.
+ *
+ * Desde o cutover da E3 há duas formas. Venda grava os campos antigos `NULL` e
+ * o crédito numa participação de ordem 1 — é o que a action faz com um
+ * participante só. Os demais tipos continuam creditando pelo lançamento.
+ */
 async function lancar(
   corretorId: string,
   tipo: Parameters<typeof prisma.lancamento.create>[0]["data"]["tipo"],
@@ -91,6 +103,21 @@ async function lancar(
     where: { id: corretorId },
     select: { equipeId: true },
   });
+
+  if (tipo === "VENDA") {
+    return prisma.lancamento.create({
+      data: {
+        tipo,
+        corretorId: null,
+        equipeId: null,
+        dataReferencia: paraDataCivil(data),
+        valor,
+        criadoPor: adminId,
+        participacoes: { create: [{ corretorId, equipeId: corretor.equipeId, ordem: 1 }] },
+      },
+    });
+  }
+
   return prisma.lancamento.create({
     data: {
       tipo,
@@ -103,6 +130,22 @@ async function lancar(
       criadoPor: adminId,
     },
   });
+}
+
+/**
+ * O `where` de corretor/equipe como a página monta: o crédito de uma venda está
+ * na participação, não nas colunas antigas do lançamento.
+ *
+ * Os dois critérios vão no **mesmo** objeto: combinados, precisam ser
+ * satisfeitos pela mesma participação — a pergunta é "o crédito deste corretor
+ * nesta equipe", como antes do cutover.
+ */
+function creditadoA(corretorId?: string, equipeId?: string) {
+  const credito = {
+    ...(corretorId ? { corretorId } : {}),
+    ...(equipeId ? { equipeId } : {}),
+  };
+  return { OR: [credito, { participacoes: { some: credito } }] };
 }
 
 describe("banco de teste", () => {
@@ -178,7 +221,10 @@ describe("equipe histórica e autoria", () => {
     const corretor = await prisma.corretor.create({
       data: { nomeCompleto: nome("mudanca"), nomeExibicao: "Mud", equipeId: equipeA },
     });
-    const criado = await lancar(corretor.id, "VENDA", "2026-08-16", "100000.00");
+    // LOCACAO: tipo de participante único, onde a equipe do fato vive no
+    // próprio lançamento. O snapshot equivalente de uma venda mora na
+    // participação e tem prova própria na suíte de venda compartilhada.
+    const criado = await lancar(corretor.id, "LOCACAO", "2026-08-16", "100000.00");
     assert.equal(criado.equipeId, equipeA);
 
     await prisma.corretor.update({ where: { id: corretor.id }, data: { equipeId: equipeB } });
@@ -203,8 +249,9 @@ describe("equipe histórica e autoria", () => {
         corretor: { select: { equipeId: true } },
       },
     });
-    assert.equal(linha.equipe.id, equipeA, "a linha tem de mostrar a equipe do evento");
-    assert.equal(linha.corretor.equipeId, equipeB, "e o corretor já está na outra");
+    // Uma PROPOSTA credita pelo lançamento, então as duas relações existem.
+    assert.equal(linha.equipe?.id, equipeA, "a linha tem de mostrar a equipe do evento");
+    assert.equal(linha.corretor?.equipeId, equipeB, "e o corretor já está na outra");
   });
 });
 
@@ -310,7 +357,7 @@ describe("filtros", () => {
   it("filtra por período", async () => {
     const encontrados = await prisma.lancamento.findMany({
       where: {
-        corretorId: corretorF,
+        ...creditadoA(corretorF),
         dataReferencia: { gte: paraDataCivil("2026-02-01"), lte: paraDataCivil("2026-03-31") },
       },
       select: { dataReferencia: true },
@@ -322,30 +369,38 @@ describe("filtros", () => {
     ]);
   });
 
-  it("filtra por corretor", async () => {
-    const total = await prisma.lancamento.count({ where: { corretorId: corretorF } });
+  it("filtra por corretor, inclusive as vendas em que ele participou", async () => {
+    // Duas vendas e duas propostas. As vendas só aparecem porque o filtro
+    // também olha a participação — as colunas antigas delas são `NULL`.
+    const total = await prisma.lancamento.count({ where: creditadoA(corretorF) });
     assert.equal(total, 4);
+
+    const soPelasColunasAntigas = await prisma.lancamento.count({
+      where: { corretorId: corretorF },
+    });
+    assert.equal(soPelasColunasAntigas, 2, "venda não credita pelo lançamento (DEC-051)");
   });
 
   it("filtra por equipe do evento", async () => {
-    const naA = await prisma.lancamento.count({ where: { corretorId: corretorF, equipeId: equipeA } });
-    const naB = await prisma.lancamento.count({ where: { corretorId: corretorF, equipeId: equipeB } });
+    const naA = await prisma.lancamento.count({ where: creditadoA(corretorF, equipeA) });
+    const naB = await prisma.lancamento.count({ where: creditadoA(corretorF, equipeB) });
     // Três foram lançados enquanto ele estava na A; um depois de mudar.
     assert.equal(naA, 3);
     assert.equal(naB, 1);
   });
 
   it("filtra por tipo", async () => {
-    const vendas = await prisma.lancamento.count({ where: { corretorId: corretorF, tipo: "VENDA" } });
+    const vendas = await prisma.lancamento.count({
+      where: { ...creditadoA(corretorF), tipo: "VENDA" },
+    });
     assert.equal(vendas, 2);
   });
 
   it("combina filtros", async () => {
     const combinado = await prisma.lancamento.findMany({
       where: {
-        corretorId: corretorF,
+        ...creditadoA(corretorF, equipeA),
         tipo: "VENDA",
-        equipeId: equipeA,
         dataReferencia: { gte: paraDataCivil("2026-01-01"), lte: paraDataCivil("2026-12-31") },
       },
       select: { dataReferencia: true, valor: true },
@@ -353,6 +408,123 @@ describe("filtros", () => {
     assert.equal(combinado.length, 1);
     assert.equal(deDataCivil(combinado[0].dataReferencia), "2026-01-10");
     assert.equal(combinado[0].valor?.toFixed(2), "100000.00");
+  });
+});
+
+/**
+ * Corretor + equipe combinados perguntam pelo crédito **daquele corretor
+ * naquela equipe** — a mesma pergunta de antes do cutover. Numa venda
+ * compartilhada isso quer dizer: a mesma participação satisfaz os dois, não uma
+ * participação para cada.
+ */
+describe("filtros combinados de corretor e equipe", () => {
+  let ana = "";
+  let bruno = "";
+  let solo = "";
+
+  before(async () => {
+    ana = (
+      await prisma.corretor.create({
+        data: { nomeCompleto: nome("comb_ana"), nomeExibicao: "CombAna", equipeId: equipeA },
+      })
+    ).id;
+    bruno = (
+      await prisma.corretor.create({
+        data: { nomeCompleto: nome("comb_bruno"), nomeExibicao: "CombBruno", equipeId: equipeB },
+      })
+    ).id;
+    solo = (
+      await prisma.corretor.create({
+        data: { nomeCompleto: nome("comb_solo"), nomeExibicao: "CombSolo", equipeId: equipeA },
+      })
+    ).id;
+
+    // Venda compartilhada: Ana credita a equipe A, Bruno credita a B.
+    await prisma.lancamento.create({
+      data: {
+        tipo: "VENDA",
+        corretorId: null,
+        equipeId: null,
+        dataReferencia: paraDataCivil("2026-09-10"),
+        valor: "900000.00",
+        observacao: nome("comb_venda"),
+        participacoes: {
+          create: [
+            { corretorId: ana, equipeId: equipeA, ordem: 1 },
+            { corretorId: bruno, equipeId: equipeB, ordem: 2 },
+          ],
+        },
+      },
+    });
+
+    // Evento individual, para o contrato antigo continuar provado.
+    await lancar(solo, "PROPOSTA", "2026-09-11");
+  });
+
+  /** Ids dos lançamentos desta suíte que casam com o filtro. */
+  async function encontrados(corretorId?: string, equipeId?: string): Promise<number> {
+    return prisma.lancamento.count({
+      where: {
+        ...creditadoA(corretorId, equipeId),
+        dataReferencia: {
+          gte: paraDataCivil("2026-09-01"),
+          lte: paraDataCivil("2026-09-30"),
+        },
+      },
+    });
+  }
+
+  it("só corretor: a venda aparece para cada participante", async () => {
+    assert.equal(await encontrados(ana), 1);
+    assert.equal(await encontrados(bruno), 1);
+  });
+
+  it("só equipe: a venda aparece nas duas equipes creditadas", async () => {
+    assert.equal(await encontrados(undefined, equipeA), 2, "venda + proposta do solo");
+    assert.equal(await encontrados(undefined, equipeB), 1);
+  });
+
+  it("Ana + equipe A: aparece — é a participação dela", async () => {
+    assert.equal(await encontrados(ana, equipeA), 1);
+  });
+
+  it("Ana + equipe B: NÃO aparece — quem credita a B é o Bruno", async () => {
+    assert.equal(await encontrados(ana, equipeB), 0);
+  });
+
+  it("Bruno + equipe B: aparece", async () => {
+    assert.equal(await encontrados(bruno, equipeB), 1);
+  });
+
+  it("evento individual mantém o contrato antigo", async () => {
+    assert.equal(await encontrados(solo, equipeA), 1);
+    assert.equal(await encontrados(solo, equipeB), 0);
+  });
+
+  it("o filtro de tipo continua compondo em AND", async () => {
+    const vendas = await prisma.lancamento.count({
+      where: {
+        ...creditadoA(ana, equipeA),
+        tipo: "VENDA",
+        dataReferencia: {
+          gte: paraDataCivil("2026-09-01"),
+          lte: paraDataCivil("2026-09-30"),
+        },
+      },
+    });
+    assert.equal(vendas, 1);
+
+    const propostas = await prisma.lancamento.count({
+      where: {
+        ...creditadoA(ana, equipeA),
+        tipo: "PROPOSTA",
+        dataReferencia: {
+          gte: paraDataCivil("2026-09-01"),
+          lte: paraDataCivil("2026-09-30"),
+        },
+      },
+    });
+    assert.equal(propostas, 0);
   });
 });
 

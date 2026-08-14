@@ -96,12 +96,24 @@ type DecimalPrisma = { toFixed(casas: number): string };
 /** Os únicos tipos com saldo de abertura na v1 (DEC-035). */
 const TIPOS_COM_SALDO = ["VENDA", "AVALIACAO_GOOGLE"] as const;
 
-type LinhaLancamento = {
-  tipo: TipoEventoMetrica;
+type LinhaParticipacao = {
   corretorId: string;
   equipeId: string;
+  ordem: number;
+};
+
+/**
+ * A linha como o banco devolve **depois do cutover da E3**: em `VENDA` os dois
+ * campos antigos são `NULL` e o crédito vem das participações; nos demais tipos
+ * eles continuam obrigatórios e não há participação nenhuma.
+ */
+type LinhaLancamento = {
+  tipo: TipoEventoMetrica;
+  corretorId: string | null;
+  equipeId: string | null;
   dataReferencia: Date;
   valor: DecimalPrisma | null;
+  participacoes: LinhaParticipacao[];
 };
 
 type LinhaSaldo = {
@@ -127,17 +139,60 @@ type LinhaEquipe = {
 };
 
 /**
+ * Converte uma linha para o domínio, escolhendo o ramo da união pelo `tipo`.
+ *
  * `dataReferencia` é `@db.Date` e chega como a meia-noite UTC do dia, que é
  * exatamente a data civil de `src/lib/datas.ts`. Passa direto: reinterpretar no
  * fuso da máquina deslocaria o dia e jogaria eventos para o mês vizinho.
+ *
+ * As duas exigências abaixo são o contrato final da DEC-051 lido de volta. O
+ * banco já as garante pelo `CHECK` do cutover; aqui elas são verificadas de
+ * novo porque esta camada é a última chance de perceber que o dado não é o que
+ * o domínio afirma. Dado incompatível **lança** — nunca vira `INDISPONIVEL`,
+ * que significa "a leitura não aconteceu" e não "a leitura trouxe lixo".
+ *
+ * Participação em lançamento não-VENDA é ignorada: a aplicação nunca cria isso,
+ * e o cálculo dos tipos individuais não conhece participação.
  */
 function paraLancamento(linha: LinhaLancamento): LancamentoMetrica {
+  const dia = linha.dataReferencia.toISOString().slice(0, 10);
+  const valor = linha.valor === null ? null : linha.valor.toFixed(2);
+
+  if (linha.tipo === "VENDA") {
+    if (linha.corretorId !== null || linha.equipeId !== null) {
+      throw new Error(
+        `VENDA com crédito antigo preenchido depois do cutover: data ${dia}. ` +
+          `O crédito de venda mora em ParticipacaoVenda (DEC-051).`,
+      );
+    }
+    if (linha.participacoes.length === 0) {
+      throw new Error(`VENDA sem participação: data ${dia}. Toda venda tem pelo menos uma.`);
+    }
+    return {
+      tipo: "VENDA",
+      dataReferencia: linha.dataReferencia,
+      valor,
+      participacoes: linha.participacoes.map((participacao) => ({
+        corretorId: participacao.corretorId,
+        equipeId: participacao.equipeId,
+        ordem: participacao.ordem,
+      })),
+    };
+  }
+
+  if (linha.corretorId === null || linha.equipeId === null) {
+    throw new Error(
+      `Lançamento ${linha.tipo} sem corretor ou equipe: data ${dia}. ` +
+        `Só VENDA tem os dois campos nulos (DEC-051).`,
+    );
+  }
+
   return {
     tipo: linha.tipo,
     corretorId: linha.corretorId,
     equipeId: linha.equipeId,
     dataReferencia: linha.dataReferencia,
-    valor: linha.valor === null ? null : linha.valor.toFixed(2),
+    valor,
   };
 }
 
@@ -260,6 +315,10 @@ export async function obterMetricasPainel(
   const instante = agora ?? new Date();
 
   const [lidosLancamentos, lidosSaldos, lidosCorretores, lidosEquipes] = await Promise.allSettled([
+    // As participações vêm aninhadas, não numa quinta leitura: elas são parte
+    // do mesmo fato, e separá-las criaria um bloco cuja falha isolada — venda
+    // sem crédito — não tem significado de tela. Falhando junto, cai o mesmo
+    // bloco que já dependia de lançamentos.
     prisma.lancamento.findMany({
       select: {
         tipo: true,
@@ -267,6 +326,7 @@ export async function obterMetricasPainel(
         equipeId: true,
         dataReferencia: true,
         valor: true,
+        participacoes: { select: { corretorId: true, equipeId: true, ordem: true } },
       },
     }),
     prisma.saldoHistorico.findMany({

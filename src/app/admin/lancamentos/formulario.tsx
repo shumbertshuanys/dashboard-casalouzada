@@ -10,6 +10,7 @@ import {
   interpretarTipo,
 } from "@/lib/validacao/lancamento";
 import type { EstadoLancamento, ValoresLancamento } from "./acoes";
+import { Participantes } from "./participantes";
 
 /**
  * Criação rápida de lançamento.
@@ -52,6 +53,7 @@ export function FormularioLancamento({
   const chave = [
     atuais.tipo,
     atuais.corretorId,
+    atuais.participanteIds.join(","),
     atuais.dataReferencia,
     atuais.valor,
     atuais.valorProposta,
@@ -106,6 +108,7 @@ function Campos({
   const tipoAtual = interpretarTipo(tipo);
   const pedeValor = tipoAtual !== null && ehTipoMonetario(tipoAtual);
   const ehProposta = tipoAtual === "PROPOSTA";
+  const ehVenda = tipoAtual === "VENDA";
   const corretorEscolhido = corretores.find((corretor) => corretor.id === corretorId);
 
   return (
@@ -130,34 +133,47 @@ function Campos({
         </select>
       </Campo>
 
-      <Campo rotulo="Corretor" erro={erros?.corretorId}>
-        <select
-          name="corretorId"
-          defaultValue={atuais.corretorId}
-          onChange={(evento) => setCorretorId(evento.target.value)}
-          className="w-full rounded-md border border-white/15 bg-fundo px-3 py-2 text-texto"
-        >
-          <option value="">Selecione…</option>
-          {corretores.map((corretor) => (
-            <option key={corretor.id} value={corretor.id}>
-              {corretor.nomeExibicao} — {corretor.nomeCompleto}
-            </option>
-          ))}
-        </select>
-      </Campo>
+      {/* Venda credita por participação; os demais tipos, por um corretor só. */}
+      {ehVenda ? (
+        <Participantes
+          // Numa venda, só corretor ativo de equipe ativa é candidato; a action
+          // revalida cada um de qualquer forma.
+          corretores={corretores.filter((corretor) => corretor.equipeAtiva)}
+          iniciais={atuais.participanteIds}
+          erro={erros?.participanteIds}
+        />
+      ) : (
+        <>
+          <Campo rotulo="Corretor" erro={erros?.corretorId}>
+            <select
+              name="corretorId"
+              defaultValue={atuais.corretorId}
+              onChange={(evento) => setCorretorId(evento.target.value)}
+              className="w-full rounded-md border border-white/15 bg-fundo px-3 py-2 text-texto"
+            >
+              <option value="">Selecione…</option>
+              {corretores.map((corretor) => (
+                <option key={corretor.id} value={corretor.id}>
+                  {corretor.nomeExibicao} — {corretor.nomeCompleto}
+                </option>
+              ))}
+            </select>
+          </Campo>
 
-      {/* Somente leitura, e sem `name`: a equipe não é enviada. */}
-      <div>
-        <span className="mb-1 block text-sm text-texto-secundario">Equipe do lançamento</span>
-        <p className="rounded-md border border-white/10 bg-fundo/40 px-3 py-2 text-sm text-texto">
-          {corretorEscolhido
-            ? `${corretorEscolhido.equipeNome}${corretorEscolhido.equipeAtiva ? "" : " (desativada)"}`
-            : "—"}
-        </p>
-        <span className="mt-1 block text-xs text-texto-secundario">
-          é a equipe atual do corretor e fica gravada neste lançamento
-        </span>
-      </div>
+          {/* Somente leitura, e sem `name`: a equipe não é enviada. */}
+          <div>
+            <span className="mb-1 block text-sm text-texto-secundario">Equipe do lançamento</span>
+            <p className="rounded-md border border-white/10 bg-fundo/40 px-3 py-2 text-sm text-texto">
+              {corretorEscolhido
+                ? `${corretorEscolhido.equipeNome}${corretorEscolhido.equipeAtiva ? "" : " (desativada)"}`
+                : "—"}
+            </p>
+            <span className="mt-1 block text-xs text-texto-secundario">
+              é a equipe atual do corretor e fica gravada neste lançamento
+            </span>
+          </div>
+        </>
+      )}
 
       <Campo rotulo="Data do lançamento" erro={erros?.dataReferencia}>
         <input

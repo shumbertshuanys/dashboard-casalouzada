@@ -78,16 +78,11 @@ const CORRETORES = [
 type ChaveCorretor = (typeof CORRETORES)[number]["chave"];
 
 /**
- * Eventos antes, exatamente em cima e depois de cada corte, os sete tipos do
- * enum, dinheiro com zeros finais (`1000000.00`) e com centavos, e a produção do
- * transferido dividida entre a equipe antiga e a atual.
+ * Os eventos de participante único: seis dos sete tipos do enum, com a produção
+ * do transferido dividida entre a equipe antiga e a atual. Venda tem lista
+ * própria — desde o cutover da E3 ela credita por participação (DEC-051).
  */
 const LANCAMENTOS = [
-  { corretor: "ana", equipe: "A", tipo: "VENDA", dia: "2026-05-10", valor: "700000.00" },
-  { corretor: "ana", equipe: "A", tipo: "VENDA", dia: "2026-06-30", valor: "800000.00" },
-  { corretor: "bruno", equipe: "A", tipo: "VENDA", dia: "2026-07-05", valor: "1000000.00" },
-  { corretor: "fabio", equipe: "A", tipo: "VENDA", dia: "2026-08-10", valor: "1000000.00" },
-  { corretor: "elena", equipe: "A", tipo: "VENDA", dia: "2026-08-12", valor: "1234567.89" },
   { corretor: "carla", equipe: "B", tipo: "LOCACAO", dia: "2026-08-05", valor: "3500.00" },
   { corretor: "carla", equipe: "B", tipo: "CAPTACAO_VENDA", dia: "2026-08-06", valor: null },
   { corretor: "diego", equipe: "C", tipo: "CAPTACAO_EXCLUSIVA", dia: "2026-08-07", valor: null },
@@ -95,6 +90,29 @@ const LANCAMENTOS = [
   { corretor: "fabio", equipe: "B", tipo: "PROPOSTA", dia: "2026-08-09", valor: null },
   { corretor: "ana", equipe: "A", tipo: "AVALIACAO_GOOGLE", dia: "2026-07-31", valor: null },
   { corretor: "bruno", equipe: "A", tipo: "AVALIACAO_GOOGLE", dia: "2026-08-01", valor: null },
+] as const;
+
+/**
+ * Vendas antes, exatamente em cima e depois do corte, dinheiro com zeros finais
+ * (`1000000.00`) e com centavos, a venda do transferido creditada à equipe
+ * antiga, e — a última — a **venda compartilhada canônica da DEC-052**: R$ 900
+ * mil com dois participantes da equipe A e um da B.
+ */
+const VENDAS = [
+  { dia: "2026-05-10", valor: "700000.00", participantes: [{ corretor: "ana", equipe: "A" }] },
+  { dia: "2026-06-30", valor: "800000.00", participantes: [{ corretor: "ana", equipe: "A" }] },
+  { dia: "2026-07-05", valor: "1000000.00", participantes: [{ corretor: "bruno", equipe: "A" }] },
+  { dia: "2026-08-10", valor: "1000000.00", participantes: [{ corretor: "fabio", equipe: "A" }] },
+  { dia: "2026-08-12", valor: "1234567.89", participantes: [{ corretor: "elena", equipe: "A" }] },
+  {
+    dia: "2026-08-14",
+    valor: "900000.00",
+    participantes: [
+      { corretor: "ana", equipe: "A" },
+      { corretor: "bruno", equipe: "A" },
+      { corretor: "carla", equipe: "B" },
+    ],
+  },
 ] as const;
 
 /** Cortes diferentes por tipo, para cada acumulado usar o da própria linha. */
@@ -196,13 +214,44 @@ async function criarFixture(): Promise<void> {
     });
   }
 
-  lancamentosEsperados = LANCAMENTOS.map((evento) => ({
-    tipo: evento.tipo,
-    corretorId: idDoCorretor.get(evento.corretor) as string,
-    equipeId: idDaEquipe[evento.equipe],
-    dataReferencia: paraDataCivil(evento.dia),
-    valor: evento.valor,
-  }));
+  // Venda: um lançamento com os campos antigos NULL e o crédito nas
+  // participações, gravadas na mesma escrita — é o estado final do cutover.
+  for (const venda of VENDAS) {
+    await prisma.lancamento.create({
+      data: {
+        tipo: "VENDA",
+        dataReferencia: paraDataCivil(venda.dia),
+        valor: venda.valor,
+        participacoes: {
+          create: venda.participantes.map((participante, indice) => ({
+            corretorId: idDoCorretor.get(participante.corretor) as string,
+            equipeId: idDaEquipe[participante.equipe],
+            ordem: indice + 1,
+          })),
+        },
+      },
+    });
+  }
+
+  lancamentosEsperados = [
+    ...LANCAMENTOS.map((evento) => ({
+      tipo: evento.tipo,
+      corretorId: idDoCorretor.get(evento.corretor) as string,
+      equipeId: idDaEquipe[evento.equipe],
+      dataReferencia: paraDataCivil(evento.dia),
+      valor: evento.valor,
+    })),
+    ...VENDAS.map((venda) => ({
+      tipo: "VENDA" as const,
+      dataReferencia: paraDataCivil(venda.dia),
+      valor: venda.valor,
+      participacoes: venda.participantes.map((participante, indice) => ({
+        corretorId: idDoCorretor.get(participante.corretor) as string,
+        equipeId: idDaEquipe[participante.equipe],
+        ordem: indice + 1,
+      })),
+    })),
+  ];
 
   for (const saldo of SALDOS) {
     await prisma.saldoHistorico.create({
@@ -225,6 +274,13 @@ async function criarFixture(): Promise<void> {
 
 /** Apaga só o que esta suíte criou. As três equipes do seed nunca são tocadas. */
 async function limpar(cliente: PrismaClient): Promise<void> {
+  // Uma venda não tem `corretor` no lançamento desde o cutover: o vínculo é a
+  // participação, e ela segura o corretor por FK `Restrict`. Sem apagar as
+  // vendas por aqui primeiro, a remoção dos corretores abaixo falharia e a
+  // fixture ficaria para trás.
+  await cliente.lancamento.deleteMany({
+    where: { participacoes: { some: { corretor: { nomeCompleto: { startsWith: PREFIXO } } } } },
+  });
   await cliente.lancamento.deleteMany({
     where: { corretor: { nomeCompleto: { startsWith: PREFIXO } } },
   });
@@ -354,15 +410,17 @@ describe("conversão Prisma → domínio", () => {
   });
 
   it("os centavos sobrevivem à leitura", () => {
-    assert.equal(dadosPeriodos(resultado).vgvPeriodos.mensal, "2234567.89");
+    // 1.000.000,00 + 1.234.567,89 + os 900.000,00 da venda compartilhada, que
+    // entra **uma vez** pelo valor integral (DEC-052).
+    assert.equal(dadosPeriodos(resultado).vgvPeriodos.mensal, "3134567.89");
   });
 
   it("as datas civis chegam sem deslocamento de fuso", () => {
     // A venda de 2026-06-30 está exatamente no corte e a de 2026-07-05 depois
     // dele: um dia deslocado mudaria as duas contas.
-    assert.deepEqual(dadosAcumulados(resultado).vendidos, { estado: "OK", valor: 103 });
-    assert.equal(dadosPeriodos(resultado).vgvPeriodos.trimestral, "3234567.89");
-    assert.equal(dadosPeriodos(resultado).vgvPeriodos.anual, "4734567.89");
+    assert.deepEqual(dadosAcumulados(resultado).vendidos, { estado: "OK", valor: 104 });
+    assert.equal(dadosPeriodos(resultado).vgvPeriodos.trimestral, "4134567.89");
+    assert.equal(dadosPeriodos(resultado).vgvPeriodos.anual, "5634567.89");
   });
 });
 
@@ -370,15 +428,16 @@ describe("números da empresa", () => {
   it("os acumulados somam o saldo e só o que veio depois do corte de cada tipo", () => {
     const acumulados = dadosAcumulados(resultado);
 
-    assert.deepEqual(acumulados.vendidos, { estado: "OK", valor: 103 });
-    assert.deepEqual(acumulados.vgv, { estado: "OK", valor: "8234567.89" });
+    assert.deepEqual(acumulados.vendidos, { estado: "OK", valor: 104 });
+    assert.deepEqual(acumulados.vgv, { estado: "OK", valor: "9134567.89" });
     // O corte da avaliação é outro: só o evento de 01/08 entra.
     assert.deepEqual(acumulados.avaliacoes, { estado: "OK", valor: 481 });
   });
 
   it("o quadro mensal conta os sete tipos, inclusive os do corretor inativo", () => {
     assert.deepEqual(dadosPeriodos(resultado).quadroMensal, {
-      VENDA: 2,
+      // Três vendas no mês — a compartilhada conta uma, não três.
+      VENDA: 3,
       LOCACAO: 1,
       CAPTACAO_VENDA: 1,
       CAPTACAO_EXCLUSIVA: 1,
@@ -427,9 +486,91 @@ describe("quadros de equipe", () => {
       linhas.some((linha) => linha.corretorId === elena),
       false,
     );
-    // A venda dela continua no VGV mensal da empresa: 1000000.00 do Fábio mais
-    // 1234567.89 da Elena.
-    assert.equal(dadosPeriodos(resultado).vgvPeriodos.mensal, "2234567.89");
+    // A venda dela continua no VGV mensal da empresa: 1000000.00 do Fábio,
+    // 1234567.89 da Elena e 900000.00 da venda compartilhada.
+    assert.equal(dadosPeriodos(resultado).vgvPeriodos.mensal, "3134567.89");
+  });
+});
+
+/**
+ * O exemplo canônico da DEC-052, do banco até o domínio: R$ 900.000 com Ana e
+ * Bruno na equipe A e Carla na B.
+ *
+ * Empresa: 1 venda e 900 mil, uma vez só. Cada participante: +1 vendido e
+ * 300 mil. Equipe A: 600 mil — a soma das frações dos **dois** participantes
+ * dela, não o valor da venda repetido. Equipe B: 300 mil. As duas somam
+ * exatamente o valor integral.
+ */
+describe("venda compartilhada (DEC-052)", () => {
+  /** O VGV que um corretor tem no quadro de uma equipe. */
+  function vgvNoQuadro(indiceDaEquipe: number, chave: ChaveCorretor): string | undefined {
+    const equipe = dadosEquipes(resultado).equipes[indiceDaEquipe];
+    return equipe.rankings.vgv.find((linha) => linha.corretorId === idDoCorretor.get(chave))
+      ?.valor;
+  }
+
+  function vendidosNoQuadro(indiceDaEquipe: number, chave: ChaveCorretor): number | undefined {
+    const equipe = dadosEquipes(resultado).equipes[indiceDaEquipe];
+    return equipe.rankings.vendidos.find(
+      (linha) => linha.corretorId === idDoCorretor.get(chave),
+    )?.valor;
+  }
+
+  it("cada participante recebe a sua fração igualitária", () => {
+    // Ana e Bruno também têm a produção própria do mês? Não: as vendas
+    // individuais deles são de maio, junho e julho. No mês corrente, o que
+    // eles têm é exatamente a fração da venda compartilhada.
+    assert.equal(vgvNoQuadro(0, "ana"), "300000.00");
+    assert.equal(vgvNoQuadro(0, "bruno"), "300000.00");
+    assert.equal(vgvNoQuadro(1, "carla"), "300000.00");
+  });
+
+  it("cada participante recebe +1 vendido", () => {
+    assert.equal(vendidosNoQuadro(0, "ana"), 1);
+    assert.equal(vendidosNoQuadro(0, "bruno"), 1);
+    assert.equal(vendidosNoQuadro(1, "carla"), 1);
+  });
+
+  it("a equipe com dois participantes recebe a soma das frações, não o valor repetido", () => {
+    const equipeA = dadosEquipes(resultado).equipes[0];
+    const equipeB = dadosEquipes(resultado).equipes[1];
+
+    // Só as linhas dos participantes da venda compartilhada. Fábio tem a venda
+    // individual de 1 milhão no quadro de A e fica de fora desta conta.
+    const daVendaEmA = ["ana", "bruno"].map((chave) =>
+      equipeA.rankings.vgv.find(
+        (linha) => linha.corretorId === idDoCorretor.get(chave as ChaveCorretor),
+      ),
+    );
+    assert.deepEqual(
+      daVendaEmA.map((linha) => linha?.valor),
+      ["300000.00", "300000.00"],
+    );
+
+    const carla = equipeB.rankings.vgv.find(
+      (linha) => linha.corretorId === idDoCorretor.get("carla"),
+    );
+    assert.equal(carla?.valor, "300000.00");
+
+    // 600 mil de A mais 300 mil de B = o valor integral da venda. Se a equipe A
+    // tivesse recebido a venda "duas vezes", isto daria 2,1 milhões.
+    const centavos = ["300000.00", "300000.00", "300000.00"].reduce(
+      (total, valor) => total + BigInt(valor.replace(".", "")),
+      BigInt(0),
+    );
+    assert.equal(centavos, BigInt("90000000"));
+  });
+
+  it("a empresa conta a venda uma vez, qualquer que seja o elenco", () => {
+    // Três participantes, um evento: o quadro mensal e o VGV do mês já provam
+    // isso acima; aqui a leitura do banco confirma que é mesmo uma linha só.
+    const vendasDeAgosto = lancamentosEsperados.filter(
+      (lancamento) =>
+        lancamento.tipo === "VENDA" &&
+        lancamento.dataReferencia >= paraDataCivil("2026-08-01") &&
+        lancamento.dataReferencia <= paraDataCivil("2026-08-31"),
+    );
+    assert.equal(vendasDeAgosto.length, 3);
   });
 });
 
@@ -496,10 +637,10 @@ describe("banco → leitura → apresentação", () => {
   });
 
   it("o VGV acumulado chega compacto e com moeda", () => {
-    // 5.000.000,00 do saldo mais as três vendas posteriores ao corte.
+    // 5.000.000,00 do saldo mais as quatro vendas posteriores ao corte.
     assert.deepEqual(apresentacaoReal.bigNumbers[1], {
       rotulo: "VGV acumulado",
-      numero: { prefixo: "R$", valor: "8,2", sufixo: "mi" },
+      numero: { prefixo: "R$", valor: "9,1", sufixo: "mi" },
       estado: "OK",
     });
   });
@@ -507,7 +648,7 @@ describe("banco → leitura → apresentação", () => {
   it("os imóveis vendidos acumulados somam saldo e eventos posteriores ao corte", () => {
     assert.deepEqual(apresentacaoReal.bigNumbers[0], {
       rotulo: "Imóveis vendidos",
-      numero: { valor: "103" },
+      numero: { valor: "104" },
       estado: "OK",
     });
   });
@@ -527,18 +668,20 @@ describe("banco → leitura → apresentação", () => {
     const area = apresentacaoReal.equipes;
     if (area.estado !== "OK") return;
 
-    // Fábio tem a venda de 1.000.000,00 creditada à equipe A; Ana e Bruno, não.
+    // Fábio tem a venda individual de 1.000.000,00 creditada à equipe A; Ana e
+    // Bruno têm a fração de 300.000,00 da venda compartilhada — e é a fração
+    // que chega formatada à tela, não o valor integral da venda.
     const [primeiro, ...resto] = area.equipes[0].rankings.vgv;
     assert.deepEqual(primeiro, { rotulo: "Fábio", valor: "R$ 1,0 mi" });
-    assert.ok(
-      resto.every((linha) => linha.valor === "R$ 0,0 mi"),
-      "zero real continua sendo exibido como zero",
-    );
+    assert.deepEqual(resto, [
+      { rotulo: "Ana", valor: "R$ 0,3 mi" },
+      { rotulo: "Bruno", valor: "R$ 0,3 mi" },
+    ]);
   });
 
   it("o quadro mensal chega com as sete linhas", () => {
     assert.equal(apresentacaoReal.quadroMensal.estado, "OK");
     assert.equal(apresentacaoReal.quadroMensal.linhas.length, 7);
-    assert.deepEqual(apresentacaoReal.quadroMensal.linhas[0], { rotulo: "Vendidos", valor: "2" });
+    assert.deepEqual(apresentacaoReal.quadroMensal.linhas[0], { rotulo: "Vendidos", valor: "3" });
   });
 });

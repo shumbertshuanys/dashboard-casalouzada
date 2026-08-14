@@ -35,11 +35,26 @@ export default async function PaginaLancamentos({
     Array.isArray(params.pagina) ? params.pagina[0] : params.pagina,
   );
 
-  // Todos os filtros são por coluna do próprio lançamento. `equipeId` é o do
-  // evento, não a equipe atual do corretor.
-  const where = {
+  // Os filtros são sempre pelo crédito **do fato**, nunca pela lotação atual do
+  // corretor. Como o crédito mora em dois lugares desde a E3 — no lançamento
+  // nos tipos individuais e na participação nas vendas —, corretor e equipe
+  // casam com qualquer um dos dois. Sem isso um filtro por corretor esconderia
+  // todas as vendas dele, que têm as colunas antigas `NULL` (DEC-051).
+  //
+  // Os dois critérios entram no **mesmo** objeto de cada lado do `OR`, e não
+  // como dois filtros independentes. Isso preserva a pergunta que a listagem
+  // sempre fez: "o crédito deste corretor **nesta** equipe". Combinados, eles
+  // precisam ser satisfeitos pela mesma participação — numa venda de Ana pela
+  // equipe X com Bruno pela Y, o filtro Ana + equipe Y não devolve nada, como
+  // não devolvia antes do cutover.
+  const credito = {
     ...(filtros.corretorId ? { corretorId: filtros.corretorId } : {}),
     ...(filtros.equipeId ? { equipeId: filtros.equipeId } : {}),
+  };
+  const temCredito = filtros.corretorId !== null || filtros.equipeId !== null;
+
+  const where = {
+    ...(temCredito ? { OR: [credito, { participacoes: { some: credito } } ] } : {}),
     ...(filtros.tipo ? { tipo: filtros.tipo } : {}),
     ...(filtros.de || filtros.ate
       ? {
@@ -71,6 +86,15 @@ export default async function PaginaLancamentos({
         // A equipe do evento, por `Lancamento.equipeId`. Nunca
         // `corretor.equipe`, que é a lotação de hoje.
         equipe: { select: { nome: true, ativa: true } },
+        // O crédito de uma venda, na ordem gravada. Também aqui a equipe é a
+        // do fato — `ParticipacaoVenda.equipeId` —, nunca a lotação atual.
+        participacoes: {
+          orderBy: { ordem: "asc" },
+          select: {
+            corretor: { select: { nomeExibicao: true } },
+            equipe: { select: { nome: true, ativa: true } },
+          },
+        },
       },
     }),
     prisma.corretor.findMany({
@@ -152,12 +176,27 @@ export default async function PaginaLancamentos({
                     {formatarDataBR(lancamento.dataReferencia)}
                   </td>
                   <td className="py-3 pr-4 text-texto">{ROTULOS[lancamento.tipo]}</td>
+                  {/* Numa venda o crédito é o elenco: cada participante numa
+                      linha, com a equipe histórica dele ao lado. Nos demais
+                      tipos, o corretor e a equipe do próprio lançamento. */}
                   <td className="py-3 pr-4 text-texto-secundario">
-                    {lancamento.corretor.nomeExibicao}
+                    {lancamento.corretor
+                      ? lancamento.corretor.nomeExibicao
+                      : lancamento.participacoes.map((participacao, indice) => (
+                          <span key={indice} className="block whitespace-nowrap">
+                            {participacao.corretor.nomeExibicao}
+                          </span>
+                        ))}
                   </td>
                   <td className="py-3 pr-4 text-texto-secundario">
-                    {lancamento.equipe.nome}
-                    {!lancamento.equipe.ativa && " (inativa)"}
+                    {lancamento.equipe
+                      ? `${lancamento.equipe.nome}${lancamento.equipe.ativa ? "" : " (inativa)"}`
+                      : lancamento.participacoes.map((participacao, indice) => (
+                          <span key={indice} className="block whitespace-nowrap">
+                            {participacao.equipe.nome}
+                            {!participacao.equipe.ativa && " (inativa)"}
+                          </span>
+                        ))}
                   </td>
                   <td className="py-3 pr-4 whitespace-nowrap text-texto-secundario">
                     {/* `toFixed(2)`, não `toString()`: o Decimal do Prisma corta

@@ -12,6 +12,11 @@ import {
 } from "@/lib/validacao/lancamento";
 import type { EstadoEdicao, ValoresLancamento } from "./acoes";
 import { excluirLancamento } from "./acoes";
+import {
+  Participantes,
+  type OpcaoParticipante,
+  type ParticipanteRegistrado,
+} from "./participantes";
 
 /**
  * Edição de lançamento.
@@ -46,6 +51,8 @@ export type ResumoLancamento = {
 export function FormularioEdicaoLancamento({
   acao,
   corretores,
+  candidatosAParticipante,
+  participacoesRegistradas,
   valoresIniciais,
   equipeRegistradaNome,
   corretorOriginalId,
@@ -55,7 +62,12 @@ export function FormularioEdicaoLancamento({
 }: {
   acao: (anterior: EstadoEdicao, form: FormData) => Promise<EstadoEdicao>;
   corretores: OpcaoCorretorEdicao[];
+  /** Candidatos a participante **novo** de uma venda: ativos, de equipe ativa. */
+  candidatosAParticipante: OpcaoParticipante[];
+  /** O elenco já gravado, em ordem — vazio quando o lançamento não é venda. */
+  participacoesRegistradas: ParticipanteRegistrado[];
   valoresIniciais: ValoresLancamento;
+  /** Vazio numa venda: o crédito dela não tem equipe no lançamento. */
   equipeRegistradaNome: string;
   corretorOriginalId: string;
   /** Valor já gravado, em forma canônica, para o aviso de descarte. */
@@ -71,6 +83,7 @@ export function FormularioEdicaoLancamento({
   const chave = [
     atuais.tipo,
     atuais.corretorId,
+    atuais.participanteIds.join(","),
     atuais.dataReferencia,
     atuais.valor,
     atuais.valorProposta,
@@ -81,19 +94,36 @@ export function FormularioEdicaoLancamento({
   ].join("|");
 
   /**
-   * Avisa antes de salvar quando a troca de tipo vai apagar um valor que já
-   * existe. O tipo é lido do próprio formulário, não de estado: assim a
-   * checagem não depende de nenhum `onChange` ter passado por aqui.
+   * Avisa antes de salvar quando a troca de tipo vai apagar algo que já existe:
+   * o valor de um tipo monetário, ou o elenco de uma venda compartilhada. O
+   * tipo é lido do próprio formulário, não de estado: assim a checagem não
+   * depende de nenhum `onChange` ter passado por aqui.
    *
-   * A regra real é do servidor — tipo não monetário grava `valor = null`.
-   * Isto só evita a perda por descuido.
+   * As regras reais são do servidor — tipo não monetário grava `valor = null`,
+   * e sair de VENDA apaga as participações. Isto só evita a perda por descuido.
    */
-  function confirmarDescarteDeValor(evento: React.FormEvent<HTMLFormElement>) {
+  function confirmarDescartes(evento: React.FormEvent<HTMLFormElement>) {
+    const escolhido = interpretarTipo(new FormData(evento.currentTarget).get("tipo"));
+    if (escolhido === null) return;
+
+    if (tipoOriginal === "VENDA" && escolhido !== "VENDA" && participacoesRegistradas.length > 0) {
+      const nomes = participacoesRegistradas
+        .map((participante) => participante.nomeExibicao)
+        .join(", ");
+      const segue = window.confirm(
+        `Esta venda tem ${participacoesRegistradas.length} participante(s): ${nomes}.\n\n` +
+          `Ao mudar para ${ROTULOS[escolhido]}, o elenco compartilhado é descartado e o ` +
+          `lançamento passa a ter um corretor só.`,
+      );
+      if (!segue) {
+        evento.preventDefault();
+        return;
+      }
+    }
+
     const eraMonetario = ehTipoMonetario(interpretarTipo(tipoOriginal) ?? "PROPOSTA");
     if (!eraMonetario || valorOriginal === null) return;
-
-    const escolhido = interpretarTipo(new FormData(evento.currentTarget).get("tipo"));
-    if (escolhido === null || ehTipoMonetario(escolhido)) return;
+    if (ehTipoMonetario(escolhido)) return;
 
     const segue = window.confirm(
       `Este lançamento possui valor de ${formatarBRL(valorOriginal)}.\n\n` +
@@ -104,7 +134,7 @@ export function FormularioEdicaoLancamento({
 
   return (
     <div className="max-w-2xl space-y-8">
-      <form action={enviar} onSubmit={confirmarDescarteDeValor} className="space-y-5">
+      <form action={enviar} onSubmit={confirmarDescartes} className="space-y-5">
         {estado.mensagem && (
           <p className="rounded-md border border-negativo/40 px-3 py-2 text-sm text-negativo">
             {estado.mensagem}
@@ -116,6 +146,8 @@ export function FormularioEdicaoLancamento({
           atuais={atuais}
           erros={estado.erros}
           corretores={corretores}
+          candidatosAParticipante={candidatosAParticipante}
+          participacoesRegistradas={participacoesRegistradas}
           equipeRegistradaNome={equipeRegistradaNome}
           conflito={estado.conflito}
           corretorOriginalId={corretorOriginalId}
@@ -144,6 +176,8 @@ function CamposEdicao({
   atuais,
   erros,
   corretores,
+  candidatosAParticipante,
+  participacoesRegistradas,
   equipeRegistradaNome,
   conflito,
   corretorOriginalId,
@@ -151,6 +185,8 @@ function CamposEdicao({
   atuais: ValoresLancamento;
   erros?: EstadoEdicao["erros"];
   corretores: OpcaoCorretorEdicao[];
+  candidatosAParticipante: OpcaoParticipante[];
+  participacoesRegistradas: ParticipanteRegistrado[];
   equipeRegistradaNome: string;
   conflito?: EstadoEdicao["conflito"];
   corretorOriginalId: string;
@@ -160,6 +196,7 @@ function CamposEdicao({
   const tipoAtual = interpretarTipo(tipo);
   const pedeValor = tipoAtual !== null && ehTipoMonetario(tipoAtual);
   const ehProposta = tipoAtual === "PROPOSTA";
+  const ehVenda = tipoAtual === "VENDA";
 
   return (
     <>
@@ -179,36 +216,54 @@ function CamposEdicao({
         </select>
       </Campo>
 
-      <Campo rotulo="Corretor" erro={erros?.corretorId}>
-        <select
-          name="corretorId"
-          defaultValue={atuais.corretorId}
-          className="w-full rounded-md border border-white/15 bg-fundo px-3 py-2 text-texto"
-        >
-          {corretores.map((corretor) => (
-            <option key={corretor.id} value={corretor.id}>
-              {corretor.nomeExibicao} — {corretor.nomeCompleto}
-              {corretor.ativo ? "" : " (inativo)"}
-              {corretor.id === corretorOriginalId ? " · atual" : ""}
-            </option>
-          ))}
-        </select>
-      </Campo>
+      {/* Venda credita por participação; os demais tipos, por um corretor só e
+          pelo fluxo de conflito de equipe da Q7. */}
+      {ehVenda ? (
+        <Participantes
+          corretores={candidatosAParticipante}
+          iniciais={atuais.participanteIds}
+          registrados={participacoesRegistradas}
+          erro={erros?.participanteIds}
+        />
+      ) : (
+        <>
+          <Campo rotulo="Corretor" erro={erros?.corretorId}>
+            <select
+              name="corretorId"
+              defaultValue={atuais.corretorId}
+              className="w-full rounded-md border border-white/15 bg-fundo px-3 py-2 text-texto"
+            >
+              {/* Vindo de uma venda não há corretor gravado para preselecionar:
+                  o operador escolhe quem fica com o evento. */}
+              {equipeRegistradaNome === "" && <option value="">Selecione…</option>}
+              {corretores.map((corretor) => (
+                <option key={corretor.id} value={corretor.id}>
+                  {corretor.nomeExibicao} — {corretor.nomeCompleto}
+                  {corretor.ativo ? "" : " (inativo)"}
+                  {corretor.id === corretorOriginalId ? " · atual" : ""}
+                </option>
+              ))}
+            </select>
+          </Campo>
 
-      {/* Somente leitura. Não existe input de equipe. */}
-      <div>
-        <span className="mb-1 block text-sm text-texto-secundario">
-          Equipe registrada no lançamento
-        </span>
-        <p className="rounded-md border border-white/10 bg-fundo/40 px-3 py-2 text-sm text-texto">
-          {equipeRegistradaNome}
-        </p>
-        <span className="mt-1 block text-xs text-texto-secundario">
-          é a equipe do momento do fato; trocar o corretor pode exigir uma decisão
-        </span>
-      </div>
+          {/* Somente leitura. Não existe input de equipe. */}
+          {equipeRegistradaNome !== "" && (
+            <div>
+              <span className="mb-1 block text-sm text-texto-secundario">
+                Equipe registrada no lançamento
+              </span>
+              <p className="rounded-md border border-white/10 bg-fundo/40 px-3 py-2 text-sm text-texto">
+                {equipeRegistradaNome}
+              </p>
+              <span className="mt-1 block text-xs text-texto-secundario">
+                é a equipe do momento do fato; trocar o corretor pode exigir uma decisão
+              </span>
+            </div>
+          )}
 
-      {conflito && <EscolhaDeEquipe conflito={conflito} />}
+          {conflito && <EscolhaDeEquipe conflito={conflito} />}
+        </>
+      )}
 
       <Campo rotulo="Data do lançamento" erro={erros?.dataReferencia}>
         <input

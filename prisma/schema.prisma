@@ -101,10 +101,13 @@ model Corretor {
 model Lancamento {
   id             String          @id @default(uuid()) @db.Uuid
   tipo           TipoLancamento
-  corretorId     String          @map("corretor_id") @db.Uuid
+  /// `NULL` em toda VENDA desde o cutover da E3: o crédito da venda mora
+  /// exclusivamente em `ParticipacaoVenda` (DEC-051). Obrigatório nos demais
+  /// tipos, garantido pelo CHECK `lancamentos_venda_credito_check`.
+  corretorId     String?         @map("corretor_id") @db.Uuid
   /// Gravado no momento do lançamento, para o histórico não mudar se o
-  /// corretor trocar de equipe.
-  equipeId       String          @map("equipe_id") @db.Uuid
+  /// corretor trocar de equipe. `NULL` em VENDA, como `corretorId`.
+  equipeId       String?         @map("equipe_id") @db.Uuid
   /// Data do fato, não a data em que foi digitado.
   dataReferencia DateTime        @map("data_referencia") @db.Date
   /// Preenchido apenas em vendas e locações.
@@ -123,11 +126,12 @@ model Lancamento {
   criadoEm       DateTime        @default(now()) @map("criado_em") @db.Timestamptz(6)
   atualizadoEm   DateTime        @updatedAt @map("atualizado_em") @db.Timestamptz(6)
 
-  corretor      Corretor            @relation(fields: [corretorId], references: [id], onDelete: Restrict)
-  equipe        Equipe              @relation(fields: [equipeId], references: [id], onDelete: Restrict)
+  /// Opcionais porque VENDA não credita pelo lançamento; `Restrict` continua
+  /// valendo quando os campos estão preenchidos (DEC-007).
+  corretor      Corretor?           @relation(fields: [corretorId], references: [id], onDelete: Restrict)
+  equipe        Equipe?             @relation(fields: [equipeId], references: [id], onDelete: Restrict)
   autor         Usuario?            @relation(fields: [criadoPor], references: [id], onDelete: SetNull)
-  /// Crédito da venda (DEC-051). Na E2A é estrutura + backfill: a fonte
-  /// executável continua sendo `corretorId`/`equipeId` até o cutover da E3.
+  /// Crédito da venda (DEC-051) — **a** fonte executável desde o cutover da E3.
   participacoes ParticipacaoVenda[]
 
   @@index([tipo, dataReferencia])
