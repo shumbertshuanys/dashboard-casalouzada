@@ -2,6 +2,7 @@ import type { ApresentacaoPainel, Metrica } from "@/lib/apresentacao-painel";
 import {
   type BlocoAcumulados,
   type BlocoEquipes,
+  type BlocoOperacional,
   type BlocoPeriodos,
   ehLeituraPainel,
   type LeituraPainel,
@@ -38,6 +39,8 @@ export type EstadoPainel = {
   periodos: Retido<BlocoPeriodos>;
   acumulados: Retido<BlocoAcumulados>;
   equipes: Retido<BlocoEquipes>;
+  propostas: Retido<BlocoOperacional>;
+  reservas: Retido<BlocoOperacional>;
 };
 
 type Marca = { lidoEmMs: number; horaLeitura: string };
@@ -57,6 +60,8 @@ export function estadoInicial(leitura: LeituraPainel): EstadoPainel {
     periodos: { dados: leitura.blocos.periodos, ...marca },
     acumulados: { dados: leitura.blocos.acumulados, ...marca },
     equipes: { dados: leitura.blocos.equipes, ...marca },
+    propostas: { dados: leitura.blocos.propostas, ...marca },
+    reservas: { dados: leitura.blocos.reservas, ...marca },
   };
 }
 
@@ -92,6 +97,14 @@ function resolverBloco<B extends { estadoLeitura: "OK" | "INDISPONIVEL" }>(
  * - `acumulados` não tem recorte mensal: imóveis vendidos e VGV acumulado são
  *   desde sempre (DEC-036). Reter atravessando a virada é correto, porque o
  *   número velho continua descrevendo a mesma coisa.
+ * - `propostas` e `reservas` também não têm recorte mensal: elas descrevem o que
+ *   está **em aberto agora**, não a produção de um mês. Uma proposta aguardando
+ *   em 31/08 continua aguardando em 01/09, então a trava de competência não se
+ *   aplica a elas.
+ *
+ * Uma leitura `OK` com lista **vazia** substitui normalmente, como qualquer
+ * outro dado: vazio ali significa "não há nada em aberto", e reter as três
+ * anteriores deixaria na parede itens que já saíram (DEC-014).
  *
  * A raiz — competência, período e métricas — vem **sempre** da leitura nova, que
  * é válida por construção: quem chega aqui já passou pelo contrato. Assim o
@@ -108,6 +121,8 @@ export function resolverAtualizacao(anterior: EstadoPainel, nova: LeituraPainel)
     periodos: resolverBloco(anterior.periodos, nova.blocos.periodos, marca, mesmaCompetencia),
     acumulados: resolverBloco(anterior.acumulados, nova.blocos.acumulados, marca, true),
     equipes: resolverBloco(anterior.equipes, nova.blocos.equipes, marca, mesmaCompetencia),
+    propostas: resolverBloco(anterior.propostas, nova.blocos.propostas, marca, true),
+    reservas: resolverBloco(anterior.reservas, nova.blocos.reservas, marca, true),
   };
 }
 
@@ -136,9 +151,15 @@ export function aplicarPayloadAtualizacao(
  * Sem nenhum bloco `OK` não há o que datar, e o selo simplesmente não aparece.
  */
 export function idadeExibida(estado: EstadoPainel): string | null {
-  const disponiveis = [estado.periodos, estado.acumulados, estado.equipes].filter(
-    (bloco) => bloco.dados.estadoLeitura === "OK",
-  );
+  // As listas da Tela B entram na conta: a rotação as põe na parede tanto quanto
+  // os big numbers, e um selo que as ignorasse dataria só metade do que se vê.
+  const disponiveis = [
+    estado.periodos,
+    estado.acumulados,
+    estado.equipes,
+    estado.propostas,
+    estado.reservas,
+  ].filter((bloco) => bloco.dados.estadoLeitura === "OK");
 
   if (disponiveis.length === 0) return null;
 
@@ -162,5 +183,9 @@ export function comporApresentacao(estado: EstadoPainel): ApresentacaoPainel {
     quadroMensal: estado.periodos.dados.quadroMensal,
     metricas: estado.metricas,
     equipes: estado.equipes.dados.area,
+    operacionais: {
+      propostas: estado.propostas.dados.lista,
+      reservas: estado.reservas.dados.lista,
+    },
   };
 }

@@ -115,10 +115,55 @@ const VENDAS = [
   },
 ] as const;
 
-/** Cortes diferentes por tipo, para cada acumulado usar o da própria linha. */
+/**
+ * Candidatas às listas operacionais da Tela B (DEC-056).
+ *
+ * Mais de três `AGUARDANDO` para o corte aparecer; uma `ACEITA` e uma
+ * `REJEITADA` mais recentes, que precisam ficar de fora mesmo sendo as últimas;
+ * e duas empatadas em data, para o desempate por criação/id valer.
+ */
+const PROPOSTAS = [
+  { corretor: "ana", equipe: "A", dia: "2026-08-21", status: "AGUARDANDO", imovel: "AP-201" },
+  { corretor: "bruno", equipe: "A", dia: "2026-08-22", status: "AGUARDANDO", imovel: "AP-202" },
+  { corretor: "carla", equipe: "B", dia: "2026-08-23", status: "AGUARDANDO", imovel: "AP-203" },
+  { corretor: "diego", equipe: "C", dia: "2026-08-24", status: "AGUARDANDO", imovel: "AP-204" },
+  // Mais recentes que todas as acima — e ainda assim fora da lista.
+  { corretor: "fabio", equipe: "B", dia: "2026-08-27", status: "ACEITA", imovel: "AP-901" },
+  { corretor: "fabio", equipe: "B", dia: "2026-08-28", status: "REJEITADA", imovel: "AP-902" },
+] as const;
+
+/** Reservas: mais de três ATIVA, mais uma FINALIZADA e uma CANCELADA. */
+const RESERVAS = [
+  { corretor: "ana", equipe: "A", dia: "2026-08-11", status: "ATIVA", imovel: "CA-101" },
+  { corretor: "bruno", equipe: "A", dia: "2026-08-12", status: "ATIVA", imovel: "CA-102" },
+  { corretor: "carla", equipe: "B", dia: "2026-08-13", status: "ATIVA", imovel: "CA-103" },
+  { corretor: "diego", equipe: "C", dia: "2026-08-14", status: "ATIVA", imovel: "CA-104" },
+  { corretor: "fabio", equipe: "B", dia: "2026-08-25", status: "FINALIZADA", imovel: "CA-901" },
+  { corretor: "fabio", equipe: "B", dia: "2026-08-26", status: "CANCELADA", imovel: "CA-902" },
+] as const;
+
+/**
+ * Cortes diferentes por tipo, para cada acumulado usar o da própria linha.
+ *
+ * As precisões também são diferentes de propósito (DEC-054): o saldo de venda é
+ * `MINIMO_CONHECIDO` — e leva o "+ de" até a tela nos dois big numbers que ele
+ * alimenta —, enquanto o de avaliação é `EXATO` e continua sem qualificador.
+ */
 const SALDOS = [
-  { tipo: "VENDA", quantidade: 100, valorTotal: "5000000.00", dataCorte: "2026-06-30" },
-  { tipo: "AVALIACAO_GOOGLE", quantidade: 480, valorTotal: "0.00", dataCorte: "2026-07-31" },
+  {
+    tipo: "VENDA",
+    quantidade: 100,
+    valorTotal: "5000000.00",
+    precisao: "MINIMO_CONHECIDO",
+    dataCorte: "2026-06-30",
+  },
+  {
+    tipo: "AVALIACAO_GOOGLE",
+    quantidade: 480,
+    valorTotal: "0.00",
+    precisao: "EXATO",
+    dataCorte: "2026-07-31",
+  },
 ] as const;
 
 /** Só vira `true` depois de o repouso ser confirmado — ver `after`. */
@@ -152,10 +197,14 @@ async function exigirRepouso(): Promise<void> {
   const corretores = await prisma.corretor.count();
   const lancamentos = await prisma.lancamento.count();
   const saldos = await prisma.saldoHistorico.count();
+  const reservas = await prisma.reservaLocacao.count();
 
   assert.equal(corretores, 0, `${AVISO_REPOUSO} — corretores encontrados: ${corretores}`);
   assert.equal(lancamentos, 0, `${AVISO_REPOUSO} — lançamentos encontrados: ${lancamentos}`);
   assert.equal(saldos, 0, `${AVISO_REPOUSO} — saldos históricos encontrados: ${saldos}`);
+  // A leitura de reservas é global, como as outras: uma reserva de terceiro
+  // entraria na lista operacional desta suíte.
+  assert.equal(reservas, 0, `${AVISO_REPOUSO} — reservas encontradas: ${reservas}`);
 }
 
 /**
@@ -233,6 +282,34 @@ async function criarFixture(): Promise<void> {
     });
   }
 
+  // Candidatas da Tela B. As propostas são lançamentos como quaisquer outros —
+  // continuam contando no quadro mensal seja qual for o status (DEC-053) —, e
+  // as reservas são entidade própria, fora de qualquer métrica (DEC-055).
+  for (const proposta of PROPOSTAS) {
+    await prisma.lancamento.create({
+      data: {
+        tipo: "PROPOSTA",
+        corretorId: idDoCorretor.get(proposta.corretor) as string,
+        equipeId: idDaEquipe[proposta.equipe],
+        dataReferencia: paraDataCivil(proposta.dia),
+        statusProposta: proposta.status,
+        imovelRef: proposta.imovel,
+      },
+    });
+  }
+
+  for (const reserva of RESERVAS) {
+    await prisma.reservaLocacao.create({
+      data: {
+        corretorId: idDoCorretor.get(reserva.corretor) as string,
+        equipeId: idDaEquipe[reserva.equipe],
+        dataReferencia: paraDataCivil(reserva.dia),
+        status: reserva.status,
+        imovelRef: reserva.imovel,
+      },
+    });
+  }
+
   lancamentosEsperados = [
     ...LANCAMENTOS.map((evento) => ({
       tipo: evento.tipo,
@@ -251,6 +328,13 @@ async function criarFixture(): Promise<void> {
         ordem: indice + 1,
       })),
     })),
+    ...PROPOSTAS.map((proposta) => ({
+      tipo: "PROPOSTA" as const,
+      corretorId: idDoCorretor.get(proposta.corretor) as string,
+      equipeId: idDaEquipe[proposta.equipe],
+      dataReferencia: paraDataCivil(proposta.dia),
+      valor: null,
+    })),
   ];
 
   for (const saldo of SALDOS) {
@@ -259,6 +343,7 @@ async function criarFixture(): Promise<void> {
         tipo: saldo.tipo,
         quantidade: saldo.quantidade,
         valorTotal: saldo.valorTotal,
+        precisao: saldo.precisao,
         dataCorte: paraDataCivil(saldo.dataCorte),
       },
     });
@@ -268,6 +353,7 @@ async function criarFixture(): Promise<void> {
     tipo: saldo.tipo,
     quantidade: saldo.quantidade,
     valorTotal: saldo.valorTotal,
+    precisao: saldo.precisao,
     dataCorte: paraDataCivil(saldo.dataCorte),
   }));
 }
@@ -282,6 +368,10 @@ async function limpar(cliente: PrismaClient): Promise<void> {
     where: { participacoes: { some: { corretor: { nomeCompleto: { startsWith: PREFIXO } } } } },
   });
   await cliente.lancamento.deleteMany({
+    where: { corretor: { nomeCompleto: { startsWith: PREFIXO } } },
+  });
+  // Reservas seguram o corretor por FK `Restrict`, como as participações.
+  await cliente.reservaLocacao.deleteMany({
     where: { corretor: { nomeCompleto: { startsWith: PREFIXO } } },
   });
   await cliente.corretor.deleteMany({ where: { nomeCompleto: { startsWith: PREFIXO } } });
@@ -418,7 +508,11 @@ describe("conversão Prisma → domínio", () => {
   it("as datas civis chegam sem deslocamento de fuso", () => {
     // A venda de 2026-06-30 está exatamente no corte e a de 2026-07-05 depois
     // dele: um dia deslocado mudaria as duas contas.
-    assert.deepEqual(dadosAcumulados(resultado).vendidos, { estado: "OK", valor: 104 });
+    assert.deepEqual(dadosAcumulados(resultado).vendidos, {
+      estado: "OK",
+      valor: 104,
+      precisao: "MINIMO_CONHECIDO",
+    });
     assert.equal(dadosPeriodos(resultado).vgvPeriodos.trimestral, "4134567.89");
     assert.equal(dadosPeriodos(resultado).vgvPeriodos.anual, "5634567.89");
   });
@@ -428,10 +522,22 @@ describe("números da empresa", () => {
   it("os acumulados somam o saldo e só o que veio depois do corte de cada tipo", () => {
     const acumulados = dadosAcumulados(resultado);
 
-    assert.deepEqual(acumulados.vendidos, { estado: "OK", valor: 104 });
-    assert.deepEqual(acumulados.vgv, { estado: "OK", valor: "9134567.89" });
-    // O corte da avaliação é outro: só o evento de 01/08 entra.
-    assert.deepEqual(acumulados.avaliacoes, { estado: "OK", valor: 481 });
+    // A precisão do saldo de VENDA viaja junto dos dois acumulados que ele
+    // alimenta, sem mudar número nenhum (DEC-054).
+    assert.deepEqual(acumulados.vendidos, {
+      estado: "OK",
+      valor: 104,
+      precisao: "MINIMO_CONHECIDO",
+    });
+    assert.deepEqual(acumulados.vgv, {
+      estado: "OK",
+      valor: "9134567.89",
+      precisao: "MINIMO_CONHECIDO",
+    });
+    // O corte da avaliação é outro: só o evento de 01/08 entra. E a precisão é
+    // a da própria linha de saldo — a de venda ser mínimo conhecido não
+    // contamina esta.
+    assert.deepEqual(acumulados.avaliacoes, { estado: "OK", valor: 481, precisao: "EXATO" });
   });
 
   it("o quadro mensal conta os sete tipos, inclusive os do corretor inativo", () => {
@@ -442,7 +548,9 @@ describe("números da empresa", () => {
       CAPTACAO_VENDA: 1,
       CAPTACAO_EXCLUSIVA: 1,
       CAPTACAO_LOCACAO: 1,
-      PROPOSTA: 1,
+      // Uma do elenco original mais as seis candidatas da Tela B: toda proposta
+      // conta na métrica mensal, qualquer que seja o status (DEC-053).
+      PROPOSTA: 7,
       AVALIACAO_GOOGLE: 1,
     });
     assert.equal(dadosPeriodos(resultado).estadoPeriodoMensal, "OK");
@@ -642,6 +750,8 @@ describe("banco → leitura → apresentação", () => {
       rotulo: "VGV acumulado",
       numero: { prefixo: "R$", valor: "9,1", sufixo: "mi" },
       estado: "OK",
+      // O saldo de VENDA é mínimo conhecido nesta fixture (DEC-054).
+      qualificador: "+ de",
     });
   });
 
@@ -650,6 +760,7 @@ describe("banco → leitura → apresentação", () => {
       rotulo: "Imóveis vendidos",
       numero: { valor: "104" },
       estado: "OK",
+      qualificador: "+ de",
     });
   });
 
@@ -679,9 +790,106 @@ describe("banco → leitura → apresentação", () => {
     ]);
   });
 
+  it("o saldo mínimo conhecido atravessa até a tela como `+ de`", () => {
+    // O saldo de VENDA é MINIMO_CONHECIDO e alimenta dois big numbers; o de
+    // avaliação é EXATO e continua sem qualificador (DEC-054).
+    assert.equal(apresentacaoReal.bigNumbers[0].qualificador, "+ de", "imóveis vendidos");
+    assert.equal(apresentacaoReal.bigNumbers[1].qualificador, "+ de", "VGV acumulado");
+    assert.equal(apresentacaoReal.bigNumbers[2].qualificador, undefined, "avaliações");
+
+    // O número não muda por causa da precisão — só a afirmação.
+    assert.equal(apresentacaoReal.bigNumbers[0].numero.valor, "104");
+    assert.deepEqual(apresentacaoReal.bigNumbers[1].numero, {
+      prefixo: "R$",
+      valor: "9,1",
+      sufixo: "mi",
+    });
+  });
+
   it("o quadro mensal chega com as sete linhas", () => {
     assert.equal(apresentacaoReal.quadroMensal.estado, "OK");
     assert.equal(apresentacaoReal.quadroMensal.linhas.length, 7);
     assert.deepEqual(apresentacaoReal.quadroMensal.linhas[0], { rotulo: "Vendidos", valor: "3" });
+  });
+});
+
+/**
+ * A Tela B do banco até a tela (DEC-056).
+ *
+ * A seleção — status, ordem e corte em três — é do núcleo, e o que se prova aqui
+ * é que ela atravessa a leitura real inteira, com os nomes e imóveis certos.
+ */
+describe("listas operacionais — banco → leitura → apresentação", () => {
+  function itensDe(lista: (typeof apresentacaoReal)["operacionais"]["propostas"]) {
+    assert.equal(lista.estado, "OK");
+    if (lista.estado !== "OK") return [];
+    return lista.itens;
+  }
+
+  it("propostas: só AGUARDANDO, as três mais recentes, imóvel e corretor", () => {
+    const itens = itensDe(apresentacaoReal.operacionais.propostas);
+
+    assert.deepEqual(itens, [
+      { imovel: "AP-204", corretor: "Diego" },
+      { imovel: "AP-203", corretor: "Carla" },
+      { imovel: "AP-202", corretor: "Bruno" },
+    ]);
+  });
+
+  it("a ACEITA e a REJEITADA ficam de fora, mesmo sendo as mais recentes", () => {
+    const imoveis = itensDe(apresentacaoReal.operacionais.propostas).map((item) => item.imovel);
+
+    assert.equal(imoveis.includes("AP-901"), false, "ACEITA não entra");
+    assert.equal(imoveis.includes("AP-902"), false, "REJEITADA não entra");
+  });
+
+  it("reservas: só ATIVA, as três mais recentes, imóvel e corretor", () => {
+    const itens = itensDe(apresentacaoReal.operacionais.reservas);
+
+    assert.deepEqual(itens, [
+      { imovel: "CA-104", corretor: "Diego" },
+      { imovel: "CA-103", corretor: "Carla" },
+      { imovel: "CA-102", corretor: "Bruno" },
+    ]);
+  });
+
+  it("a FINALIZADA e a CANCELADA ficam de fora, mesmo sendo as mais recentes", () => {
+    const imoveis = itensDe(apresentacaoReal.operacionais.reservas).map((item) => item.imovel);
+
+    assert.equal(imoveis.includes("CA-901"), false, "FINALIZADA não entra");
+    assert.equal(imoveis.includes("CA-902"), false, "CANCELADA não entra");
+  });
+
+  it("as duas listas param em três, mesmo com quatro candidatas cada", () => {
+    assert.equal(itensDe(apresentacaoReal.operacionais.propostas).length, 3);
+    assert.equal(itensDe(apresentacaoReal.operacionais.reservas).length, 3);
+  });
+
+  it("os dois blocos de leitura ficam OK", () => {
+    assert.equal(resultado.propostas.estadoLeitura, "OK");
+    assert.equal(resultado.reservas.estadoLeitura, "OK");
+  });
+
+  it("reserva não mexe em métrica nenhuma", () => {
+    // Reserva é operação, não produção (DEC-055): as seis criadas não aparecem
+    // no quadro mensal, no VGV nem em ranking algum.
+    assert.equal(dadosPeriodos(resultado).quadroMensal.LOCACAO, 1, "só a locação real");
+    assert.equal(dadosPeriodos(resultado).vgvPeriodos.mensal, "3134567.89");
+
+    const locadosDaEquipeC = dadosEquipes(resultado).equipes[2].rankings.locados;
+    assert.ok(
+      locadosDaEquipeC.every((linha) => linha.valor === 0),
+      "a reserva do Diego não virou locação",
+    );
+  });
+
+  it("a venda compartilhada da E3 continua intacta com as listas no ar", () => {
+    const equipeA = dadosEquipes(resultado).equipes[0];
+    const ana = equipeA.rankings.vgv.find(
+      (linha) => linha.corretorId === idDoCorretor.get("ana"),
+    );
+
+    assert.equal(ana?.valor, "300000.00", "a fração da venda compartilhada não mudou");
+    assert.equal(dadosPeriodos(resultado).quadroMensal.VENDA, 3);
   });
 });

@@ -9,6 +9,10 @@ export function FaixaBig({ itens }: { itens: BigNumber[] }) {
         <div key={item.rotulo} className={estilos.big}>
           <div className={estilos.rot}>{item.rotulo}</div>
           <div className={estilos.num}>
+            {/* "+ de" vem antes da moeda: o acumulado é um piso, e o piso
+                qualifica o número inteiro, inclusive o `R$` (DEC-054). Só existe
+                em acumulado com número — nunca "+ de —". */}
+            {item.qualificador && <span className={estilos.qual}>{item.qualificador}</span>}
             {item.numero.prefixo && <span className={estilos.pre}>{item.numero.prefixo}</span>}
             {item.numero.valor}
             {item.numero.sufixo && <span className={estilos.suf}>{item.numero.sufixo}</span>}

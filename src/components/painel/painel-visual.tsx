@@ -2,7 +2,7 @@ import { Jost } from "next/font/google";
 import Image from "next/image";
 import type { ApresentacaoPainel } from "@/lib/apresentacao-painel";
 import { decidirAreaEquipes } from "./decidir-area-equipes";
-import { FaixaBig } from "./faixa-big";
+import { FaixaSuperior } from "./faixa-superior";
 import { FaixaVgv } from "./faixa-vgv";
 import { QuadrosEquipe } from "./quadros-equipe";
 import estilos from "./painel.module.css";
@@ -86,7 +86,13 @@ export function PainelVisual({
             </div>
           </div>
 
-          <FaixaBig itens={apresentacao.bigNumbers} />
+          {/* A faixa de cima alterna entre os acumulados e as listas
+              operacionais a cada 20 s (DEC-056). O resto da composição não sabe
+              disso: as duas telas ocupam a mesma região. */}
+          <FaixaSuperior
+            bigNumbers={apresentacao.bigNumbers}
+            operacionais={apresentacao.operacionais}
+          />
 
           <FaixaVgv titulo="VGV por período" itens={apresentacao.vgvPeriodos} />
 

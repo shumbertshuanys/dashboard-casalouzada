@@ -1,7 +1,15 @@
 import type { Metadata } from "next";
 import { PainelVisual } from "@/components/painel/painel-visual";
 import type { ApresentacaoPainel } from "@/lib/apresentacao-painel";
-import { bigNumbers, equipes, metricas, periodo, quadroMensal, vgvPeriodos } from "@/lib/mock-painel";
+import {
+  bigNumbers,
+  equipes,
+  metricas,
+  operacionais,
+  periodo,
+  quadroMensal,
+  vgvPeriodos,
+} from "@/lib/mock-painel";
 
 export const metadata: Metadata = {
   title: "Preview do painel — Casa Louzada",
@@ -23,6 +31,7 @@ const apresentacao: ApresentacaoPainel = {
   quadroMensal: { estado: "OK", linhas: quadroMensal },
   metricas,
   equipes: { estado: "OK", equipes },
+  operacionais,
 };
 
 /**

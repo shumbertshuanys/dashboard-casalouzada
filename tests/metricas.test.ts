@@ -10,6 +10,7 @@ import {
   type EquipeMetrica,
   type LancamentoMetrica,
   type MetricasEquipesPuras,
+  type PrecisaoSaldoMetrica,
   type SaldoHistoricoMetrica,
   type TipoEventoMetrica,
   type TipoSaldoMetrica,
@@ -58,13 +59,15 @@ function lancamento(
   };
 }
 
+/** `EXATO` por padrão: é o que a maioria dos casos exercita (DEC-054). */
 function saldo(
   tipo: TipoSaldoMetrica,
   quantidade: number,
   valorTotal: string,
   dataCorte: string,
+  precisao: PrecisaoSaldoMetrica = "EXATO",
 ): SaldoHistoricoMetrica {
-  return { tipo, quantidade, valorTotal, dataCorte: paraDataCivil(dataCorte) };
+  return { tipo, quantidade, valorTotal, precisao, dataCorte: paraDataCivil(dataCorte) };
 }
 
 describe("acumulados — ausência de saldo histórico", () => {
@@ -117,8 +120,8 @@ describe("acumulados — o corte é inclusivo no saldo", () => {
   it("sem lançamentos posteriores, o acumulado é exatamente o saldo", () => {
     const metricas = calcularMetricasEmpresa([], saldos, AGORA);
 
-    assert.deepEqual(metricas.acumulados.vendidos, { estado: "OK", valor: 100 });
-    assert.deepEqual(metricas.acumulados.vgv, { estado: "OK", valor: "250000.00" });
+    assert.deepEqual(metricas.acumulados.vendidos, { estado: "OK", valor: 100, precisao: "EXATO" });
+    assert.deepEqual(metricas.acumulados.vgv, { estado: "OK", valor: "250000.00", precisao: "EXATO" });
   });
 
   it("evento anterior ao corte não soma de novo", () => {
@@ -228,7 +231,7 @@ describe("acumulados — cada tipo usa o próprio corte", () => {
       AGORA,
     );
 
-    assert.deepEqual(metricas.acumulados.avaliacoes, { estado: "OK", valor: 2643 });
+    assert.deepEqual(metricas.acumulados.avaliacoes, { estado: "OK", valor: 2643, precisao: "EXATO" });
   });
 });
 

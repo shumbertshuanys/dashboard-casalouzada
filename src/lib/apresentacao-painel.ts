@@ -10,6 +10,7 @@ import {
 import { mesCorrente } from "@/lib/datas";
 import type {
   BlocoAcumuladosEmpresa,
+  BlocoDestaques,
   BlocoEquipes,
   BlocoPeriodosEmpresa,
   ResultadoPainel,
@@ -69,8 +70,43 @@ export type EstadoBigNumber = "OK" | "INDISPONIVEL" | "SEM_SALDO_HISTORICO";
 export type EstadoVgvPeriodo = "OK" | "INDISPONIVEL" | "SEM_DADOS";
 export type EstadoQuadroMensal = "OK" | "INDISPONIVEL" | "SEM_DADOS";
 
-export type BigNumber = { rotulo: string; numero: ValorComposto; estado: EstadoBigNumber };
+/**
+ * O prefixo de um acumulado que é piso, não afirmação (DEC-054).
+ *
+ * Campo próprio, e não misturado no `prefixo` do `ValorComposto`: aquele
+ * significa **moeda**, e enfiar precisão ali daria dois sentidos ao mesmo campo —
+ * a tela teria de adivinhar se `"R$"` e `"+ de"` cabem juntos. Assim a contagem
+ * sai `+ de 527` e o dinheiro, `+ de R$ 800 mi`.
+ */
+export type QualificadorBigNumber = "+ de";
+
+export type BigNumber = {
+  rotulo: string;
+  numero: ValorComposto;
+  estado: EstadoBigNumber;
+  /** Só existe em acumulado `OK` de saldo mínimo conhecido. */
+  qualificador?: QualificadorBigNumber;
+};
 export type VgvPeriodo = { rotulo: string; valor: ValorComposto; estado: EstadoVgvPeriodo };
+
+/** Um item da Tela B: imóvel e corretor, nada além (DEC-056). */
+export type ItemOperacional = { imovel: string; corretor: string };
+
+/**
+ * Uma lista da Tela B.
+ *
+ * `OK` com zero itens é **dado**: significa que não há nada em aberto agora, e a
+ * tela diz isso com texto, nunca com `0` — lista operacional não é métrica
+ * (DEC-014). `INDISPONIVEL` é outra coisa: a leitura não aconteceu.
+ */
+export type ListaOperacional =
+  | { estado: "OK"; itens: ItemOperacional[] }
+  | { estado: "INDISPONIVEL" };
+
+export type AreaOperacional = {
+  propostas: ListaOperacional;
+  reservas: ListaOperacional;
+};
 
 export type Equipe = {
   nome: string;
@@ -104,6 +140,8 @@ export type ApresentacaoPainel = {
   quadroMensal: AreaQuadroMensal;
   metricas: readonly Metrica[];
   equipes: AreaEquipes;
+  /** As duas listas da Tela B, já prontas para desenhar (DEC-056). */
+  operacionais: AreaOperacional;
 };
 
 /** Como cada métrica do ciclo aparece no título do quadro (DEC-033). */
@@ -345,6 +383,12 @@ function ausente(): ValorComposto {
   return { valor: TRACO };
 }
 
+/** O texto que marca um acumulado como piso (DEC-054). */
+const QUALIFICADOR_MINIMO: QualificadorBigNumber = "+ de";
+
+/** Proposta legada sem imóvel continua na lista, mas dizendo o que falta. */
+const IMOVEL_AUSENTE = "Imóvel não informado";
+
 const ROTULO_VENDIDOS = "Imóveis vendidos";
 const ROTULO_VGV_ACUMULADO = "VGV acumulado";
 const ROTULO_AVALIACOES = "Avaliações Google";
@@ -363,10 +407,17 @@ function bigNumberDe<T>(
   acumulado: Acumulado<T>,
   apresentar: (valor: T) => ValorComposto,
 ): BigNumber {
-  if (acumulado.estado !== "OK" || acumulado.valor === null) {
+  if (acumulado.estado !== "OK") {
     return { rotulo, numero: ausente(), estado: "SEM_SALDO_HISTORICO" };
   }
-  return { rotulo, numero: apresentar(acumulado.valor), estado: "OK" };
+
+  // O qualificador só acompanha número: em `—` ele viraria "+ de —", que não
+  // afirma piso de coisa nenhuma. Por isso ele nasce aqui, depois do estado
+  // resolvido, e não existe em nenhum ramo sem valor (DEC-054).
+  const base = { rotulo, numero: apresentar(acumulado.valor), estado: "OK" as const };
+  return acumulado.precisao === "MINIMO_CONHECIDO"
+    ? { ...base, qualificador: QUALIFICADOR_MINIMO }
+    : base;
 }
 
 function bigNumbersDe(acumulados: BlocoAcumuladosEmpresa): BigNumber[] {
@@ -510,6 +561,26 @@ function areaEquipesDe(equipes: BlocoEquipes): AreaEquipes {
 }
 
 /**
+ * Uma lista da Tela B: só imóvel e corretor, na ordem que o núcleo já decidiu.
+ *
+ * Aqui não se filtra status, não se ordena e não se corta em três — isso é regra
+ * de produto e mora no núcleo (DEC-013). O que esta camada faz é escolher o
+ * texto: uma proposta legada sem imóvel diz "Imóvel não informado" em vez de
+ * sumir da parede.
+ */
+function listaOperacionalDe(bloco: BlocoDestaques): ListaOperacional {
+  if (bloco.estadoLeitura !== "OK") return { estado: "INDISPONIVEL" };
+
+  return {
+    estado: "OK",
+    itens: bloco.dados.map((destaque) => ({
+      imovel: destaque.imovelRef ?? IMOVEL_AUSENTE,
+      corretor: destaque.corretorNome,
+    })),
+  };
+}
+
+/**
  * Traduz o resultado da leitura no que a tela desenha.
  *
  * `agora` é **obrigatório** e serve só ao rótulo do período. Um default
@@ -530,5 +601,9 @@ export function criarApresentacaoPainel(
     quadroMensal: quadroMensalDe(resultado.empresa.periodos),
     metricas: METRICAS_PAINEL,
     equipes: areaEquipesDe(resultado.equipes),
+    operacionais: {
+      propostas: listaOperacionalDe(resultado.propostas),
+      reservas: listaOperacionalDe(resultado.reservas),
+    },
   };
 }

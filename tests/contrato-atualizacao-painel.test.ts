@@ -91,9 +91,174 @@ function leituraValida(): LeituraPainel {
         estadoLeitura: "OK",
         area: { estado: "OK", equipes: tresEquipes() },
       },
+      propostas: {
+        estadoLeitura: "OK",
+        lista: {
+          estado: "OK",
+          itens: [
+            { imovel: "AP-1203", corretor: "Marina" },
+            { imovel: "CA-450", corretor: "Rodrigo" },
+          ],
+        },
+      },
+      reservas: {
+        estadoLeitura: "OK",
+        lista: { estado: "OK", itens: [{ imovel: "AP-88", corretor: "Camila" }] },
+      },
     },
   };
 }
+
+/**
+ * As duas listas da Tela B no contrato (DEC-056).
+ *
+ * O que se valida aqui é o mesmo de sempre: forma e **coerência**. Um bloco que
+ * diga `INDISPONIVEL` carregando itens é contraditório, e aceitá-lo apagaria da
+ * parede a lista que estava retida.
+ */
+describe("listas operacionais no contrato", () => {
+  it("aceita lista vazia — zero em aberto é dado válido", () => {
+    assert.equal(
+      ehLeituraPainel(
+        corromper((leitura) => {
+          leitura.blocos.propostas.lista = { estado: "OK", itens: [] };
+          leitura.blocos.reservas.lista = { estado: "OK", itens: [] };
+        }),
+      ),
+      true,
+    );
+  });
+
+  it("aceita exatamente três itens", () => {
+    assert.equal(
+      ehLeituraPainel(
+        corromper((leitura) => {
+          leitura.blocos.propostas.lista = {
+            estado: "OK",
+            itens: [
+              { imovel: "A", corretor: "1" },
+              { imovel: "B", corretor: "2" },
+              { imovel: "C", corretor: "3" },
+            ],
+          };
+        }),
+      ),
+      true,
+    );
+  });
+
+  it("recusa quatro itens: o teto da Tela B é três", () => {
+    assert.equal(
+      ehLeituraPainel(
+        corromper((leitura) => {
+          leitura.blocos.propostas.lista = {
+            estado: "OK",
+            itens: [
+              { imovel: "A", corretor: "1" },
+              { imovel: "B", corretor: "2" },
+              { imovel: "C", corretor: "3" },
+              { imovel: "D", corretor: "4" },
+            ],
+          };
+        }),
+      ),
+      false,
+    );
+  });
+
+  it("recusa item sem imóvel ou sem corretor", () => {
+    const semImovel = corromper((leitura) => {
+      leitura.blocos.reservas.lista = {
+        estado: "OK",
+        itens: [{ imovel: "", corretor: "Camila" }],
+      };
+    });
+    const semCorretor = corromper((leitura) => {
+      leitura.blocos.reservas.lista = {
+        estado: "OK",
+        itens: [{ imovel: "AP-88" } as never],
+      };
+    });
+
+    assert.equal(ehLeituraPainel(semImovel), false);
+    assert.equal(ehLeituraPainel(semCorretor), false);
+  });
+
+  it("recusa itens que não são objeto", () => {
+    assert.equal(
+      ehLeituraPainel(
+        corromper((leitura) => {
+          leitura.blocos.propostas.lista = { estado: "OK", itens: ["AP-1" as never] };
+        }),
+      ),
+      false,
+    );
+  });
+
+  it("aceita bloco indisponível sem itens", () => {
+    assert.equal(
+      ehLeituraPainel(
+        corromper((leitura) => {
+          leitura.blocos.propostas.estadoLeitura = "INDISPONIVEL";
+          leitura.blocos.propostas.lista = { estado: "INDISPONIVEL" };
+        }),
+      ),
+      true,
+    );
+  });
+
+  it("recusa bloco indisponível carregando itens", () => {
+    assert.equal(
+      ehLeituraPainel(
+        corromper((leitura) => {
+          leitura.blocos.propostas.estadoLeitura = "INDISPONIVEL";
+          leitura.blocos.propostas.lista = {
+            estado: "INDISPONIVEL",
+            itens: [{ imovel: "AP-1", corretor: "Ana" }],
+          } as never;
+        }),
+      ),
+      false,
+    );
+  });
+
+  it("recusa leitura OK com lista indisponível, e o contrário", () => {
+    const okComListaCaida = corromper((leitura) => {
+      leitura.blocos.reservas.estadoLeitura = "OK";
+      leitura.blocos.reservas.lista = { estado: "INDISPONIVEL" };
+    });
+    const caidoComListaOk = corromper((leitura) => {
+      leitura.blocos.reservas.estadoLeitura = "INDISPONIVEL";
+      leitura.blocos.reservas.lista = { estado: "OK", itens: [] };
+    });
+
+    assert.equal(ehLeituraPainel(okComListaCaida), false);
+    assert.equal(ehLeituraPainel(caidoComListaOk), false);
+  });
+
+  it("recusa payload sem os blocos operacionais", () => {
+    assert.equal(
+      ehLeituraPainel(
+        corromper((leitura) => {
+          delete (leitura.blocos as Partial<LeituraPainel["blocos"]>).propostas;
+        }),
+      ),
+      false,
+    );
+  });
+
+  it("uma lista caída não invalida a outra", () => {
+    assert.equal(
+      ehLeituraPainel(
+        corromper((leitura) => {
+          leitura.blocos.propostas.estadoLeitura = "INDISPONIVEL";
+          leitura.blocos.propostas.lista = { estado: "INDISPONIVEL" };
+        }),
+      ),
+      true,
+    );
+  });
+});
 
 /** Corrompe o payload válido e devolve o objeto solto, para o validador julgar. */
 function corromper(mutar: (leitura: LeituraPainel) => void): unknown {

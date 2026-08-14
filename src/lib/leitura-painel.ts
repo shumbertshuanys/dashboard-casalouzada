@@ -19,8 +19,10 @@ import { obterMetricasPainel } from "@/lib/metricas-prisma";
  * criaria um segundo relógio dentro de um caminho que precisa ter só um.
  *
  * Nada é recalculado nem reformatado: a leitura vem da F3.3, a formatação da
- * F3.4, e o que se faz aqui é fatiar o resultado nos três blocos e carimbar a
- * hora. Sem `try`/`catch` — exceção continua sendo exceção.
+ * F3.4, e o que se faz aqui é fatiar o resultado nos blocos e carimbar a hora.
+ * As duas listas da Tela B seguem a mesma regra — a seleção já aconteceu no
+ * núcleo, e aqui elas só viajam. Sem `try`/`catch` — exceção continua sendo
+ * exceção.
  */
 export async function lerPainel(prisma: PrismaClient, agora: Date): Promise<LeituraPainel> {
   const resultado = await obterMetricasPainel(prisma, agora);
@@ -48,6 +50,14 @@ export async function lerPainel(prisma: PrismaClient, agora: Date): Promise<Leit
       equipes: {
         estadoLeitura: resultado.equipes.estadoLeitura,
         area: apresentacao.equipes,
+      },
+      propostas: {
+        estadoLeitura: resultado.propostas.estadoLeitura,
+        lista: apresentacao.operacionais.propostas,
+      },
+      reservas: {
+        estadoLeitura: resultado.reservas.estadoLeitura,
+        lista: apresentacao.operacionais.reservas,
       },
     },
   };

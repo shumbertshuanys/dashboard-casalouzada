@@ -196,12 +196,20 @@ describe("empresa não infla com o número de participantes", () => {
     const compartilhada = venda("900000.00", participacoes(["a", "A"], ["b", "A"], ["c", "B"]));
     const metricas = calcularMetricasEmpresa(
       [compartilhada],
-      [{ tipo: "VENDA", quantidade: 10, valorTotal: "100000.00", dataCorte: paraDataCivil("2026-07-31") }],
+      [
+        {
+          tipo: "VENDA",
+          quantidade: 10,
+          valorTotal: "100000.00",
+          precisao: "EXATO",
+          dataCorte: paraDataCivil("2026-07-31"),
+        },
+      ],
       AGORA,
     );
 
-    assert.deepEqual(metricas.acumulados.vendidos, { estado: "OK", valor: 11 });
-    assert.deepEqual(metricas.acumulados.vgv, { estado: "OK", valor: "1000000.00" });
+    assert.deepEqual(metricas.acumulados.vendidos, { estado: "OK", valor: 11, precisao: "EXATO" });
+    assert.deepEqual(metricas.acumulados.vgv, { estado: "OK", valor: "1000000.00", precisao: "EXATO" });
   });
 
   it("venda sem valor continua falhando alto", () => {

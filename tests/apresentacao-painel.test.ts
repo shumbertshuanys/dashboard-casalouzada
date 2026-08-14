@@ -328,9 +328,10 @@ function acumulados(
   parcial: Partial<MetricasEmpresaPuras["acumulados"]> = {},
 ): MetricasEmpresaPuras["acumulados"] {
   return {
-    vendidos: { estado: "OK", valor: 528 },
-    vgv: { estado: "OK", valor: "4200000000.00" },
-    avaliacoes: { estado: "OK", valor: 2643 },
+    // `EXATO` é o caso comum; os testes de "+ de" passam `MINIMO_CONHECIDO`.
+    vendidos: { estado: "OK", valor: 528, precisao: "EXATO" },
+    vgv: { estado: "OK", valor: "4200000000.00", precisao: "EXATO" },
+    avaliacoes: { estado: "OK", valor: 2643, precisao: "EXATO" },
     ...parcial,
   };
 }
@@ -400,6 +401,8 @@ function resultado(parcial: Partial<ResultadoPainel> = {}): ResultadoPainel {
       estadoLeitura: "OK",
       dados: { estadoPeriodoMensal: "OK", estadoEquipes: "OK", equipes: TRES_EQUIPES },
     },
+    propostas: { estadoLeitura: "OK", dados: [] },
+    reservas: { estadoLeitura: "OK", dados: [] },
     ...parcial,
   };
 }
@@ -632,7 +635,7 @@ describe("sub-resolução chega ao shape de apresentação", () => {
         periodos: { estadoLeitura: "OK", dados: periodos() },
         acumulados: {
           estadoLeitura: "OK",
-          dados: acumulados({ vgv: { estado: "OK", valor: "1000.00" } }),
+          dados: acumulados({ vgv: { estado: "OK", valor: "1000.00", precisao: "EXATO" } }),
         },
       },
     });
@@ -895,6 +898,245 @@ describe("precedência: configuração inválida vence mês sem dados", () => {
     assert.equal(painel.equipes.estado, "CONFIGURACAO_INVALIDA");
     assert.equal(painel.vgvPeriodos[2].estado, "SEM_DADOS");
     assert.equal(painel.quadroMensal.estado, "SEM_DADOS");
+  });
+});
+
+/**
+ * O "+ de" dos acumulados de saldo mínimo conhecido (DEC-054).
+ *
+ * O número não muda: o que muda é a afirmação. `EXATO` diz "527";
+ * `MINIMO_CONHECIDO` diz "+ de 527" — e o qualificador é campo próprio, para o
+ * `prefixo` continuar significando só moeda.
+ */
+describe("precisão do saldo vira qualificador (DEC-054)", () => {
+  it("saldo EXATO não traz qualificador", () => {
+    const painel = apresentar();
+
+    assert.equal(painel.bigNumbers[0].qualificador, undefined);
+    assert.equal(painel.bigNumbers[1].qualificador, undefined);
+    assert.equal(painel.bigNumbers[2].qualificador, undefined);
+  });
+
+  it("saldo MINIMO_CONHECIDO qualifica os imóveis vendidos", () => {
+    const painel = apresentar({
+      empresa: {
+        periodos: { estadoLeitura: "OK", dados: periodos() },
+        acumulados: {
+          estadoLeitura: "OK",
+          dados: acumulados({
+            vendidos: { estado: "OK", valor: 527, precisao: "MINIMO_CONHECIDO" },
+          }),
+        },
+      },
+    });
+
+    assert.deepEqual(painel.bigNumbers[0], {
+      rotulo: "Imóveis vendidos",
+      numero: { valor: "527" },
+      estado: "OK",
+      qualificador: "+ de",
+    });
+  });
+
+  it("saldo MINIMO_CONHECIDO qualifica o VGV acumulado, sem mexer na moeda", () => {
+    const painel = apresentar({
+      empresa: {
+        periodos: { estadoLeitura: "OK", dados: periodos() },
+        acumulados: {
+          estadoLeitura: "OK",
+          dados: acumulados({
+            vgv: { estado: "OK", valor: "800000000.00", precisao: "MINIMO_CONHECIDO" },
+          }),
+        },
+      },
+    });
+
+    const big = painel.bigNumbers[1];
+    assert.equal(big.qualificador, "+ de");
+    // O prefixo continua sendo só a moeda: os dois papéis não se misturam.
+    assert.deepEqual(big.numero, { prefixo: "R$", valor: "800", sufixo: "mi" });
+  });
+
+  it("saldo MINIMO_CONHECIDO qualifica as avaliações", () => {
+    const painel = apresentar({
+      empresa: {
+        periodos: { estadoLeitura: "OK", dados: periodos() },
+        acumulados: {
+          estadoLeitura: "OK",
+          dados: acumulados({
+            avaliacoes: { estado: "OK", valor: 2643, precisao: "MINIMO_CONHECIDO" },
+          }),
+        },
+      },
+    });
+
+    assert.equal(painel.bigNumbers[2].qualificador, "+ de");
+    assert.equal(painel.bigNumbers[2].numero.valor, "2.643");
+  });
+
+  it("a precisão de um saldo não contamina o outro", () => {
+    const painel = apresentar({
+      empresa: {
+        periodos: { estadoLeitura: "OK", dados: periodos() },
+        acumulados: {
+          estadoLeitura: "OK",
+          dados: acumulados({
+            vendidos: { estado: "OK", valor: 527, precisao: "MINIMO_CONHECIDO" },
+            vgv: { estado: "OK", valor: "800000000.00", precisao: "MINIMO_CONHECIDO" },
+          }),
+        },
+      },
+    });
+
+    assert.equal(painel.bigNumbers[0].qualificador, "+ de");
+    assert.equal(painel.bigNumbers[1].qualificador, "+ de");
+    assert.equal(painel.bigNumbers[2].qualificador, undefined, "avaliações seguem EXATO");
+  });
+
+  it("sem saldo, não existe `+ de —`", () => {
+    const painel = apresentar({
+      empresa: {
+        periodos: { estadoLeitura: "OK", dados: periodos() },
+        acumulados: {
+          estadoLeitura: "OK",
+          dados: acumulados({ vendidos: SEM_SALDO, vgv: SEM_SALDO, avaliacoes: SEM_SALDO }),
+        },
+      },
+    });
+
+    for (const big of painel.bigNumbers) {
+      assert.equal(big.estado, "SEM_SALDO_HISTORICO");
+      assert.equal(big.numero.valor, TRACO);
+      assert.equal(big.qualificador, undefined);
+    }
+  });
+
+  it("leitura indisponível também não qualifica nada", () => {
+    const painel = apresentar({
+      empresa: {
+        periodos: { estadoLeitura: "OK", dados: periodos() },
+        acumulados: { estadoLeitura: "INDISPONIVEL" },
+      },
+    });
+
+    for (const big of painel.bigNumbers) {
+      assert.equal(big.estado, "INDISPONIVEL");
+      assert.equal(big.qualificador, undefined);
+    }
+  });
+
+  it("o `+ de` não escapa para VGV por período nem para o quadro mensal", () => {
+    const painel = apresentar({
+      empresa: {
+        periodos: { estadoLeitura: "OK", dados: periodos() },
+        acumulados: {
+          estadoLeitura: "OK",
+          dados: acumulados({
+            vgv: { estado: "OK", valor: "800000000.00", precisao: "MINIMO_CONHECIDO" },
+          }),
+        },
+      },
+    });
+
+    // O piso qualifica o acumulado, não os recortes de período (DEC-054).
+    for (const periodo of painel.vgvPeriodos) {
+      assert.equal("qualificador" in periodo, false);
+    }
+    for (const linha of painel.quadroMensal.linhas) {
+      assert.equal(linha.valor.startsWith("+"), false);
+    }
+  });
+});
+
+/** As duas listas da Tela B, já formatadas (DEC-056). */
+describe("listas operacionais", () => {
+  it("transporta imóvel e corretor, na ordem que o núcleo entregou", () => {
+    const painel = apresentar({
+      propostas: {
+        estadoLeitura: "OK",
+        dados: [
+          { id: "p1", imovelRef: "AP-1203", corretorNome: "Marina" },
+          { id: "p2", imovelRef: "CA-450", corretorNome: "Rodrigo" },
+        ],
+      },
+      reservas: {
+        estadoLeitura: "OK",
+        dados: [{ id: "r1", imovelRef: "AP-88", corretorNome: "Camila" }],
+      },
+    });
+
+    assert.deepEqual(painel.operacionais.propostas, {
+      estado: "OK",
+      itens: [
+        { imovel: "AP-1203", corretor: "Marina" },
+        { imovel: "CA-450", corretor: "Rodrigo" },
+      ],
+    });
+    assert.deepEqual(painel.operacionais.reservas, {
+      estado: "OK",
+      itens: [{ imovel: "AP-88", corretor: "Camila" }],
+    });
+  });
+
+  it("proposta legada sem imóvel diz o que falta, em vez de sumir (DEC-053)", () => {
+    const painel = apresentar({
+      propostas: {
+        estadoLeitura: "OK",
+        dados: [{ id: "p1", imovelRef: null, corretorNome: "Bianca" }],
+      },
+    });
+
+    assert.deepEqual(painel.operacionais.propostas, {
+      estado: "OK",
+      itens: [{ imovel: "Imóvel não informado", corretor: "Bianca" }],
+    });
+  });
+
+  it("lista vazia é dado, não ausência", () => {
+    const painel = apresentar({
+      propostas: { estadoLeitura: "OK", dados: [] },
+      reservas: { estadoLeitura: "OK", dados: [] },
+    });
+
+    assert.deepEqual(painel.operacionais.propostas, { estado: "OK", itens: [] });
+    assert.deepEqual(painel.operacionais.reservas, { estado: "OK", itens: [] });
+  });
+
+  it("leitura indisponível não carrega itens", () => {
+    const painel = apresentar({
+      propostas: { estadoLeitura: "INDISPONIVEL" },
+      reservas: { estadoLeitura: "INDISPONIVEL" },
+    });
+
+    assert.deepEqual(painel.operacionais.propostas, { estado: "INDISPONIVEL" });
+    assert.deepEqual(painel.operacionais.reservas, { estado: "INDISPONIVEL" });
+  });
+
+  it("uma lista indisponível não derruba a outra", () => {
+    const painel = apresentar({
+      propostas: { estadoLeitura: "INDISPONIVEL" },
+      reservas: {
+        estadoLeitura: "OK",
+        dados: [{ id: "r1", imovelRef: "AP-88", corretorNome: "Camila" }],
+      },
+    });
+
+    assert.equal(painel.operacionais.propostas.estado, "INDISPONIVEL");
+    assert.equal(painel.operacionais.reservas.estado, "OK");
+  });
+
+  it("nem os big numbers nem as equipes mudam por causa das listas", () => {
+    const comListas = apresentar({
+      propostas: {
+        estadoLeitura: "OK",
+        dados: [{ id: "p1", imovelRef: "AP-1", corretorNome: "Ana" }],
+      },
+    });
+    const semListas = apresentar();
+
+    assert.deepEqual(comListas.bigNumbers, semListas.bigNumbers);
+    assert.deepEqual(comListas.quadroMensal, semListas.quadroMensal);
+    assert.deepEqual(comListas.equipes, semListas.equipes);
   });
 });
 

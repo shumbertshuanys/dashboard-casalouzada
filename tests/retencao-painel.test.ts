@@ -66,6 +66,11 @@ type Opcoes = {
   estadoQuadro?: "OK" | "SEM_DADOS";
   estadoBigNumber?: "OK" | "SEM_SALDO_HISTORICO";
   estadoArea?: "OK" | "SEM_DADOS" | "CONFIGURACAO_INVALIDA";
+  propostas?: "OK" | "INDISPONIVEL";
+  reservas?: "OK" | "INDISPONIVEL";
+  /** Quantos itens cada lista operacional traz quando a leitura é `OK`. */
+  itensPropostas?: number;
+  itensReservas?: number;
 };
 
 const TRACO = "—";
@@ -88,11 +93,27 @@ function leitura(opcoes: Opcoes = {}): LeituraPainel {
     estadoQuadro = "OK",
     estadoBigNumber = "OK",
     estadoArea = "OK",
+    propostas = "OK",
+    reservas = "OK",
+    itensPropostas = 2,
+    itensReservas = 1,
   } = opcoes;
 
   const periodosIndisponivel = periodos === "INDISPONIVEL";
   const acumuladosIndisponivel = acumulados === "INDISPONIVEL";
   const equipesIndisponivel = leituraEquipes === "INDISPONIVEL";
+
+  /** Uma lista operacional coerente com o estado de leitura do bloco. */
+  const lista = (estado: "OK" | "INDISPONIVEL", quantos: number, prefixo: string) =>
+    estado === "INDISPONIVEL"
+      ? ({ estado: "INDISPONIVEL" } as const)
+      : ({
+          estado: "OK" as const,
+          itens: Array.from({ length: quantos }, (_, indice) => ({
+            imovel: `${prefixo}-${indice}-${marca}`,
+            corretor: `Corretor ${indice}`,
+          })),
+        } as const);
 
   return {
     competencia,
@@ -135,6 +156,14 @@ function leitura(opcoes: Opcoes = {}): LeituraPainel {
           : estadoArea === "CONFIGURACAO_INVALIDA"
             ? { estado: "CONFIGURACAO_INVALIDA" }
             : { estado: estadoArea, equipes: equipes(marca) },
+      },
+      propostas: {
+        estadoLeitura: propostas,
+        lista: lista(propostas, itensPropostas, "AP"),
+      },
+      reservas: {
+        estadoLeitura: reservas,
+        lista: lista(reservas, itensReservas, "CA"),
       },
     },
   };
@@ -342,7 +371,13 @@ describe("T12–T13 — a hora do selo", () => {
 
   it("T13: sem nenhum bloco OK, não há selo", () => {
     const estado = estadoInicial(
-      leitura({ periodos: "INDISPONIVEL", acumulados: "INDISPONIVEL", equipes: "INDISPONIVEL" }),
+      leitura({
+        periodos: "INDISPONIVEL",
+        acumulados: "INDISPONIVEL",
+        equipes: "INDISPONIVEL",
+        propostas: "INDISPONIVEL",
+        reservas: "INDISPONIVEL",
+      }),
     );
 
     assert.equal(idadeExibida(estado), null);
@@ -396,6 +431,114 @@ describe("T15 — nenhum bloco retido fica em competência alheia", () => {
   });
 });
 
+/**
+ * As duas listas da Tela B na retenção (DEC-056).
+ *
+ * Elas seguem a mesma regra dos outros blocos — falha não apaga dado bom —, com
+ * uma diferença: **não** têm recorte mensal. Uma proposta aguardando em 31/08
+ * continua aguardando em 01/09, então a trava de competência não se aplica.
+ */
+describe("T17 — retenção das listas operacionais", () => {
+  it("propostas indisponíveis retêm a lista anterior", () => {
+    const antes = estadoInicial(leitura({ marca: "1", itensPropostas: 3 }));
+    const depois = resolverAtualizacao(antes, leitura({ marca: "2", propostas: "INDISPONIVEL" }));
+
+    assert.equal(depois.propostas.dados.estadoLeitura, "OK", "a lista de antes fica");
+    assert.deepEqual(depois.propostas.dados.lista, antes.propostas.dados.lista);
+    // E a queda de uma lista não contamina a outra.
+    assert.equal(depois.reservas.dados.estadoLeitura, "OK");
+    assert.equal(depois.acumulados.dados.bigNumbers[0].numero.valor, "2");
+  });
+
+  it("reservas indisponíveis retêm a lista anterior", () => {
+    const antes = estadoInicial(leitura({ marca: "1", itensReservas: 3 }));
+    const depois = resolverAtualizacao(antes, leitura({ marca: "2", reservas: "INDISPONIVEL" }));
+
+    assert.equal(depois.reservas.dados.estadoLeitura, "OK");
+    assert.deepEqual(depois.reservas.dados.lista, antes.reservas.dados.lista);
+  });
+
+  it("leitura OK com lista VAZIA substitui — não retém as anteriores", () => {
+    const antes = estadoInicial(leitura({ marca: "1", itensPropostas: 3 }));
+    const depois = resolverAtualizacao(antes, leitura({ marca: "2", itensPropostas: 0 }));
+
+    // Vazio é dado: significa que não há mais nada em aberto. Reter as três
+    // deixaria na parede itens que já saíram.
+    assert.equal(depois.propostas.dados.estadoLeitura, "OK");
+    assert.deepEqual(depois.propostas.dados.lista, { estado: "OK", itens: [] });
+  });
+
+  it("o mesmo vale para reservas", () => {
+    const antes = estadoInicial(leitura({ marca: "1", itensReservas: 3 }));
+    const depois = resolverAtualizacao(antes, leitura({ marca: "2", itensReservas: 0 }));
+
+    assert.deepEqual(depois.reservas.dados.lista, { estado: "OK", itens: [] });
+  });
+
+  it("a retenção atravessa a virada de mês", () => {
+    const antes = estadoInicial(leitura({ competencia: "2026-08-01", marca: "1" }));
+    const depois = resolverAtualizacao(
+      antes,
+      leitura({
+        competencia: "2026-09-01",
+        marca: "2",
+        propostas: "INDISPONIVEL",
+        reservas: "INDISPONIVEL",
+        periodos: "INDISPONIVEL",
+      }),
+    );
+
+    assert.equal(depois.competencia, "2026-09-01");
+    // Períodos caem na virada; as listas operacionais, não — elas não descrevem
+    // a produção de um mês.
+    assert.equal(depois.periodos.dados.estadoLeitura, "INDISPONIVEL");
+    assert.equal(depois.propostas.dados.estadoLeitura, "OK");
+    assert.equal(depois.reservas.dados.estadoLeitura, "OK");
+  });
+
+  it("a lista retida volta a andar quando a leitura volta", () => {
+    const antes = estadoInicial(leitura({ marca: "1" }));
+    const durante = resolverAtualizacao(antes, leitura({ marca: "2", propostas: "INDISPONIVEL" }));
+    const depois = resolverAtualizacao(durante, leitura({ marca: "3" }));
+
+    assert.equal(depois.propostas.dados.estadoLeitura, "OK");
+    assert.ok(
+      depois.propostas.dados.lista.estado === "OK" &&
+        depois.propostas.dados.lista.itens[0].imovel.endsWith("-3"),
+    );
+  });
+
+  it("o selo considera as listas: uma lista retida envelhece o selo", () => {
+    const antes = estadoInicial(leitura({ marca: "1", horaLeitura: "14:00" }));
+    const depois = resolverAtualizacao(
+      antes,
+      leitura({
+        marca: "2",
+        lidoEmMs: 1_786_000_600_000,
+        horaLeitura: "14:10",
+        propostas: "INDISPONIVEL",
+      }),
+    );
+
+    // A lista de propostas continua sendo a das 14:00; o selo tem de dizer isso.
+    assert.equal(idadeExibida(depois), "14:00");
+  });
+
+  it("sem nenhum bloco OK, inclusive as listas, não há selo", () => {
+    const estado = estadoInicial(
+      leitura({
+        periodos: "INDISPONIVEL",
+        acumulados: "INDISPONIVEL",
+        equipes: "INDISPONIVEL",
+        propostas: "INDISPONIVEL",
+        reservas: "INDISPONIVEL",
+      }),
+    );
+
+    assert.equal(idadeExibida(estado), null);
+  });
+});
+
 describe("T16 — a recomposição devolve a apresentação original", () => {
   it("estado inicial de uma leitura OK recompõe exatamente o que a formou", () => {
     const base = leitura({ marca: "7" });
@@ -407,6 +550,10 @@ describe("T16 — a recomposição devolve a apresentação original", () => {
       quadroMensal: base.blocos.periodos.quadroMensal,
       metricas: base.metricas,
       equipes: base.blocos.equipes.area,
+      operacionais: {
+        propostas: base.blocos.propostas.lista,
+        reservas: base.blocos.reservas.lista,
+      },
     };
 
     assert.deepEqual(comporApresentacao(estadoInicial(base)), esperada);

@@ -88,11 +88,100 @@
   opacity: 0.72;
 }
 
+/* A faixa superior alterna entre a Tela A e a Tela B (DEC-056). As duas ocupam
+   exatamente a mesma região da composição.
+
+   `height` fixa, e não `min-height`: medido em 3840px, a Tela B com três itens
+   por coluna ficava 36.79px mais alta que a Tela A e empurrava a faixa de VGV e
+   os quadros para baixo a cada 20 segundos. Com a altura travada em 11.6cqw — a
+   que a Tela A já ocupava — nada abaixo se move na troca. As colunas da Tela B
+   distribuem os itens dentro desse espaço em vez de esticá-lo. */
+.faixaSuperior {
+  flex-shrink: 0;
+  height: 11.6cqw;
+  transition: opacity 0.45s ease;
+}
+.faixaSuperior.trocando {
+  opacity: 0;
+}
+
 .faixaBig {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1.1cqw;
   flex-shrink: 0;
+}
+
+/* Tela B: duas listas operacionais lado a lado, na mesma caixa da Tela A. */
+.faixaOperacional {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.1cqw;
+  height: 100%;
+}
+.operacional {
+  background: var(--color-superficie);
+  padding: 1.5cqw 1.8cqw 1.7cqw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9cqw;
+  min-width: 0;
+  /* A coluna vive dentro da altura travada da faixa; o corte é a garantia de
+     que nada aqui volte a empurrar o resto do painel. */
+  height: 100%;
+  overflow: hidden;
+}
+/* O rótulo repete o `.big .rot`: as duas telas têm o mesmo topo, então a troca
+   não desloca a primeira linha de texto. */
+.operacional .rot {
+  font-size: 0.84cqw;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-texto-secundario);
+}
+/* Os itens ocupam o que sobra da coluna e se distribuem nele, em vez de somarem
+   altura própria — é isso que mantém a região com o mesmo tamanho tendo um, dois
+   ou três itens. */
+.operacionalItens {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.operacionalItem {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8cqw;
+  min-width: 0;
+}
+/* 1.6cqw dá 61px numa TV de 3840px — bem acima dos 44px que a seção 6 do PLANO
+   exige para nome e valores de lista. */
+.operacionalImovel {
+  font-size: 1.6cqw;
+  font-weight: 400;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+.operacionalCorretor {
+  font-size: 1.15cqw;
+  color: var(--color-texto-secundario);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* "Nenhuma proposta em andamento" e "Dados indisponíveis" ocupam o corpo da
+   coluna sem virar número: lista operacional vazia é frase, nunca `0`. */
+.operacionalAviso {
+  font-size: 1.15cqw;
+  color: var(--color-texto-secundario);
+  display: flex;
+  flex: 1;
+  align-items: center;
 }
 .big {
   background: var(--color-superficie);
@@ -112,6 +201,15 @@
   font-weight: 300;
   line-height: 0.92;
   letter-spacing: -0.02em;
+}
+/* O "+ de" acompanha a escala do prefixo de moeda: é um qualificador, não o
+   número. Fica antes do `R$` quando os dois existem. */
+.big .num .qual {
+  font-size: 2.6cqw;
+  font-weight: 300;
+  color: var(--color-texto-secundario);
+  margin-right: 0.18em;
+  letter-spacing: 0;
 }
 .big .num .pre {
   font-size: 2.6cqw;

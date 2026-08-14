@@ -80,8 +80,15 @@ describe("estrutura da leitura", () => {
     assert.equal(new Set(leitura.metricas.map((metrica) => metrica.chave)).size, 8);
   });
 
-  it("traz os três blocos, cada um com o próprio estado de leitura", () => {
-    assert.deepEqual(Object.keys(leitura.blocos).sort(), ["acumulados", "equipes", "periodos"]);
+  it("traz os cinco blocos, cada um com o próprio estado de leitura", () => {
+    // Os três de sempre mais as duas listas operacionais da Tela B (DEC-056).
+    assert.deepEqual(Object.keys(leitura.blocos).sort(), [
+      "acumulados",
+      "equipes",
+      "periodos",
+      "propostas",
+      "reservas",
+    ]);
 
     for (const bloco of Object.values(leitura.blocos)) {
       assert.ok(
@@ -95,6 +102,17 @@ describe("estrutura da leitura", () => {
     assert.equal(leitura.blocos.periodos.vgvPeriodos.length, 3);
     assert.equal(leitura.blocos.periodos.quadroMensal.linhas.length, 7);
     assert.equal(leitura.blocos.acumulados.bigNumbers.length, 3);
+  });
+
+  it("as listas operacionais nunca passam de três itens", () => {
+    for (const bloco of [leitura.blocos.propostas, leitura.blocos.reservas]) {
+      if (bloco.lista.estado !== "OK") continue;
+      assert.ok(bloco.lista.itens.length <= 3, "o teto da Tela B é três (DEC-056)");
+      for (const item of bloco.lista.itens) {
+        assert.equal(typeof item.imovel, "string");
+        assert.equal(typeof item.corretor, "string");
+      }
+    }
   });
 
   it("os rótulos são os do painel", () => {
@@ -162,6 +180,10 @@ describe("a leitura recompõe exatamente a apresentação que carrega", () => {
       quadroMensal: leitura.blocos.periodos.quadroMensal,
       metricas: leitura.metricas,
       equipes: leitura.blocos.equipes.area,
+      operacionais: {
+        propostas: leitura.blocos.propostas.lista,
+        reservas: leitura.blocos.reservas.lista,
+      },
     });
   });
 

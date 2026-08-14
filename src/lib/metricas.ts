@@ -108,11 +108,24 @@ export function ehVenda(lancamento: LancamentoMetrica): lancamento is VendaMetri
   return lancamento.tipo === "VENDA";
 }
 
+/**
+ * A precisão de um saldo de abertura (DEC-054).
+ *
+ * `EXATO` afirma o número; `MINIMO_CONHECIDO` é um **piso** — o proprietário
+ * sabe que houve pelo menos aquilo. O cálculo é o mesmo nos dois casos: a
+ * precisão viaja junto do acumulado só para a apresentação saber se prefixa o
+ * número com "+ de".
+ */
+export const PRECISOES_SALDO = ["EXATO", "MINIMO_CONHECIDO"] as const;
+
+export type PrecisaoSaldoMetrica = (typeof PRECISOES_SALDO)[number];
+
 /** O saldo de abertura de um tipo, autoritativo até o próprio corte (DEC-036). */
 export type SaldoHistoricoMetrica = {
   tipo: TipoSaldoMetrica;
   quantidade: number;
   valorTotal: string;
+  precisao: PrecisaoSaldoMetrica;
   dataCorte: Date;
 };
 
@@ -123,14 +136,15 @@ export type EstadoPeriodo = "OK" | "SEM_DADOS";
 export type EstadoAcumulado = "OK" | "SEM_SALDO_HISTORICO";
 
 /**
- * Um acumulado é um par estado + valor, e `valor` é `null` sempre que o estado
- * não for `OK`. Zero é um número que afirma alguma coisa; ausência de saldo não
- * afirma nada (DEC-014, DEC-042).
+ * Um acumulado: valor **e** a precisão do saldo que o originou, ou a ausência.
+ *
+ * União discriminada de propósito: `SEM_SALDO_HISTORICO` não tem valor nem
+ * precisão, e o tipo impede afirmar "+ de —". Zero é um número que afirma alguma
+ * coisa; ausência de saldo não afirma nada (DEC-014, DEC-042).
  */
-export type Acumulado<T> = {
-  estado: EstadoAcumulado;
-  valor: T | null;
-};
+export type Acumulado<T> =
+  | { estado: "OK"; valor: T; precisao: PrecisaoSaldoMetrica }
+  | { estado: "SEM_SALDO_HISTORICO"; valor: null };
 
 /** As sete contagens do mês corrente. Sem VGV: ele não é linha do quadro. */
 export type QuadroMensal = Record<TipoEventoMetrica, number>;
@@ -149,6 +163,117 @@ export type MetricasEmpresaPuras = {
   };
   quadroMensal: QuadroMensal;
 };
+
+/* ------------------------------------------------------------------ */
+/* Destaques operacionais da Tela B (DEC-056)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Os destaques operacionais **não são métrica** (DEC-014): são listas do que
+ * está em aberto agora. Por isso não têm recorte de mês, não entram em nenhum
+ * total e não conhecem `dataCorte` — e por isso, também, uma lista vazia é dado
+ * legítimo, nunca `0`.
+ *
+ * O banco entrega candidatos; a regra de produto — quais status entram, em que
+ * ordem e quantos cabem — mora inteira aqui (DEC-013).
+ */
+
+/** Quantos itens cabem em cada lista da Tela B (DEC-056). */
+export const MAXIMO_DESTAQUES = 3;
+
+/** Uma proposta candidata à lista "Propostas em andamento". */
+export type PropostaOperacional = {
+  id: string;
+  status: StatusPropostaMetrica;
+  /** Proposta legada pode não ter imóvel; ela continua entrando (DEC-053). */
+  imovelRef: string | null;
+  corretorNome: string;
+  dataReferencia: Date;
+  criadoEm: Date;
+};
+
+/** Uma reserva candidata à lista "Reservas de locação". */
+export type ReservaOperacional = {
+  id: string;
+  status: StatusReservaMetrica;
+  imovelRef: string;
+  corretorNome: string;
+  dataReferencia: Date;
+  criadoEm: Date;
+};
+
+export type StatusPropostaMetrica = "AGUARDANDO" | "ACEITA" | "REJEITADA";
+export type StatusReservaMetrica = "ATIVA" | "FINALIZADA" | "CANCELADA";
+
+/** O que a Tela B mostra de cada item: imóvel e corretor, nada além (DEC-056). */
+export type DestaqueOperacional = {
+  id: string;
+  /** `null` só em proposta legada sem imóvel; a apresentação decide o texto. */
+  imovelRef: string | null;
+  corretorNome: string;
+};
+
+/**
+ * Mais recentes primeiro, com desempate determinístico.
+ *
+ * `dataReferencia` decrescente é a regra de produto; `criadoEm` decrescente
+ * desempata o mesmo dia; e `id` crescente fecha o caso de dois registros
+ * gravados no mesmo instante. Sem os dois desempates, dois itens empatados
+ * poderiam trocar de lugar a cada atualização da TV sem nada ter mudado.
+ *
+ * Copia antes de ordenar: a lista do chamador não é mexida.
+ */
+function ordenarDestaques<T extends { dataReferencia: Date; criadoEm: Date; id: string }>(
+  itens: readonly T[],
+): T[] {
+  return [...itens].sort((a, b) => {
+    const porData = b.dataReferencia.getTime() - a.dataReferencia.getTime();
+    if (porData !== 0) return porData;
+
+    const porCriacao = b.criadoEm.getTime() - a.criadoEm.getTime();
+    if (porCriacao !== 0) return porCriacao;
+
+    return compararTexto(a.id, b.id);
+  });
+}
+
+function paraDestaque(item: {
+  id: string;
+  imovelRef: string | null;
+  corretorNome: string;
+}): DestaqueOperacional {
+  return { id: item.id, imovelRef: item.imovelRef, corretorNome: item.corretorNome };
+}
+
+/**
+ * As até três propostas em andamento: só `AGUARDANDO`, mais recentes primeiro.
+ *
+ * Toda proposta continua contando na métrica mensal qualquer que seja o status
+ * (DEC-053) — o filtro aqui é só da lista operacional. A proposta legada sem
+ * imóvel **entra normalmente**: some da lista seria perder de vista algo que
+ * está genuinamente em aberto.
+ */
+export function selecionarPropostasEmAndamento(
+  candidatas: readonly PropostaOperacional[],
+): DestaqueOperacional[] {
+  return ordenarDestaques(candidatas.filter((proposta) => proposta.status === "AGUARDANDO"))
+    .slice(0, MAXIMO_DESTAQUES)
+    .map(paraDestaque);
+}
+
+/**
+ * As até três reservas de locação ativas, mais recentes primeiro.
+ *
+ * Reserva é operação, não produção (DEC-055): `FINALIZADA` e `CANCELADA` saem da
+ * lista sem afetar contagem nenhuma, porque nunca houve contagem de reserva.
+ */
+export function selecionarReservasAtivas(
+  candidatas: readonly ReservaOperacional[],
+): DestaqueOperacional[] {
+  return ordenarDestaques(candidatas.filter((reserva) => reserva.status === "ATIVA"))
+    .slice(0, MAXIMO_DESTAQUES)
+    .map(paraDestaque);
+}
 
 /** O corretor como o ranking precisa dele. Sem foto, CRECI ou datas. */
 export type CorretorMetrica = {
@@ -475,9 +600,16 @@ export function calcularMetricasEmpresa(
   return {
     estadoPeriodoMensal: estadoDoMes(doMes),
 
+    // A precisão vem do saldo que originou cada acumulado e viaja junto sem
+    // mudar número nenhum (DEC-054): a soma de um `MINIMO_CONHECIDO` é a mesma
+    // de um `EXATO`, e o que muda é só como a tela afirma o resultado.
     acumulados: {
       vendidos: saldoVenda
-        ? { estado: "OK", valor: saldoVenda.quantidade + vendasPosteriores.length }
+        ? {
+            estado: "OK",
+            valor: saldoVenda.quantidade + vendasPosteriores.length,
+            precisao: saldoVenda.precisao,
+          }
         : semSaldo,
       vgv: saldoVenda
         ? {
@@ -486,10 +618,15 @@ export function calcularMetricasEmpresa(
               [saldoVenda.valorTotal, ...vendasPosteriores.map(valorDaVenda)],
               "VGV acumulado",
             ),
+            precisao: saldoVenda.precisao,
           }
         : semSaldo,
       avaliacoes: saldoAvaliacao
-        ? { estado: "OK", valor: saldoAvaliacao.quantidade + avaliacoesPosteriores }
+        ? {
+            estado: "OK",
+            valor: saldoAvaliacao.quantidade + avaliacoesPosteriores,
+            precisao: saldoAvaliacao.precisao,
+          }
         : semSaldo,
     },
 

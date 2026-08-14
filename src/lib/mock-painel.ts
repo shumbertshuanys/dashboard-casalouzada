@@ -12,6 +12,7 @@
 // mock e a apresentação real precisam desenhar o mesmo shape, e mantê-lo em dois
 // lugares deixaria o protótipo divergir da tela de verdade sem ninguém notar.
 import {
+  type AreaOperacional,
   type BigNumber,
   type Equipe,
   type Linha,
@@ -21,10 +22,13 @@ import {
 } from "@/lib/apresentacao-painel";
 
 export type {
+  AreaOperacional,
   BigNumber,
   ChaveMetrica,
   Equipe,
+  ItemOperacional,
   Linha,
+  ListaOperacional,
   Metrica,
   ValorComposto,
   VgvPeriodo,
@@ -36,15 +40,45 @@ export const periodo = "agosto de 2026";
 /** Mesma ordem do ciclo real — derivada, não recopiada (DEC-033). */
 export const metricas: Metrica[] = [...METRICAS_PAINEL];
 
+// Os dois primeiros saem de um saldo fictício MINIMO_CONHECIDO, para o "+ de"
+// entrar no contrato visual (DEC-054); o das avaliações é EXATO, e assim as duas
+// formas aparecem lado a lado na mesma faixa.
 export const bigNumbers: BigNumber[] = [
-  { rotulo: "Imóveis vendidos", numero: { valor: "528" }, estado: "OK" },
+  { rotulo: "Imóveis vendidos", numero: { valor: "528" }, estado: "OK", qualificador: "+ de" },
   {
     rotulo: "VGV acumulado",
     numero: { prefixo: "R$", valor: "4,2", sufixo: "bi" },
     estado: "OK",
+    qualificador: "+ de",
   },
   { rotulo: "Avaliações Google", numero: { valor: "2.643" }, estado: "OK" },
 ];
+
+/**
+ * A Tela B do protótipo: três propostas e três reservas, o máximo que cabe
+ * (DEC-056). Imóveis e nomes inventados, como todo o resto deste módulo.
+ *
+ * A terceira proposta não tem imóvel de propósito — é o caso da proposta legada
+ * (DEC-053), que continua na lista dizendo o que falta em vez de sumir.
+ */
+export const operacionais: AreaOperacional = {
+  propostas: {
+    estado: "OK",
+    itens: [
+      { imovel: "AP-1203 · Ed. Aurora", corretor: "Marina" },
+      { imovel: "CA-450 · Alphaville", corretor: "Rodrigo" },
+      { imovel: "Imóvel não informado", corretor: "Bianca" },
+    ],
+  },
+  reservas: {
+    estado: "OK",
+    itens: [
+      { imovel: "AP-88 · Jardins", corretor: "Camila" },
+      { imovel: "SL-12 · Centro", corretor: "Otávio" },
+      { imovel: "CA-77 · Granja", corretor: "Marina" },
+    ],
+  },
+};
 
 export const vgvPeriodos: VgvPeriodo[] = [
   { rotulo: "Anual", valor: { prefixo: "R$", valor: "431", sufixo: "mi" }, estado: "OK" },

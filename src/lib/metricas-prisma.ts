@@ -5,11 +5,19 @@ import {
   calcularMetricasEmpresa,
   calcularMetricasEquipes,
   type CorretorMetrica,
+  type DestaqueOperacional,
   type EquipeMetrica,
   type LancamentoMetrica,
   type MetricasEmpresaPuras,
   type MetricasEquipesPuras,
+  type PrecisaoSaldoMetrica,
+  type PropostaOperacional,
+  type ReservaOperacional,
   type SaldoHistoricoMetrica,
+  selecionarPropostasEmAndamento,
+  selecionarReservasAtivas,
+  type StatusPropostaMetrica,
+  type StatusReservaMetrica,
   type TipoEventoMetrica,
   type TipoSaldoMetrica,
 } from "@/lib/metricas";
@@ -75,12 +83,25 @@ export type BlocoEquipes =
   | { estadoLeitura: "OK"; dados: MetricasEquipesPuras }
   | { estadoLeitura: "INDISPONIVEL" };
 
+/**
+ * As listas operacionais da Tela B, cada uma com o próprio estado de leitura.
+ *
+ * Blocos independentes pelo mesmo motivo dos outros: as reservas têm leitura
+ * própria e podem cair sozinhas, enquanto as propostas vêm dos lançamentos e
+ * caem junto com eles (DEC-042).
+ */
+export type BlocoDestaques =
+  | { estadoLeitura: "OK"; dados: DestaqueOperacional[] }
+  | { estadoLeitura: "INDISPONIVEL" };
+
 export type ResultadoPainel = {
   empresa: {
     periodos: BlocoPeriodosEmpresa;
     acumulados: BlocoAcumuladosEmpresa;
   };
   equipes: BlocoEquipes;
+  propostas: BlocoDestaques;
+  reservas: BlocoDestaques;
 };
 
 /**
@@ -106,20 +127,39 @@ type LinhaParticipacao = {
  * A linha como o banco devolve **depois do cutover da E3**: em `VENDA` os dois
  * campos antigos são `NULL` e o crédito vem das participações; nos demais tipos
  * eles continuam obrigatórios e não há participação nenhuma.
+ *
+ * Os campos de proposta e o nome do corretor viajam junto porque a mesma leitura
+ * alimenta duas coisas: as métricas e os candidatos da lista operacional. Uma
+ * segunda consulta só para as propostas leria as mesmas linhas de novo.
  */
 type LinhaLancamento = {
+  id: string;
   tipo: TipoEventoMetrica;
   corretorId: string | null;
   equipeId: string | null;
   dataReferencia: Date;
   valor: DecimalPrisma | null;
+  statusProposta: StatusPropostaMetrica | null;
+  imovelRef: string | null;
+  criadoEm: Date;
+  corretor: { nomeExibicao: string } | null;
   participacoes: LinhaParticipacao[];
+};
+
+type LinhaReserva = {
+  id: string;
+  status: StatusReservaMetrica;
+  imovelRef: string;
+  dataReferencia: Date;
+  criadoEm: Date;
+  corretor: { nomeExibicao: string };
 };
 
 type LinhaSaldo = {
   tipo: TipoEventoMetrica;
   quantidade: number;
   valorTotal: DecimalPrisma;
+  precisao: PrecisaoSaldoMetrica;
   dataCorte: Date;
 };
 
@@ -215,10 +255,52 @@ function paraSaldos(linhas: readonly LinhaSaldo[]): SaldoHistoricoMetrica[] {
       tipo: linha.tipo,
       quantidade: linha.quantidade,
       valorTotal: linha.valorTotal.toFixed(2),
+      // Passa direto: a precisão não muda conta nenhuma aqui (DEC-054).
+      precisao: linha.precisao,
       dataCorte: linha.dataCorte,
     });
   }
   return saldos;
+}
+
+/**
+ * As propostas candidatas à lista operacional, extraídas das mesmas linhas de
+ * lançamento que alimentam as métricas.
+ *
+ * Aqui só se **projeta** o tipo `PROPOSTA` para a forma que o núcleo espera. A
+ * regra de produto — quais status entram, em que ordem e quantas cabem — é do
+ * núcleo (DEC-013), e não acontece nesta camada. Uma proposta sem status ou sem
+ * corretor não é candidata possível: o `CHECK` da E2B exige status, e proposta
+ * credita pelo lançamento; se aparecer alguma assim, ela fica de fora em vez de
+ * entrar com campo inventado.
+ */
+function paraPropostasCandidatas(linhas: readonly LinhaLancamento[]): PropostaOperacional[] {
+  const candidatas: PropostaOperacional[] = [];
+  for (const linha of linhas) {
+    if (linha.tipo !== "PROPOSTA") continue;
+    if (linha.statusProposta === null || linha.corretor === null) continue;
+    candidatas.push({
+      id: linha.id,
+      status: linha.statusProposta,
+      imovelRef: linha.imovelRef,
+      corretorNome: linha.corretor.nomeExibicao,
+      dataReferencia: linha.dataReferencia,
+      criadoEm: linha.criadoEm,
+    });
+  }
+  return candidatas;
+}
+
+/** As reservas candidatas. Sem filtro de status, sem ordem, sem corte. */
+function paraReservasCandidatas(linhas: readonly LinhaReserva[]): ReservaOperacional[] {
+  return linhas.map((linha) => ({
+    id: linha.id,
+    status: linha.status,
+    imovelRef: linha.imovelRef,
+    corretorNome: linha.corretor.nomeExibicao,
+    dataReferencia: linha.dataReferencia,
+    criadoEm: linha.criadoEm,
+  }));
 }
 
 function paraCorretor(linha: LinhaCorretor): CorretorMetrica {
@@ -314,32 +396,59 @@ export async function obterMetricasPainel(
   // produzir uma tela em que a empresa e as equipes falam de períodos distintos.
   const instante = agora ?? new Date();
 
-  const [lidosLancamentos, lidosSaldos, lidosCorretores, lidosEquipes] = await Promise.allSettled([
-    // As participações vêm aninhadas, não numa quinta leitura: elas são parte
-    // do mesmo fato, e separá-las criaria um bloco cuja falha isolada — venda
-    // sem crédito — não tem significado de tela. Falhando junto, cai o mesmo
-    // bloco que já dependia de lançamentos.
-    prisma.lancamento.findMany({
-      select: {
-        tipo: true,
-        corretorId: true,
-        equipeId: true,
-        dataReferencia: true,
-        valor: true,
-        participacoes: { select: { corretorId: true, equipeId: true, ordem: true } },
-      },
-    }),
-    prisma.saldoHistorico.findMany({
-      where: { tipo: { in: [...TIPOS_COM_SALDO] } },
-      select: { tipo: true, quantidade: true, valorTotal: true, dataCorte: true },
-    }),
-    prisma.corretor.findMany({
-      select: { id: true, nomeExibicao: true, equipeId: true, ativo: true },
-    }),
-    prisma.equipe.findMany({
-      select: { id: true, nome: true, gerenteNome: true, ordemExibicao: true, ativa: true },
-    }),
-  ]);
+  const [lidosLancamentos, lidosSaldos, lidosCorretores, lidosEquipes, lidasReservas] =
+    await Promise.allSettled([
+      // As participações vêm aninhadas, não numa leitura própria: elas são parte
+      // do mesmo fato, e separá-las criaria um bloco cuja falha isolada — venda
+      // sem crédito — não tem significado de tela. Falhando junto, cai o mesmo
+      // bloco que já dependia de lançamentos. Os campos de proposta seguem a
+      // mesma lógica: a lista operacional sai destas linhas.
+      prisma.lancamento.findMany({
+        select: {
+          id: true,
+          tipo: true,
+          corretorId: true,
+          equipeId: true,
+          dataReferencia: true,
+          valor: true,
+          statusProposta: true,
+          imovelRef: true,
+          criadoEm: true,
+          corretor: { select: { nomeExibicao: true } },
+          participacoes: { select: { corretorId: true, equipeId: true, ordem: true } },
+        },
+      }),
+      prisma.saldoHistorico.findMany({
+        where: { tipo: { in: [...TIPOS_COM_SALDO] } },
+        select: {
+          tipo: true,
+          quantidade: true,
+          valorTotal: true,
+          precisao: true,
+          dataCorte: true,
+        },
+      }),
+      prisma.corretor.findMany({
+        select: { id: true, nomeExibicao: true, equipeId: true, ativo: true },
+      }),
+      prisma.equipe.findMany({
+        select: { id: true, nome: true, gerenteNome: true, ordemExibicao: true, ativa: true },
+      }),
+      // Reserva tem leitura própria porque é uma entidade própria (DEC-055), e
+      // é isso que permite ela cair sozinha sem levar métricas nem propostas
+      // junto. Sem `where`, sem `orderBy` e sem `take`: o banco entrega os
+      // candidatos e a regra de produto fica no núcleo.
+      prisma.reservaLocacao.findMany({
+        select: {
+          id: true,
+          status: true,
+          imovelRef: true,
+          dataReferencia: true,
+          criadoEm: true,
+          corretor: { select: { nomeExibicao: true } },
+        },
+      }),
+    ]);
 
   // `null` aqui é leitura que falhou. Lista vazia é leitura que deu certo e não
   // achou nada — quem decide o que isso significa é o núcleo (DEC-039, DEC-040).
@@ -349,6 +458,15 @@ export async function obterMetricasPainel(
   const corretores =
     lidosCorretores.status === "fulfilled" ? lidosCorretores.value.map(paraCorretor) : null;
   const equipes = lidosEquipes.status === "fulfilled" ? lidosEquipes.value.map(paraEquipe) : null;
+
+  // As propostas dependem da mesma leitura das métricas; as reservas, da sua.
+  // Cada bloco cai só com quem ele depende (DEC-042).
+  const propostasCandidatas =
+    lidosLancamentos.status === "fulfilled"
+      ? paraPropostasCandidatas(lidosLancamentos.value)
+      : null;
+  const reservasCandidatas =
+    lidasReservas.status === "fulfilled" ? paraReservasCandidatas(lidasReservas.value) : null;
 
   // As chamadas ao núcleo ficam deliberadamente fora de qualquer `try`: exceção
   // de domínio precisa escapar, não virar `INDISPONIVEL`.
@@ -361,6 +479,16 @@ export async function obterMetricasPainel(
             estadoLeitura: "OK",
             dados: calcularMetricasEquipes(lancamentos, corretores, equipes, instante),
           }
+        : { estadoLeitura: "INDISPONIVEL" },
+
+    propostas:
+      propostasCandidatas !== null
+        ? { estadoLeitura: "OK", dados: selecionarPropostasEmAndamento(propostasCandidatas) }
+        : { estadoLeitura: "INDISPONIVEL" },
+
+    reservas:
+      reservasCandidatas !== null
+        ? { estadoLeitura: "OK", dados: selecionarReservasAtivas(reservasCandidatas) }
         : { estadoLeitura: "INDISPONIVEL" },
   };
 }

@@ -3,7 +3,9 @@ import type {
   AreaQuadroMensal,
   BigNumber,
   Equipe,
+  ItemOperacional,
   Linha,
+  ListaOperacional,
   Metrica,
   ValorComposto,
   VgvPeriodo,
@@ -18,9 +20,11 @@ import type {
  * camada de apresentação apenas como `import type` — nada de cálculo, leitura ou
  * Prisma chega ao bundle do navegador por aqui.
  *
- * A leitura é fatiada nos **mesmos três blocos** da F3.3, cada um carregando o
- * próprio `estadoLeitura`. Sem essa granularidade a retenção do último valor não
- * teria como reter só o bloco que falhou (DEC-042).
+ * A leitura é fatiada nos **mesmos blocos** que a leitura do servidor produz —
+ * períodos, acumulados, equipes e, desde a E4, as duas listas operacionais da
+ * Tela B —, cada um carregando o próprio `estadoLeitura`. Sem essa granularidade
+ * a retenção do último valor não teria como reter só o bloco que falhou
+ * (DEC-042).
  *
  * A validação é manual e verbosa de propósito: um schema de terceiros seria uma
  * dependência nova, e o que se valida aqui não é forma genérica — é **coerência**
@@ -47,6 +51,12 @@ export type BlocoEquipes = {
   area: AreaEquipes;
 };
 
+/** Uma das duas listas da Tela B, com o estado da leitura que a produziu. */
+export type BlocoOperacional = {
+  estadoLeitura: EstadoLeituraBloco;
+  lista: ListaOperacional;
+};
+
 export type LeituraPainel = {
   /** Mês civil da leitura, como `YYYY-MM-01`. Guarda a retenção na virada. */
   competencia: string;
@@ -59,6 +69,8 @@ export type LeituraPainel = {
     periodos: BlocoPeriodos;
     acumulados: BlocoAcumulados;
     equipes: BlocoEquipes;
+    propostas: BlocoOperacional;
+    reservas: BlocoOperacional;
   };
 };
 
@@ -70,6 +82,10 @@ const ESTADOS_BIG_NUMBER = ["OK", "INDISPONIVEL", "SEM_SALDO_HISTORICO"];
 const ESTADOS_VGV = ["OK", "INDISPONIVEL", "SEM_DADOS"];
 const ESTADOS_QUADRO = ["OK", "INDISPONIVEL", "SEM_DADOS"];
 const ESTADOS_AREA = ["OK", "SEM_DADOS", "INDISPONIVEL", "CONFIGURACAO_INVALIDA"];
+const ESTADOS_LISTA = ["OK", "INDISPONIVEL"];
+
+/** O teto da Tela B (DEC-056). Um payload com quatro itens está fora do contrato. */
+const MAXIMO_OPERACIONAIS = 3;
 
 /** Quantas equipes o painel v1 exige quando há quadros a mostrar (DEC-040). */
 const EQUIPES_ESPERADAS = 3;
@@ -240,6 +256,34 @@ function equipesCoerentes(bloco: BlocoEquipes): boolean {
     : bloco.area.estado !== "INDISPONIVEL";
 }
 
+function ehItemOperacional(valor: unknown): valor is ItemOperacional {
+  return ehObjeto(valor) && ehTextoNaoVazio(valor.imovel) && ehTextoNaoVazio(valor.corretor);
+}
+
+/**
+ * Uma lista da Tela B.
+ *
+ * `INDISPONIVEL` chega **sem** `itens`: um bloco caído carregando lista seria
+ * contraditório, e aceitá-lo apagaria da parede a lista retida. `OK` traz de
+ * zero a três itens — zero é dado válido, quatro está fora do contrato.
+ */
+function ehListaOperacional(valor: unknown): valor is ListaOperacional {
+  if (!ehObjeto(valor)) return false;
+  if (!ehUmDe(valor.estado, ESTADOS_LISTA)) return false;
+
+  if (valor.estado === "INDISPONIVEL") return !("itens" in valor);
+
+  if (!Array.isArray(valor.itens)) return false;
+  if (valor.itens.length > MAXIMO_OPERACIONAIS) return false;
+  return valor.itens.every(ehItemOperacional);
+}
+
+function operacionalCoerente(bloco: BlocoOperacional): boolean {
+  return bloco.estadoLeitura === "INDISPONIVEL"
+    ? bloco.lista.estado === "INDISPONIVEL"
+    : bloco.lista.estado === "OK";
+}
+
 /**
  * O portão de entrada do que veio pela rede.
  *
@@ -261,7 +305,7 @@ export function ehLeituraPainel(valor: unknown): valor is LeituraPainel {
   const chaves = valor.metricas.map((metrica) => metrica.chave);
 
   if (!ehObjeto(valor.blocos)) return false;
-  const { periodos, acumulados, equipes } = valor.blocos;
+  const { periodos, acumulados, equipes, propostas, reservas } = valor.blocos;
 
   if (!ehObjeto(periodos) || !ehUmDe(periodos.estadoLeitura, ESTADOS_LEITURA)) return false;
   if (!ehVgvPeriodos(periodos.vgvPeriodos)) return false;
@@ -273,11 +317,19 @@ export function ehLeituraPainel(valor: unknown): valor is LeituraPainel {
   if (!ehObjeto(equipes) || !ehUmDe(equipes.estadoLeitura, ESTADOS_LEITURA)) return false;
   if (!ehAreaEquipes(equipes.area, chaves)) return false;
 
+  if (!ehObjeto(propostas) || !ehUmDe(propostas.estadoLeitura, ESTADOS_LEITURA)) return false;
+  if (!ehListaOperacional(propostas.lista)) return false;
+
+  if (!ehObjeto(reservas) || !ehUmDe(reservas.estadoLeitura, ESTADOS_LEITURA)) return false;
+  if (!ehListaOperacional(reservas.lista)) return false;
+
   const blocos = valor.blocos as LeituraPainel["blocos"];
 
   return (
     periodosCoerentes(blocos.periodos) &&
     acumuladosCoerentes(blocos.acumulados) &&
-    equipesCoerentes(blocos.equipes)
+    equipesCoerentes(blocos.equipes) &&
+    operacionalCoerente(blocos.propostas) &&
+    operacionalCoerente(blocos.reservas)
   );
 }

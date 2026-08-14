@@ -8,6 +8,7 @@ import {
   type EquipeMetrica,
   type LancamentoMetrica,
   type MetricasEmpresaPuras,
+  type PrecisaoSaldoMetrica,
   type SaldoHistoricoMetrica,
   type TipoEventoMetrica,
   type TipoSaldoMetrica,
@@ -52,18 +53,43 @@ function decimal(inteiro: string, centavos = "00"): DecimalFalso {
 type LinhaParticipacao = { corretorId: string; equipeId: string; ordem: number };
 
 type LinhaLancamento = {
+  id: string;
   tipo: TipoEventoMetrica;
   corretorId: string | null;
   equipeId: string | null;
   dataReferencia: Date;
   valor: DecimalFalso | null;
+  statusProposta: "AGUARDANDO" | "ACEITA" | "REJEITADA" | null;
+  imovelRef: string | null;
+  criadoEm: Date;
+  corretor: { nomeExibicao: string } | null;
   participacoes: LinhaParticipacao[];
 };
+
+/** A linha de reserva como o `select` da fronteira a pede (E4). */
+type LinhaReserva = {
+  id: string;
+  status: "ATIVA" | "FINALIZADA" | "CANCELADA";
+  imovelRef: string;
+  dataReferencia: Date;
+  criadoEm: Date;
+  corretor: { nomeExibicao: string };
+};
+
+/** Carimbo estável: o teste não pode depender do relógio da máquina. */
+const CRIADO_EM = new Date("2026-08-01T12:00:00.000Z");
+
+let sequenciaLinha = 0;
+function proximoId(): string {
+  sequenciaLinha += 1;
+  return `linha-${sequenciaLinha}`;
+}
 
 type LinhaSaldo = {
   tipo: TipoEventoMetrica;
   quantidade: number;
   valorTotal: DecimalFalso;
+  precisao: PrecisaoSaldoMetrica;
   dataCorte: Date;
 };
 
@@ -87,14 +113,23 @@ function lancamento(
   const valor = inteiro === null ? null : `${inteiro}.${centavos}`;
   const valorDecimal = inteiro === null ? null : decimal(inteiro, centavos);
 
+  const comuns = {
+    id: proximoId(),
+    statusProposta: (tipo === "PROPOSTA" ? "AGUARDANDO" : null) as LinhaLancamento["statusProposta"],
+    imovelRef: tipo === "PROPOSTA" ? "AP-1" : null,
+    criadoEm: CRIADO_EM,
+  };
+
   if (tipo === "VENDA") {
     return {
       linha: {
+        ...comuns,
         tipo,
         corretorId: null,
         equipeId: null,
         dataReferencia,
         valor: valorDecimal,
+        corretor: null,
         participacoes: [{ corretorId, equipeId, ordem: 1 }],
       },
       dominio: {
@@ -107,7 +142,16 @@ function lancamento(
   }
 
   return {
-    linha: { tipo, corretorId, equipeId, dataReferencia, valor: valorDecimal, participacoes: [] },
+    linha: {
+      ...comuns,
+      tipo,
+      corretorId,
+      equipeId,
+      dataReferencia,
+      valor: valorDecimal,
+      corretor: { nomeExibicao: `Nome ${corretorId}` },
+      participacoes: [],
+    },
     dominio: { tipo, corretorId, equipeId, dataReferencia, valor },
   };
 }
@@ -126,11 +170,16 @@ function vendaCompartilhada(
   }));
   return {
     linha: {
+      id: proximoId(),
       tipo: "VENDA",
       corretorId: null,
       equipeId: null,
       dataReferencia,
       valor: decimal(inteiro, centavos),
+      statusProposta: null,
+      imovelRef: null,
+      criadoEm: CRIADO_EM,
+      corretor: null,
       participacoes,
     },
     dominio: {
@@ -148,11 +197,12 @@ function saldo(
   inteiro: string,
   centavos: string,
   dia: string,
+  precisao: PrecisaoSaldoMetrica = "EXATO",
 ): Par<LinhaSaldo, SaldoHistoricoMetrica> {
   const dataCorte = paraDataCivil(dia);
   return {
-    linha: { tipo, quantidade, valorTotal: decimal(inteiro, centavos), dataCorte },
-    dominio: { tipo, quantidade, valorTotal: `${inteiro}.${centavos}`, dataCorte },
+    linha: { tipo, quantidade, valorTotal: decimal(inteiro, centavos), precisao, dataCorte },
+    dominio: { tipo, quantidade, valorTotal: `${inteiro}.${centavos}`, precisao, dataCorte },
   };
 }
 
@@ -191,6 +241,8 @@ type Leituras = {
   saldos: readonly LinhaSaldo[] | Error;
   corretores: readonly CorretorMetrica[] | Error;
   equipes: readonly EquipeMetrica[] | Error;
+  /** A quinta leitura, da E4: candidatas a "Reservas de locação" (DEC-055). */
+  reservas?: readonly LinhaReserva[] | Error;
 };
 
 type Chamadas = {
@@ -198,10 +250,17 @@ type Chamadas = {
   saldoHistorico: unknown[];
   corretor: unknown[];
   equipe: unknown[];
+  reservaLocacao: unknown[];
 };
 
 function criarPrismaFalso(leituras: Leituras): { prisma: PrismaClient; chamadas: Chamadas } {
-  const chamadas: Chamadas = { lancamento: [], saldoHistorico: [], corretor: [], equipe: [] };
+  const chamadas: Chamadas = {
+    lancamento: [],
+    saldoHistorico: [],
+    corretor: [],
+    equipe: [],
+    reservaLocacao: [],
+  };
 
   const modelo = <T>(nome: keyof Chamadas, resposta: readonly T[] | Error) => ({
     findMany: async (argumentos: unknown): Promise<readonly T[]> => {
@@ -216,6 +275,7 @@ function criarPrismaFalso(leituras: Leituras): { prisma: PrismaClient; chamadas:
     saldoHistorico: modelo("saldoHistorico", leituras.saldos),
     corretor: modelo("corretor", leituras.corretores),
     equipe: modelo("equipe", leituras.equipes),
+    reservaLocacao: modelo("reservaLocacao", leituras.reservas ?? []),
   };
 
   return { prisma: falso as unknown as PrismaClient, chamadas };
@@ -554,6 +614,179 @@ describe("venda compartilhada atravessa a fronteira sem cálculo (DEC-051)", () 
   });
 });
 
+/**
+ * As listas operacionais atravessando a fronteira (E4).
+ *
+ * O que se prova é que a camada **lê e normaliza**, e que a regra de produto —
+ * status, ordem e corte em três — continua sendo do núcleo (DEC-013).
+ */
+describe("listas operacionais na fronteira", () => {
+  function reserva(
+    id: string,
+    status: LinhaReserva["status"],
+    dia: string,
+    imovelRef = `CA-${id}`,
+  ): LinhaReserva {
+    return {
+      id,
+      status,
+      imovelRef,
+      dataReferencia: paraDataCivil(dia),
+      criadoEm: CRIADO_EM,
+      corretor: { nomeExibicao: `Corretor ${id}` },
+    };
+  }
+
+  function proposta(
+    id: string,
+    status: "AGUARDANDO" | "ACEITA" | "REJEITADA",
+    dia: string,
+    imovelRef: string | null = `AP-${id}`,
+  ): LinhaLancamento {
+    return {
+      id,
+      tipo: "PROPOSTA",
+      corretorId: "c1",
+      equipeId: "e1",
+      dataReferencia: paraDataCivil(dia),
+      valor: null,
+      statusProposta: status,
+      imovelRef,
+      criadoEm: CRIADO_EM,
+      corretor: { nomeExibicao: `Corretor ${id}` },
+      participacoes: [],
+    };
+  }
+
+  it("a leitura de reservas não filtra, não ordena e não corta", async () => {
+    const { prisma, chamadas } = criarPrismaFalso({
+      ...LEITURAS_BASE,
+      reservas: [reserva("a", "ATIVA", "2026-08-10")],
+    });
+    await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(chamadas.reservaLocacao.length, 1, "uma leitura de reservas");
+    const argumentos = chamadas.reservaLocacao[0] as Record<string, unknown>;
+    assert.equal("where" in argumentos, false, "sem filtro de status");
+    assert.equal("orderBy" in argumentos, false, "a ordem é do núcleo");
+    assert.equal("take" in argumentos, false, "o corte em três é do núcleo");
+  });
+
+  it("as propostas saem da leitura de lançamentos, sem consulta própria", async () => {
+    const { prisma, chamadas } = criarPrismaFalso(LEITURAS_BASE);
+    await obterMetricasPainel(prisma, AGORA);
+
+    // Quatro modelos com leitura: lançamento, saldo, corretor, equipe e reserva.
+    assert.equal(chamadas.lancamento.length, 1, "uma leitura de lançamentos, e só uma");
+  });
+
+  it("transporta as candidatas e deixa o núcleo selecionar", async () => {
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_BASE,
+      lancamentos: [
+        proposta("p1", "AGUARDANDO", "2026-08-01"),
+        proposta("p2", "AGUARDANDO", "2026-08-02"),
+        proposta("p3", "AGUARDANDO", "2026-08-03"),
+        proposta("p4", "AGUARDANDO", "2026-08-04"),
+        proposta("p5", "ACEITA", "2026-08-05"),
+      ],
+      reservas: [
+        reserva("r1", "ATIVA", "2026-08-01"),
+        reserva("r2", "ATIVA", "2026-08-02"),
+        reserva("r3", "ATIVA", "2026-08-03"),
+        reserva("r4", "ATIVA", "2026-08-04"),
+        reserva("r5", "CANCELADA", "2026-08-05"),
+      ],
+    });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(resultado.propostas.estadoLeitura, "OK");
+    if (resultado.propostas.estadoLeitura !== "OK") return;
+    assert.deepEqual(
+      resultado.propostas.dados.map((item) => item.id),
+      ["p4", "p3", "p2"],
+      "só AGUARDANDO, as três mais recentes",
+    );
+
+    assert.equal(resultado.reservas.estadoLeitura, "OK");
+    if (resultado.reservas.estadoLeitura !== "OK") return;
+    assert.deepEqual(
+      resultado.reservas.dados.map((item) => item.id),
+      ["r4", "r3", "r2"],
+    );
+  });
+
+  it("a proposta legada sem imóvel chega com `null`, sem texto inventado", async () => {
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_BASE,
+      lancamentos: [proposta("legada", "AGUARDANDO", "2026-08-01", null)],
+    });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(resultado.propostas.estadoLeitura, "OK");
+    if (resultado.propostas.estadoLeitura !== "OK") return;
+    assert.equal(resultado.propostas.dados[0].imovelRef, null);
+  });
+
+  it("falha na leitura de reservas derruba só as reservas", async () => {
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_BASE,
+      reservas: falha("reservas"),
+    });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(resultado.reservas.estadoLeitura, "INDISPONIVEL");
+    assert.equal(resultado.propostas.estadoLeitura, "OK", "propostas não dependem de reservas");
+    assert.equal(resultado.empresa.periodos.estadoLeitura, "OK");
+    assert.equal(resultado.empresa.acumulados.estadoLeitura, "OK");
+    assert.equal(resultado.equipes.estadoLeitura, "OK");
+  });
+
+  it("falha na leitura de lançamentos derruba as propostas junto", async () => {
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_BASE,
+      lancamentos: falha("lançamentos"),
+      reservas: [reserva("a", "ATIVA", "2026-08-10")],
+    });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    // As propostas saem da mesma leitura; as reservas, não.
+    assert.equal(resultado.propostas.estadoLeitura, "INDISPONIVEL");
+    assert.equal(resultado.reservas.estadoLeitura, "OK");
+  });
+
+  it("o ramo indisponível não carrega dados", async () => {
+    const { prisma } = criarPrismaFalso({ ...LEITURAS_BASE, reservas: falha("reservas") });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal("dados" in resultado.reservas, false);
+  });
+
+  it("nenhuma candidata devolve lista vazia, que é dado e não ausência", async () => {
+    const { prisma } = criarPrismaFalso({ ...LEITURAS_BASE, reservas: [] });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(resultado.reservas.estadoLeitura, "OK");
+    if (resultado.reservas.estadoLeitura !== "OK") return;
+    assert.deepEqual(resultado.reservas.dados, []);
+  });
+
+  it("o saldo chega com a precisão que o banco devolveu", async () => {
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_BASE,
+      saldos: [saldo("VENDA", 500, "1000", "00", "2026-06-30", "MINIMO_CONHECIDO").linha],
+    });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(resultado.empresa.acumulados.estadoLeitura, "OK");
+    if (resultado.empresa.acumulados.estadoLeitura !== "OK") return;
+    const { vendidos } = resultado.empresa.acumulados.dados;
+    assert.equal(vendidos.estado, "OK");
+    if (vendidos.estado !== "OK") return;
+    assert.equal(vendidos.precisao, "MINIMO_CONHECIDO");
+  });
+});
+
 describe("dinheiro atravessa a fronteira como string canônica", () => {
   it("um milhão redondo vira \"1000000.00\", nunca number", async () => {
     const { prisma } = criarPrismaFalso({
@@ -605,6 +838,7 @@ describe("a leitura de saldo é restrita aos tipos suportados", () => {
           tipo: "LOCACAO",
           quantidade: 99,
           valorTotal: decimal("777"),
+          precisao: "EXATO",
           dataCorte: paraDataCivil("2026-06-30"),
         },
       ],
@@ -615,7 +849,7 @@ describe("a leitura de saldo é restrita aos tipos suportados", () => {
     if (resultado.empresa.acumulados.estadoLeitura !== "OK") return;
     // 10 do saldo mais as duas vendas do cenário base, ambas posteriores ao
     // corte. O saldo de `LOCACAO` não acrescenta nada, porque não entrou.
-    assert.deepEqual(resultado.empresa.acumulados.dados.vendidos, { estado: "OK", valor: 12 });
+    assert.deepEqual(resultado.empresa.acumulados.dados.vendidos, { estado: "OK", valor: 12, precisao: "EXATO" });
     assert.equal(resultado.empresa.acumulados.dados.avaliacoes.estado, "SEM_SALDO_HISTORICO");
   });
 });
