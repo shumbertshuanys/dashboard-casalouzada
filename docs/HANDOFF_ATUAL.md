@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `2a50965394d2c477da1fad897750d2a0b4bdc388` — `feat: adiciona venda compartilhada e conclui cutover` |
+| Commit de referência | `c24a0c92a81d6c8b09c20efe74fb1e6fc81ddb19` — `feat: adiciona painel operacional da entrega v1` |
 | Data do handoff | 2026-08-14 |
 
 ## Estado executivo
@@ -55,7 +55,7 @@ momentos. A leitura inicial, no servidor:
 request inicial
   → tokenPainelConfere
   → lerPainel(prisma, agora)
-      (obterMetricasPainel → criarApresentacaoPainel, fatiada em três blocos)
+      (obterMetricasPainel → criarApresentacaoPainel, fatiada em cinco blocos)
   → LeituraPainel
   → AtualizadorPainel
   → PainelVisual
@@ -165,8 +165,37 @@ atual validada pelo servidor; a remoção recompacta `1..N`; não há reordenaç
 Os filtros de corretor e equipe casam pelas participações e, combinados, exigem que a
 mesma participação satisfaça os dois.
 
-A **próxima etapa é a E4 — painel operacional A/B e novos estados**, que **não** foi
-iniciada.
+A **E4 — painel operacional A/B e novos estados — está CONCLUÍDA E PUBLICADA** em
+**`c24a0c9`**, em 23 caminhos, **sem schema e sem migration**: é uma etapa inteiramente
+de apresentação.
+
+**Faixa superior A/B.** A faixa deixou de ser estática e alterna entre a **Tela A** — os
+três acumulados de sempre — e a **Tela B** — "Propostas em andamento" e "Reservas de
+locação" —, 20 segundos cada, `A → B → A → B`, sem terceira tela. O ciclo é
+independente do refresh de 60 s: o timer depende só de qual tela está ativa, então uma
+atualização de dados troca o conteúdo por baixo sem reiniciar a rotação.
+
+**Listas operacionais.** Propostas entram só em `AGUARDANDO`; reservas, só em `ATIVA`.
+No máximo três de cada, ordenadas por `dataReferencia` decrescente, com `criadoEm`
+decrescente e `id` crescente como desempates — sem eles, dois itens empatados poderiam
+trocar de lugar a cada atualização sem nada ter mudado. Cada item mostra **imóvel e
+corretor**, e nada além. Lista vazia vira frase — "Nenhuma proposta em andamento" /
+"Nenhuma reserva ativa" —, **nunca `0`**: são listas operacionais, não métricas
+(DEC-014). Proposta legada sem imóvel continua na lista, dizendo "Imóvel não informado".
+
+**Onde mora a regra.** Seleção, ordenação e corte em três estão em `src/lib/metricas.ts`
+(DEC-013), com `MAXIMO_DESTAQUES = 3` como fonte única do corte. A leitura Prisma
+**não** filtra status, **não** ordena operacionalmente e **não** aplica `take`; os
+componentes **não** filtram, **não** ordenam e **não** cortam.
+
+**Precisão do saldo na tela.** `MINIMO_CONHECIDO` não muda cálculo nenhum: ele qualifica
+a apresentação dos acumulados com "+ de" — "+ de 527", "+ de R$ 800 mi". A precisão do
+saldo de `VENDA` qualifica imóveis vendidos **e** VGV acumulado; a de
+`AVALIACAO_GOOGLE`, as avaliações. "+ de" **nunca** aparece em mês, trimestre, ano,
+quadro mensal ou ranking, e `SEM_SALDO_HISTORICO` continua `—`, nunca "+ de —" — o tipo
+do acumulado tornou isso inexprimível, porque o ramo sem valor não carrega precisão.
+
+A **próxima etapa é a E5 — gate completo**, que **não** foi iniciada.
 
 ## Fases
 
@@ -202,8 +231,8 @@ iniciada.
 | E2C — Admin de reservas de locação | **Concluída** | `18a6599` |
 | **E2 — Migration aditiva + admin (propostas, saldo, reservas)** | **Concluída** | `c6464b5` + `fe00fd2` + `18a6599` |
 | E3 — Venda compartilhada + métricas + cutover final | **Concluída** | `2a50965` — publicação atômica |
-| E4 — Painel operacional A/B e novos estados | **Próxima** | não iniciada |
-| E5 — Gate completo | **Futura** | — |
+| E4 — Painel operacional A/B e novos estados | **Concluída** | `c24a0c9` — publicação atômica, sem migration |
+| E5 — Gate completo | **Próxima** | não iniciada |
 | E6 — Go-live no Render + smoke test | **Futura** | — |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
@@ -228,9 +257,11 @@ iniciada.
 - **Núcleo de cálculo**: `src/lib/metricas.ts`, desde a F3.2. Puro — recebe os dados
   por parâmetro, sem Prisma nem ambiente.
 - **Fronteira de leitura**: `src/lib/metricas-prisma.ts`, desde a F3.3. `server-only`,
-  com o `PrismaClient` injetado por parâmetro (DEC-041). Faz quatro leituras Prisma,
+  com o `PrismaClient` injetado por parâmetro (DEC-041). Faz **cinco** leituras Prisma
+  desde a E4 — a quinta é `reservaLocacao`, sem `where`, sem `orderBy` e sem `take` —,
   converte `Decimal` em string decimal canônica por `toFixed(2)` e chama o núcleo puro.
-  Não repete nenhum cálculo: não há soma, contagem, `groupBy` nem `aggregate` ali.
+  Não repete nenhum cálculo: não há soma, contagem, `groupBy` nem `aggregate` ali, e
+  também não há filtro de status, ordenação operacional nem corte de lista.
 - **Camada de apresentação**: `src/lib/apresentacao-painel.ts`, desde a F3.4. Módulo
   puro e síncrono, sem Prisma e sem I/O — o `ResultadoPainel` entra como `import type`,
   para o `server-only` do módulo de leitura não chegar ao runtime. `agora` é
@@ -251,15 +282,22 @@ iniciada.
   comparação de token, usada pela página e pela rota de dados.
 - **Leitura empacotada**: `src/lib/leitura-painel.ts`, desde a F3.6.
   `lerPainel(prisma, agora)` chama `obterMetricasPainel` e `criarApresentacaoPainel` —
-  não calcula nem formata dinheiro por conta própria —, fatia a apresentação nos três
-  blocos e carimba `competencia`, `lidoEmMs` e `horaLeitura`. Um único `agora`
-  alimenta tudo.
+  não calcula nem formata dinheiro por conta própria —, fatia a apresentação nos
+  **cinco** blocos desde a E4 e carimba `competencia`, `lidoEmMs` e `horaLeitura`. Um
+  único `agora` alimenta tudo.
 - **Contrato HTTP**: `src/lib/contrato-atualizacao-painel.ts`, desde a F3.6.
   `LeituraPainel` é JSON-safe, e `ehLeituraPainel` valida estrutura, dimensões,
   equipes, rankings e coerência em runtime, manualmente e sem Zod. Payload inválido
-  não entra no reducer.
+  não entra no reducer. Desde a E4 ele valida também as duas listas operacionais:
+  `INDISPONIVEL` chega **sem** `itens`, `OK` traz de zero a três, e cada item precisa
+  de imóvel e corretor não vazios.
 - **Retenção**: `src/lib/retencao-painel.ts`, desde a F3.6. Reducer puro do último
-  valor conhecido, por bloco (DEC-045), consumido pelo `AtualizadorPainel`.
+  valor conhecido, por bloco (DEC-045), consumido pelo `AtualizadorPainel`. Desde a E4
+  ele cobre os cinco blocos.
+- **Rotação da faixa superior**: `src/components/painel/rotacao-faixa.ts`,
+  `faixa-superior.tsx` e `faixa-operacional.tsx`, desde a E4. A regra de rotação mora
+  num módulo **sem JSX e sem CSS** justamente para ser testável — o componente importa
+  o módulo de estilos, e o runner do Node não parseia CSS.
 
 ## Administração implementada
 
@@ -316,8 +354,8 @@ permanece creditado onde foi registrado.
   limpa os campos.
 
 A listagem mostra o status numa coluna própria e usa `valorProposta` na coluna de
-valor quando o lançamento é uma proposta. **A TV ainda não lista propostas
-`AGUARDANDO`** — isso é da E4.
+valor quando o lançamento é uma proposta. Desde a **E4** (`c24a0c9`) a TV lista as
+propostas `AGUARDANDO` na Tela B — até três, mais recentes primeiro.
 
 ### Saldo histórico — `/admin/saldo-historico`
 
@@ -336,8 +374,9 @@ silencioso, e aparece na listagem e na confirmação de exclusão. Todas as linh
 existentes receberam `EXATO` no backfill da E2A — **nenhum saldo virou mínimo
 conhecido sozinho**.
 
-**O painel ainda NÃO desenha "+ de".** A apresentação do piso é trabalho futuro da
-Entrega v1 (E4); hoje a precisão só existe no modelo e na administração.
+**O painel desenha "+ de" desde a E4** (`c24a0c9`), e só nos acumulados: a DEC-054 está
+**completa na v1**. `MINIMO_CONHECIDO` não altera cálculo — o piso é uma afirmação de
+apresentação.
 
 ### Reservas de locação — `/admin/reservas-locacao`
 
@@ -367,7 +406,9 @@ Entregue na E2C (`18a6599`). Reserva é operação, não produção (DEC-055): n
   coisas: quando o negócio fecha, o operador registra a locação separadamente, como um
   lançamento normal.
 
-A lista de reservas `ATIVA` na TV **não existe** — é da E4.
+A lista de reservas `ATIVA` na TV **existe desde a E4** (`c24a0c9`): até três, mais
+recentes primeiro, com imóvel e corretor. `FINALIZADA` e `CANCELADA` ficam de fora sem
+afetar contagem nenhuma, porque nunca houve contagem de reserva.
 
 ## Equipe histórica na edição de lançamento (Q7)
 
@@ -461,8 +502,9 @@ Cinco migrations versionadas:
 > testada e aplicada somente no `casalouzada_test`, e **não há evidência de aplicação
 > em produção**. As migrations da E2A, da E2B e a do cutover da E3 foram igualmente
 > aplicadas e testadas **apenas no banco local de teste**; **nenhuma migration remota
-> foi executada** em nenhuma das quatro publicações — nem em Supabase, nem em qualquer
-> outro ambiente. Publicar no Git **não é** aplicar em produção. Portanto, antes do
+> foi executada** em nenhuma das cinco publicações — nem em Supabase, nem em qualquer
+> outro ambiente. A E4 (`c24a0c9`) não criou migration nenhuma e também não aplicou
+> nenhuma. Publicar no Git **não é** aplicar em produção. Portanto, antes do
 > go-live (E6), existe **gate operacional de migrations de produção** para as quatro,
 > nesta ordem: `20260812120000_saldo_historico_tipo_unico`,
 > `20260814150000_entrega_v1_aditiva`, `20260814210000_contrato_proposta` e
@@ -716,9 +758,10 @@ Não se pode dizer que a situação de credenciais esteja saneada hoje.
 Levantado arquivo por arquivo na árvore em `888f779` e atualizado pelos commits
 seguintes: `f49f912` alterou dois arquivos CSS e removeu cinco SVGs de scaffold,
 `7e0e35d` trouxe os assets da marca e o favicon, `16490f0` acrescentou uma propriedade
-a `painel.module.css`, `8b9fce2` criou o mecanismo offline, e as três fatias da E2
+a `painel.module.css`, `8b9fce2` criou o mecanismo offline, as três fatias da E2
 (`c6464b5`, `fe00fd2`, `18a6599`) trouxeram o modelo aditivo da entrega v1 e a
-administração de propostas, precisão de saldo e reservas.
+administração de propostas, precisão de saldo e reservas, `2a50965` fez o cutover da
+venda compartilhada e `c24a0c9` entregou o painel operacional A/B.
 
 **A F3 está concluída.** A TV mostra os números reais e os mantém atualizados
 sozinha. O que continua não existindo:
@@ -764,12 +807,13 @@ sozinha. O que continua não existindo:
 | Cutover da VENDA (campos nullable, `NULL`, CHECK da DEC-051) | **concluído** — `lancamentos_venda_credito_check` instalado | E3 feita |
 | `ParticipacaoVenda` como fonte executável do crédito | **existe** — é a única, desde `2a50965` | E3 feita |
 | Status e valor de proposta — modelo e administração | **existem** — E2A + E2B (`fe00fd2`), com CHECK de integridade | E2 feita |
-| Lista operacional de propostas `AGUARDANDO` na TV | ausente (DEC-053, DEC-056) | E4 |
+| Lista operacional de propostas `AGUARDANDO` na TV | **existe** — até 3, mais recentes primeiro (DEC-053, DEC-056) | E4 feita |
 | Precisão do saldo histórico — modelo e administração | **existem** — `EXATO` / `MINIMO_CONHECIDO` (E2A + E2B) | E2 feita |
-| Apresentação "+ de" no painel | ausente (DEC-054) | E4 |
+| Apresentação "+ de" no painel | **existe** — só nos acumulados (DEC-054) | E4 feita |
 | `ReservaLocacao` — modelo e administração | **existem** — E2A + E2C (`18a6599`) | E2 feita |
-| Lista de reservas `ATIVA` na TV | ausente (DEC-055, DEC-056) | E4 |
-| Faixa superior alternando A/B | ausente — aprovada na E1 (DEC-056) | E4 |
+| Lista de reservas `ATIVA` na TV | **existe** — até 3, mais recentes primeiro (DEC-055, DEC-056) | E4 feita |
+| Faixa superior alternando A/B | **existe** — 20 s por tela, sem terceira (DEC-056) | E4 feita |
+| Transporte das listas operacionais pelo contrato e pela retenção | **existe** — cinco blocos | E4 feita |
 | Deploy no Render | ausente — decisão de infraestrutura é do E6 (DEC-057) | E6 |
 | Inventário e operação do `Phantom Alien 4K IPTV` | não realizados (DEC-049) — **fatia adiada** (DEC-057) | F4.5 |
 | Screen Wake Lock | ausente **por decisão** (DEC-050) | F4.5, só se o ensaio provar necessidade |
@@ -928,11 +972,13 @@ de `src/lib/metricas.ts` foi tocada** — a fronteira vive fora do núcleo (DEC-
 - entrada única: `obterMetricasPainel(prisma, agora?)`, com o `PrismaClient` por
   parâmetro (DEC-041) — o singleton de `src/lib/db.ts` não é importado;
 - `EstadoLeitura` (`OK` / `INDISPONIVEL`) — a quarta dimensão da DEC-042;
-- o resultado tem três blocos independentes: `empresa.periodos`,
-  `empresa.acumulados` e `equipes`. No ramo `INDISPONIVEL` a propriedade `dados`
-  **não existe**, em vez de vir nula;
-- quatro `findMany` sob `Promise.allSettled` — não transaction, não `Promise.all` —,
-  porque conhecer sucesso e falha de cada leitura é o que permite sucesso parcial;
+- o resultado tinha, na F3.3, três blocos independentes: `empresa.periodos`,
+  `empresa.acumulados` e `equipes` — a E4 acrescentou `propostas` e `reservas`, e hoje
+  são cinco. No ramo `INDISPONIVEL` a propriedade `dados` **não existe**, em vez de vir
+  nula;
+- quatro `findMany` sob `Promise.allSettled` na F3.3, cinco desde a E4 — não
+  transaction, não `Promise.all` —, porque conhecer sucesso e falha de cada leitura é o
+  que permite sucesso parcial;
 - dependências: períodos ← lançamentos; acumulados ← lançamentos + saldo histórico;
   equipes ← lançamentos + corretores + equipes;
 - **falha de saldo histórico não apaga os períodos**: o VGV mensal, trimestral e anual
@@ -1080,8 +1126,8 @@ para token inválido, um único `agora`, `lerPainel`, resposta JSON com
 
 `src/lib/leitura-painel.ts` — `lerPainel(prisma, agora)` chama `obterMetricasPainel`
 e `criarApresentacaoPainel`; **não calcula** e **não formata dinheiro** por conta
-própria. Fatia a apresentação nos três blocos e adiciona `competencia`, `lidoEmMs` e
-`horaLeitura`. O mesmo `agora` alimenta tudo.
+própria. Fatia a apresentação nos blocos — três na F3.6, **cinco desde a E4** — e
+adiciona `competencia`, `lidoEmMs` e `horaLeitura`. O mesmo `agora` alimenta tudo.
 
 #### Contrato HTTP
 
@@ -1110,6 +1156,10 @@ Leitura válida, bloco a bloco:
 
 `SEM_DADOS`, `SEM_SALDO_HISTORICO` e `CONFIGURACAO_INVALIDA` são estados de domínio —
 **dados válidos** — e passam: não são alvo de retenção.
+
+A tabela acima é a da F3.6. A **E4 acrescentou `propostas` e `reservas`**, que retêm
+como os acumulados — inclusive atravessando a virada de mês — e cuja leitura `OK` com
+lista vazia substitui normalmente. Ver a seção da E4.
 
 #### Primeira carga
 
@@ -1487,8 +1537,10 @@ venda por `ParticipacaoVenda`, com divisão igualitária exata em centavos; a
 administração registra venda com N participantes; e o banco protege o estado final com
 o `CHECK lancamentos_venda_credito_check`.
 
-**O que continua pendente:** a faixa superior do painel continua estática — sem "+ de",
-sem lista de propostas `AGUARDANDO` e sem lista de reservas `ATIVA` (E4).
+**O que a E4 implantou (`c24a0c9`):** a faixa superior alternada, as duas listas
+operacionais, o "+ de" dos acumulados e a extensão do contrato de atualização e da
+retenção para transportá-las. **O contrato de produto da E1 está inteiramente
+implementado**; o que resta da Entrega v1 é gate (E5) e go-live (E6).
 
 ### Baseline do fechamento da E2
 
@@ -1553,6 +1605,126 @@ antigo e de não-VENDA sem crédito; `CHECK` de proposta ainda ativo; uniques e 
 
 **Fresh install:** `migrate reset --force` aplicou as **cinco** migrations do zero,
 exit 0, seguido de `db seed` OK.
+
+### E4 — painel operacional A/B e novos estados · concluída
+
+Publicada em **`c24a0c9`**, em 23 caminhos — 19 modificados e 4 novos, `+2080/−80`.
+**Nenhuma linha de schema, migration, administração ou validação foi tocada**: a E4 é
+inteiramente de leitura, domínio de apresentação e componentes.
+
+#### Rotação
+
+Duas telas e só duas, 20 segundos cada, `A → B → A → B`. A Tela A é a inicial. A regra
+mora em `src/components/painel/rotacao-faixa.ts` — sem React, sem DOM, sem timer —,
+e é isso que a torna testável: o componente importa o módulo de estilos, e o runner do
+Node não parseia CSS. O `useEffect` da faixa depende **apenas** da tela ativa, então o
+refresh de 60 s troca o conteúdo por baixo sem reiniciar o ciclo; amarrar os dois faria
+a Tela B aparecer em intervalos irregulares sempre que a rede oscilasse.
+
+#### Seleção operacional
+
+Regra **exclusivamente no núcleo** (DEC-013), com `MAXIMO_DESTAQUES = 3` como fonte
+única do corte:
+
+1. filtro de status — `AGUARDANDO` nas propostas, `ATIVA` nas reservas;
+2. `dataReferencia` decrescente;
+3. `criadoEm` decrescente;
+4. `id` crescente;
+5. corte em 3.
+
+Os dois últimos desempates não são preciosismo: sem eles, dois itens gravados no mesmo
+dia — ou no mesmo instante — poderiam trocar de lugar a cada atualização da TV sem nada
+ter mudado. A ordenação copia a lista antes de ordenar; a do chamador não é mexida.
+
+A **proposta legada sem imóvel continua selecionada** (DEC-053) e a apresentação diz
+"Imóvel não informado" — sumir da lista seria perder de vista algo genuinamente em
+aberto. Toda proposta continua contando na métrica mensal qualquer que seja o status: o
+filtro vale só para a lista.
+
+#### Precisão do saldo na apresentação
+
+`MINIMO_CONHECIDO` **não muda conta nenhuma**. Ele viaja junto do acumulado e a
+apresentação prefixa "+ de". O qualificador é campo próprio, e não o `prefixo` do
+`ValorComposto` — aquele significa **moeda**, e misturar os dois daria dois sentidos ao
+mesmo campo. Por isso a contagem sai `+ de 527` e o dinheiro, `+ de R$ 800 mi`, com o
+"+ de" antes do `R$`.
+
+A precisão do saldo de `VENDA` qualifica **imóveis vendidos e VGV acumulado**; a de
+`AVALIACAO_GOOGLE`, **as avaliações**. Nunca aparece em mês, trimestre, ano, quadro
+mensal ou ranking. `SEM_SALDO_HISTORICO` continua `—`: o `Acumulado<T>` virou união
+discriminada e o ramo sem valor **não tem** campo de precisão, o que torna "+ de —"
+inexprimível em vez de meramente evitado.
+
+#### Leitura, contrato e retenção
+
+`LeituraPainel` passou a ter **cinco** blocos: `periodos`, `acumulados`, `equipes`,
+`propostas` e `reservas`. As dependências continuam sendo o que decide o que cai junto:
+
+| Falha | Efeito |
+|---|---|
+| leitura de `reservas_locacao` | só `reservas` fica `INDISPONIVEL` — propostas e métricas seguem |
+| leitura de lançamentos | derruba `propostas` junto dos blocos que já dependiam dela |
+
+Retenção das duas listas:
+
+| Nova leitura | Condição | Resultado |
+|---|---|---|
+| `OK` com itens | — | substitui |
+| `OK` com lista **vazia** | — | **substitui** — vazio significa "não há nada em aberto", e reter as anteriores deixaria na parede itens que já saíram |
+| `INDISPONIVEL` | anterior `OK` | retém a última lista conhecida |
+| `INDISPONIVEL` | virada de mês | **retém mesmo assim** — as listas descrevem o que está em aberto agora, não produção mensal; uma proposta aguardando em 31/08 continua aguardando em 01/09 |
+
+O selo `atualizado HH:MM` passou a considerar os **cinco** blocos `OK`: a rotação põe as
+listas na parede tanto quanto os big numbers, e um selo que as ignorasse dataria só
+metade do que se vê.
+
+O contrato runtime rejeita `INDISPONIVEL` que venha **com** `itens` — um bloco caído
+carregando lista apagaria da parede a lista retida — e aceita `OK` com zero a três; um
+payload com quatro itens está fora do contrato.
+
+#### Visual
+
+- a faixa superior tem **altura estrutural fixa relativa**, `11.6cqw`, igual nas duas
+  telas;
+- **nenhuma dimensão estrutural nova em px**: as três ocorrências de `px` no diff do CSS
+  são comentário;
+- verificação feita em **3840×2160** com `devicePixelRatio` **1**, com `.tv` medindo
+  **3840 × 2160** e **overflow zero** nas duas telas;
+- **Tela A e Tela B mediram 445,44 de altura** depois da correção, e as faixas de VGV e
+  base **não deslocam** na rotação;
+- o **menor texto operacional** mediu **61,44px**, acima do mínimo de 44px da §6 do
+  PLANO.
+
+O defeito que motivou a altura travada foi encontrado **só** nessa verificação: com
+`min-height`, a Tela B ficava 36,79px mais alta que a Tela A e empurrava as faixas de
+baixo a cada 20 segundos. Nenhum teste pegaria isso. Estas medições são registro do que
+foi medido, **não** decisão de produto nova.
+
+#### Baseline do fechamento da E4
+
+Medido sobre a árvore que veio a ser publicada em `c24a0c9`, **antes** do commit e
+**depois** da correção de layout e do rebuild. A publicação **não** reexecutou suíte
+nenhuma: ela publicou os **mesmos bytes auditados**, o que os SHA-256 dos 23 caminhos
+comprovaram um a um, 23/23, zero divergentes.
+
+| Comando | Resultado verificado |
+|---|---|
+| `npx prisma validate` | exit 0 |
+| `npx prisma generate` | exit 0 |
+| `npm test` | 606 testes, 152 suítes, 0 falhas |
+| `npm run test:fusos` | 606 × 3 — `UTC`, `America/Sao_Paulo` e `Asia/Tokyo`, suíte estável |
+| `npm run test:integracao` | 156 testes, 51 suítes, 0 falhas |
+| `npm run test:integracao:painel` | 49 testes, 14 suítes, 0 falhas |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `tsx scripts/banco-teste.ts npm run build` | exit 0, 23 rotas |
+| `git diff --check` | exit 0 |
+
+**Estabilidade:** `test:integracao:painel` rodou **três vezes consecutivas**, sem
+alteração de árvore entre elas — 49/14/0 nas três.
+
+A **verificação visual 4K foi concluída** e é parte do gate desta etapa, não um extra:
+foi ela, e só ela, que expôs o deslocamento de layout descrito acima.
 
 ### Venda compartilhada (DEC-051, DEC-052)
 
@@ -1649,8 +1821,10 @@ atual, preservada. **Tela B**: "Propostas em andamento" (até 3 `AGUARDANDO`) e
 Lista vazia mostra "Nenhuma proposta em andamento" / "Nenhuma reserva ativa" — nunca
 `0`: são listas operacionais, não métricas (DEC-014). Seleção, ordenação e corte em 3
 são regra de domínio e moram no núcleo (DEC-013); o contrato de leitura/atualização
-da F3.6 (DEC-044 a DEC-046) será estendido para transportar as listas — desenho na
-E3/E4.
+da F3.6 (DEC-044 a DEC-046) foi estendido para transportar as listas.
+
+**Implementado na E4 (`c24a0c9`).** Ver a seção da E4 abaixo para o comportamento
+efetivo, incluindo os desempates da ordenação e a política de retenção das listas.
 
 ### Incompatibilidades mapeadas — o que a E2 e a E3 resolveram e o que resta
 
@@ -1683,24 +1857,33 @@ publicaram:
   ser multi-participante; o fluxo Q7 permanece intocado para os tipos de participante
   único, em `src/lib/lancamento-equipe.ts`.
 
-**Continua pendente:**
+**Resolvido pela E4 (`c24a0c9`):**
 
-- `leitura-painel.ts` / `contrato-atualizacao-painel.ts` / `retencao-painel.ts` — não
-  transportam as listas operacionais da Tela B (E4);
-- `src/lib/apresentacao-painel.ts` — não conhece "+ de" nem as listas da Tela B (E4);
-- `src/components/painel/*` — faixa superior estática, sem rotação A/B (E4).
+- `src/lib/metricas.ts` — `PrecisaoSaldoMetrica` viaja no acumulado, que virou união
+  discriminada; `selecionarPropostasEmAndamento` e `selecionarReservasAtivas` fazem
+  filtro, ordenação e corte em três;
+- `src/lib/metricas-prisma.ts` — projeta as candidatas e ganhou a quinta leitura, a de
+  `reservas_locacao`;
+- `leitura-painel.ts` / `contrato-atualizacao-painel.ts` / `retencao-painel.ts` —
+  transportam, validam e retêm as duas listas; a leitura tem cinco blocos;
+- `src/lib/apresentacao-painel.ts` — conhece o qualificador "+ de" e as duas listas;
+- `src/components/painel/*` — faixa superior alternando A/B, com a Tela B nova.
+
+**Nada do contrato de produto da E1 continua pendente de implementação.** O que resta
+da Entrega v1 é o gate completo (E5) e o go-live (E6).
 
 ### Ordem de entrega e deploy (DEC-057)
 
 E1 (contratos, **concluída em `078f360`**) → E2 (migration **aditiva** + admin de
 propostas, saldo e reservas — sem cutover de VENDA; **concluída em `c6464b5`,
 `fe00fd2` e `18a6599`**) → E3 (venda compartilhada + métricas + **cutover final** —
-**concluída em `2a50965`**) → E4 (painel A/B e novos estados — **próxima, não
-iniciada**) → E5 (gate completo) → E6 (go-live no Render + smoke test). O go-live
-provisório precede a F4.5; plano/infraestrutura de produção se decide no E6, e nada de
-Render foi configurado. Depois do E6, retoma-se a F4.5. F5 não está iniciada. O
-transporte de precisão e das listas operacionais para o painel não exigiu preparação na
-E3: o contrato de leitura ficou intocado, e o desenho é inteiro da E4.
+**concluída em `2a50965`**) → E4 (painel A/B e novos estados — **concluída em
+`c24a0c9`**) → E5 (gate completo — **próxima, não iniciada**) → E6 (go-live no Render +
+smoke test). O go-live provisório precede a F4.5; plano/infraestrutura de produção se
+decide no E6, e nada de Render foi configurado. Depois do E6, retoma-se a F4.5. F5 não
+está iniciada. O transporte de precisão e das listas operacionais para o painel não
+exigiu preparação na E3: o contrato de leitura ficou intocado até a E4, que fez o
+desenho inteiro sem tocar schema nem migration.
 
 ## Pendências
 
@@ -1715,9 +1898,9 @@ E3: o contrato de leitura ficou intocado, e o desenho é inteiro da E4.
    foi executada** em nenhuma publicação. É gate do E6. A do cutover zera colunas e o
    runtime que a acompanha exige o estado novo — ela e o deploy do código têm de ir na
    mesma janela.
-3. **Entrega v1 (E4 a E6)**: a E1, a E2 e a E3 estão concluídas (`078f360`;
-   `c6464b5` + `fe00fd2` + `18a6599`; `2a50965`). Falta o painel A/B com "+ de" e as
-   listas operacionais (E4), o gate completo (E5) e o go-live no Render (E6).
+3. **Entrega v1 (E5 e E6)**: a E1, a E2, a E3 e a E4 estão concluídas (`078f360`;
+   `c6464b5` + `fe00fd2` + `18a6599`; `2a50965`; `c24a0c9`). O contrato de produto está
+   inteiramente implementado; faltam o gate completo (E5) e o go-live no Render (E6).
 4. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas e a
    **F4.5 adiada** até o go-live da v1 (DEC-057). O que falta nela, objetivamente:
    - o **hardware alvo é o `Phantom Alien 4K IPTV`**;

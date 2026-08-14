@@ -999,14 +999,18 @@ abre nenhuma dessas frentes.
 
 ### DEC-045 — Último valor conhecido é retido por bloco
 
-**Decisão.** A retenção opera sobre os três blocos da leitura — `periodos`,
-`acumulados` e `equipes` — separadamente:
+**Decisão.** A retenção opera sobre os blocos da leitura separadamente — `periodos`,
+`acumulados` e `equipes` na F3.6, mais `propostas` e `reservas` desde a E4:
 
 - `periodos` e `equipes` só retêm o valor anterior **dentro da mesma competência
   mensal**; na virada de mês, a indisponibilidade nova é aceita como
   indisponibilidade;
 - `acumulados` podem atravessar a virada de mês, porque não têm recorte mensal
   (DEC-036);
+- `propostas` e `reservas` também atravessam a virada, pelo mesmo motivo: elas
+  descrevem o que está **em aberto agora**, não a produção de um mês (E4, DEC-056). Uma
+  leitura `OK` com lista **vazia** substitui normalmente — vazio ali significa "não há
+  nada em aberto", e reter as anteriores deixaria na parede itens que já saíram;
 - leitura `OK` **sempre substitui** o que estava na tela;
 - estados de domínio (`SEM_DADOS`, `SEM_SALDO_HISTORICO`, `CONFIGURACAO_INVALIDA`)
   são dados válidos e **sempre passam** — não são alvo de retenção;
@@ -1023,12 +1027,14 @@ legenda falsa; um acumulado desde sempre continua descrevendo a mesma coisa depo
 virada.
 
 **Impacto.** O selo discreto `atualizado HH:MM` usa a hora do bloco `OK` mais antigo
-ainda exibido; sem nenhum bloco `OK`, não há selo. Recarregar a página durante uma
+ainda exibido; sem nenhum bloco `OK`, não há selo. Desde a E4 ele considera os **cinco**
+blocos: a rotação põe as listas na parede tanto quanto os big numbers, e um selo que as
+ignorasse dataria só metade do que se vê. Recarregar a página durante uma
 indisponibilidade perde a retenção em memória — offline persistente é F4, não defeito
 da F3.6.
 
 **Fonte.** `src/lib/retencao-painel.ts`; `tests/retencao-painel.test.ts`; commit
-`888f779`. **implementada**
+`888f779`, estendida em `c24a0c9`. **implementada**
 
 ### DEC-046 — Payload de atualização é validado em runtime antes da retenção
 
@@ -1432,9 +1438,12 @@ editável entre os três estados, `valorProposta` opcional e fora de qualquer ag
 monetário, imóvel exigido em criação e edição, campos zerados nos demais tipos, e o
 `CHECK` `lancamentos_proposta_campos_check` no banco. O `CHECK` **não exige
 `imovel_ref`** de propósito: a proposta legada sem imóvel continua válida como
-histórico, conforme esta decisão. A lista operacional "Propostas em andamento" da TV
-continua pendente.
-**implementada na E2 (`c6464b5` + `fe00fd2`); lista operacional da TV na E4**
+histórico, conforme esta decisão. A **lista operacional "Propostas em andamento" da TV
+foi implementada na E4** (`c24a0c9`): só `AGUARDANDO`, no máximo três, mais recentes
+primeiro, com imóvel e corretor — e a proposta legada sem imóvel **entra normalmente**,
+exibindo "Imóvel não informado". Toda proposta continua contando na métrica mensal
+qualquer que seja o status; o filtro vale só para a lista.
+**implementada — modelo e admin na E2 (`c6464b5` + `fe00fd2`), lista da TV na E4 (`c24a0c9`)**
 
 ### DEC-054 — Saldo histórico pode ser mínimo conhecido
 
@@ -1469,9 +1478,14 @@ ele tem.
 default `EXATO`, e toda linha anterior à migration recebeu `EXATO`. **Administração em
 `fe00fd2`**: a precisão é escolhida na criação e alterável entre `EXATO` e
 `MINIMO_CONHECIDO` nos dois sentidos, aparece na listagem e é exigida pela validação,
-sem default silencioso. **A apresentação "+ de" continua pendente** — o painel não a
-desenha.
-**implementada na E2 (`c6464b5` + `fe00fd2`); apresentação "+ de" na E4**
+sem default silencioso. **A apresentação "+ de" foi implementada na E4** (`c24a0c9`): o
+cálculo não muda, a precisão viaja junto do acumulado e a tela prefixa "+ de" — antes do
+`R$` quando há moeda. A precisão do saldo de `VENDA` qualifica **imóveis vendidos e VGV
+acumulado**; a de `AVALIACAO_GOOGLE`, **as avaliações**. Nunca aparece em mês,
+trimestre, ano, quadro mensal ou ranking. `SEM_SALDO_HISTORICO` continua `—`: o tipo do
+acumulado é união discriminada e o ramo sem valor não carrega precisão, o que torna
+"+ de —" **inexprimível**, não apenas evitado.
+**implementada por completo na v1 — modelo e admin na E2 (`c6464b5` + `fe00fd2`), apresentação na E4 (`c24a0c9`)**
 
 ### DEC-055 — Reserva de locação é entidade operacional, não produção
 
@@ -1508,8 +1522,10 @@ não há campo de status na criação, e a action grava o valor explicitamente; 
 são **imutáveis na edição**; o status é editável entre os três estados, nos dois
 sentidos; **não há hard delete** no admin — `CANCELADA` é o estado de uma reserva que
 deixou de valer; e **finalizar não cria `LOCACAO`**, nem qualquer outro lançamento. A
-lista de reservas `ATIVA` na TV continua pendente.
-**implementada na E2 (`c6464b5` + `18a6599`); lista da TV na E4**
+**lista de reservas `ATIVA` na TV foi implementada na E4** (`c24a0c9`): só `ATIVA`, no
+máximo três, mais recentes primeiro, com imóvel e corretor. `FINALIZADA` e `CANCELADA`
+ficam de fora **sem afetar contagem nenhuma** — nunca houve contagem de reserva.
+**implementada — modelo e admin na E2 (`c6464b5` + `18a6599`), lista da TV na E4 (`c24a0c9`)**
 
 ### DEC-056 — A faixa superior alterna entre métricas e destaques operacionais
 
@@ -1530,8 +1546,8 @@ afirmaria um desempenho que a lista não mede (DEC-014).
 
 A **seleção e a ordenação** das listas — filtro por status, mais recentes primeiro,
 corte em 3, desempate determinístico — são regra de domínio e moram no núcleo
-(DEC-013). A leitura e o contrato de atualização da F3.6 (DEC-044 a DEC-046) serão
-estendidos para transportar as listas; o desenho dessa extensão é da E3/E4.
+(DEC-013). A leitura e o contrato de atualização da F3.6 (DEC-044 a DEC-046) foram
+estendidos para transportar as listas.
 
 **Motivo.** A TV é o lugar onde o pipeline operacional fica visível para a equipe,
 e a alternância preserva os acumulados sem disputar espaço com eles.
@@ -1539,11 +1555,25 @@ e a alternância preserva os acumulados sem disputar espaço com eles.
 **Fonte.** Decisão do proprietário em 2026-08-14; DEC-013; DEC-014; DEC-053;
 DEC-055.
 
-**Estado de implementação.** **Pendente.** A faixa superior continua estática, com a
-Tela A apenas. Os dados que a Tela B vai listar já existem no modelo desde a E2
-(propostas com status, reservas com status), mas nem a seleção no núcleo, nem o
-transporte pelo contrato de atualização, nem a rotação A/B foram escritos.
-**invariante futura — implementação na E4, sobre E2/E3**
+**Estado de implementação.** **IMPLEMENTADA na E4** (`c24a0c9`). O que existe hoje:
+
+- **A/B** — duas telas e só duas, com a Tela A inicial e `proximaTela` total e cíclica;
+  não há terceiro estado possível;
+- **20 segundos** por tela, num timer que depende só da tela ativa — o refresh de 60 s
+  troca o conteúdo por baixo sem reiniciar o ciclo;
+- **máximo 3** por lista, com `MAXIMO_DESTAQUES = 3` como fonte única do corte;
+- **vazio é textual** — "Nenhuma proposta em andamento" / "Nenhuma reserva ativa" —, e
+  `0` não aparece em lugar nenhum das listas;
+- **seleção, ordenação e corte no núcleo** (`src/lib/metricas.ts`): filtro de status,
+  `dataReferencia` decrescente, `criadoEm` decrescente e `id` crescente como desempates.
+  A leitura Prisma não filtra status, não ordena operacionalmente e não aplica `take`, e
+  os componentes não filtram, não ordenam e não cortam;
+- **contrato e retenção estendidos**: `LeituraPainel` tem cinco blocos; uma leitura `OK`
+  com lista vazia substitui a anterior, `INDISPONIVEL` retém a última lista conhecida, e
+  as listas são retidas **mesmo atravessando a virada de mês**, porque descrevem o que
+  está em aberto agora e não a produção de um mês.
+
+**implementada na E4 (`c24a0c9`), sobre E2/E3**
 
 ### DEC-057 — O go-live provisório por URL precede a F4.5
 
@@ -1558,8 +1588,8 @@ Ordem de entrega aprovada:
 | E1 | contratos e modelo de dados — **concluída em `078f360`** |
 | E2 | migration **aditiva** + administração de propostas, saldo e reservas — **concluída em `c6464b5`, `fe00fd2` e `18a6599`** |
 | E3 | venda compartilhada + métricas + **cutover final** (DEC-051) — **concluída em `2a50965`** |
-| E4 | painel operacional A/B e apresentação dos novos estados — **próxima** |
-| E5 | gate completo |
+| E4 | painel operacional A/B e apresentação dos novos estados — **concluída em `c24a0c9`** |
+| E5 | gate completo — **próxima** |
 | E6 | go-live no Render + smoke test |
 
 Depois da entrega, retoma-se a F4.5. A escolha de plano/infraestrutura de produção é

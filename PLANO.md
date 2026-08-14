@@ -23,8 +23,39 @@ entrega, a F4.5 é retomada.
 A **E1 — contratos, documental — está concluída** (`078f360`); a **E2 está concluída**
 em três commits — **`c6464b5`** (E2A — schema e migration aditiva com backfills),
 **`fe00fd2`** (E2B — administração de propostas e precisão do saldo) e **`18a6599`**
-(E2C — administração de reservas de locação); e a **E3 está concluída e publicada** em
-**`2a50965`**, que fechou o cutover da venda compartilhada. A **E4 é a próxima etapa**.
+(E2C — administração de reservas de locação); a **E3 está concluída e publicada** em
+**`2a50965`**, que fechou o cutover da venda compartilhada; e a **E4 está concluída e
+publicada** em **`c24a0c9`**, que entregou o painel operacional. A **E5 — gate completo —
+é a próxima etapa**, e não foi iniciada.
+
+### Estado final da faixa superior (E4, `c24a0c9`)
+
+A faixa superior deixou de ser estática e passou a alternar entre duas telas, 20
+segundos cada, `A → B → A → B`, sem terceira tela (DEC-056):
+
+- **Tela A** — a de sempre: Imóveis vendidos, VGV acumulado e Avaliações Google;
+- **Tela B** — duas listas operacionais: **Propostas em andamento** (até 3 propostas
+  `AGUARDANDO`) e **Reservas de locação** (até 3 reservas `ATIVA`), cada item com
+  imóvel e corretor, e nada além.
+
+As duas listas ordenam por `dataReferencia` decrescente, desempatam por `criadoEm`
+decrescente e, persistindo o empate, por `id` crescente — sem isso dois itens
+empatados poderiam trocar de lugar a cada atualização da TV sem nada ter mudado.
+Lista vazia é dado legítimo e vira frase — "Nenhuma proposta em andamento" /
+"Nenhuma reserva ativa" —, nunca `0`: lista operacional não é métrica (DEC-014).
+Proposta legada sem imóvel (DEC-053) continua na lista, dizendo "Imóvel não
+informado" em vez de sumir da parede.
+
+**Seleção, ordenação e corte moram em `src/lib/metricas.ts`** (DEC-013). A leitura
+Prisma não filtra status, não ordena operacionalmente e não aplica `take`; os
+componentes não filtram, não ordenam e não cortam.
+
+O saldo `MINIMO_CONHECIDO` também chegou à tela: ele **não muda cálculo nenhum** e
+qualifica a apresentação dos acumulados com "+ de" — "+ de 527", "+ de R$ 800 mi". A
+precisão do saldo de `VENDA` qualifica imóveis vendidos **e** VGV acumulado; a do
+saldo de `AVALIACAO_GOOGLE` qualifica as avaliações. "+ de" **nunca** aparece em mês,
+trimestre, ano, quadro mensal ou ranking, e `SEM_SALDO_HISTORICO` continua sendo `—`,
+nunca "+ de —".
 
 ### Estado final da VENDA (E3, `2a50965`)
 
@@ -204,9 +235,11 @@ aplicação em criação **e** edição, e campos de proposta forçados a `NULL`
 tipos. A integridade também é do banco — a migration `20260814210000_contrato_proposta`
 instalou o `CHECK` correspondente, que **de propósito não exige `imovel_ref`**: a
 proposta histórica sem imóvel continua válida enquanto não for editada. A lista
-operacional "Propostas em andamento" na TV continua sendo da E4.
+operacional "Propostas em andamento" na TV foi entregue na **E4** (`c24a0c9`) e mostra
+só `AGUARDANDO`, no máximo três, com a proposta legada sem imóvel exibindo "Imóvel não
+informado".
 
-#### `saldo_historico` — precisão (DEC-054) — **implementado; "+ de" pendente**
+#### `saldo_historico` — precisão (DEC-054) — **implementado**
 
 | Campo | Tipo | Observação |
 |---|---|---|
@@ -221,8 +254,8 @@ entrando somente nos acumulados.
 
 **Estado real.** O campo existe desde a E2A (`c6464b5`), com backfill `EXATO`, e a
 E2B (`fe00fd2`) levou a precisão ao admin: ela é escolhida na criação e alterável nos
-dois sentidos na edição, e aparece na listagem. **A apresentação "+ de" ainda não
-existe no painel** — é da E4.
+dois sentidos na edição, e aparece na listagem. A **apresentação "+ de" foi entregue na
+E4** (`c24a0c9`), só nos acumulados: a decisão está **completa na v1**.
 
 #### `reservas_locacao` (DEC-055) — **modelo e administração implementados**
 
@@ -249,7 +282,8 @@ primeiro, no máximo 3.
 `/admin/reservas-locacao`. Toda reserva nasce `ATIVA`; a equipe é snapshot lido pelo
 servidor na criação e imutável na edição; **não há hard delete** — `CANCELADA` é o
 estado de uma reserva que deixou de valer; e finalizar **não cria `LOCACAO`
-automaticamente**. **A lista de reservas `ATIVA` na TV ainda não existe** — é da E4.
+automaticamente**. A **lista de reservas `ATIVA` na TV foi entregue na E4**
+(`c24a0c9`): só `ATIVA`, no máximo três, imóvel e corretor.
 
 ### `metas` — não entra na v1
 
@@ -302,15 +336,17 @@ mensal geral e os rankings de equipe usam a do mês corrente. O saldo histórico
 continua entrando somente nos acumulados.
 
 A **leitura** foi implementada na F3.3, em `src/lib/metricas-prisma.ts`: ela lê as
-quatro tabelas, converte cada linha para os tipos de domínio e chama o núcleo. A
-regra de cálculo continua inteira em `src/lib/metricas.ts` (DEC-013) — a fronteira
-não soma nem conta nada.
+tabelas, converte cada linha para os tipos de domínio e chama o núcleo. A regra de
+cálculo continua inteira em `src/lib/metricas.ts` (DEC-013) — a fronteira não soma,
+não conta, não filtra status, não ordena e não corta lista.
 
-O resultado da leitura é separado em três blocos, cada um com as próprias
-dependências: `empresa.periodos` (lançamentos), `empresa.acumulados` (lançamentos e
-saldo histórico) e `equipes` (lançamentos, corretores e equipes). Uma leitura que
-falha derruba só quem dependia dela — falhar o saldo não apaga o VGV do mês
-(DEC-040, DEC-042).
+O resultado da leitura é separado em blocos, cada um com as próprias dependências:
+`empresa.periodos` (lançamentos), `empresa.acumulados` (lançamentos e saldo
+histórico), `equipes` (lançamentos, corretores e equipes) e, desde a **E4**,
+`propostas` (lançamentos) e `reservas` (leitura própria de `reservas_locacao`, a
+quinta). Uma leitura que falha derruba só quem dependia dela — falhar o saldo não
+apaga o VGV do mês, e falhar a leitura de reservas não derruba as propostas nem as
+métricas (DEC-040, DEC-042).
 
 A **apresentação** foi implementada na F3.4, em `src/lib/apresentacao-painel.ts`:
 ela recebe o resultado da leitura e um `agora`, e devolve rótulos e valores já
@@ -342,16 +378,18 @@ A rota envia cabeçalho `noindex` para não aparecer em buscador.
 
 Três faixas, sem rolagem, ocupando 3840×2160:
 
-1. **Big numbers** — imóveis vendidos, VGV total, avaliações Google.
+1. **Faixa superior** — alterna entre a **Tela A** (imóveis vendidos, VGV total,
+   avaliações Google) e a **Tela B** (propostas em andamento e reservas de locação).
 2. **Faixa de VGV** — anual, trimestral e mensal lado a lado.
 3. **Base** — quadro "mensal geral" à esquerda (7 métricas) e os três quadros de equipe à direita.
 
-> Aprovado para a v1, **ainda não implementado** (DEC-056, fatia E4): a faixa
-> superior passa a alternar entre duas telas de 20 segundos — a **Tela A** acima,
-> preservada, e a **Tela B** com duas listas operacionais: "Propostas em andamento"
-> (até 3 propostas `AGUARDANDO`) e "Reservas de locação" (até 3 reservas `ATIVA`),
-> mais recentes primeiro, imóvel + corretor. Lista vazia mostra "Nenhuma proposta em
-> andamento" / "Nenhuma reserva ativa", nunca `0`.
+> **Implementado na E4** (`c24a0c9`, DEC-056): a faixa superior alterna entre duas
+> telas de 20 segundos — a **Tela A**, preservada, e a **Tela B** com duas listas
+> operacionais: "Propostas em andamento" (até 3 propostas `AGUARDANDO`) e "Reservas de
+> locação" (até 3 reservas `ATIVA`), mais recentes primeiro, imóvel + corretor. Lista
+> vazia mostra "Nenhuma proposta em andamento" / "Nenhuma reserva ativa", nunca `0`. A
+> faixa tem altura estrutural fixa em `11.6cqw`, igual nas duas telas, para a rotação
+> não deslocar o que está abaixo dela.
 
 Comportamentos: atualização dos dados a cada 60 segundos sem recarregar a página, e
 reconexão automática se a internet cair (mantém o último valor na tela em vez de zerar).
@@ -569,8 +607,8 @@ locação e a faixa superior alternando entre métricas e destaques operacionais
 | E1 | contratos e modelo de dados | **concluída** — `078f360`, sem código |
 | E2 | migration **aditiva** + admin de propostas, saldo e reservas | **concluída** — `c6464b5` + `fe00fd2` + `18a6599` |
 | E3 | venda compartilhada + métricas + **cutover final** | **concluída** — `2a50965` |
-| E4 | painel operacional A/B e novos estados | **próxima** |
-| E5 | gate completo | futura |
+| E4 | painel operacional A/B e novos estados | **concluída** — `c24a0c9` |
+| E5 | gate completo | **próxima** |
 | E6 | go-live no Render + smoke test | futura |
 
 A E2 saiu em três fatias: **E2A** (`c6464b5`) — enums, campos de proposta, precisão do
@@ -582,7 +620,12 @@ locação.
 A **E3** saiu como uma **unidade atômica** (`2a50965`): schema, migration de cutover,
 núcleo de métricas, leitura Prisma, administração de venda compartilhada e testes no
 mesmo commit — publicar qualquer metade deixaria runtime e banco em contratos
-diferentes. **Nenhuma das quatro publicações aplicou migration em produção.**
+diferentes.
+
+A **E4** (`c24a0c9`) foi inteiramente de apresentação: 23 caminhos, **sem schema e sem
+migration**. Ela entregou a rotação A/B da faixa superior, as duas listas operacionais,
+o "+ de" dos acumulados e a extensão do contrato de atualização e da retenção para
+transportar as listas. **Nenhuma das cinco publicações aplicou migration em produção.**
 
 A decisão de infraestrutura/plano de produção é do E6 — nada de Render é configurado
 antes. Depois do E6, retoma-se a **F4.5**.
