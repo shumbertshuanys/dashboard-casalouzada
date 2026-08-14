@@ -1246,11 +1246,12 @@ A sintaxe SQL exata é decisão da fatia que o instala, conforme os nomes reais 
 enum e colunas — o que está fixado aqui é o contrato. As FKs atuais continuam
 `Restrict` quando os campos estão preenchidos.
 
-**Sequenciamento — E2 aditiva, E3 cutover.** O código de métricas em produção lê
+**Sequenciamento — E2 aditiva, E3 cutover.** *Plano executado: E2 em `c6464b5`,
+`fe00fd2` e `18a6599`; E3 em `2a50965`.* O código de métricas de então lia
 `Lancamento.corretorId`/`equipeId`; zerá-los antes de a camada de cálculo consumir
-participações quebraria o painel. Por isso o corte é dividido, e a **representação
-dupla durante a transição é temporária e controlada** — a proibição acima vale para
-o estado final permanente, não para a janela entre E2 e E3.
+participações quebraria o painel. Por isso o corte foi dividido, e a **representação
+dupla durante a transição foi temporária e controlada** — a proibição acima vale para
+o estado final permanente, não para a janela entre E2 e E3, que já se fechou.
 
 **E2 — aditiva, sem cutover:**
 
@@ -1298,17 +1299,26 @@ snapshot.
 
 **Fonte.** Decisão do proprietário em 2026-08-14; `PLANO.md` §3.
 
-**Estado de implementação.** A **E2A está implementada em `c6464b5`**: a tabela
-`ParticipacaoVenda` existe com as duas unicidades e as FKs (`Cascade` para o
-lançamento, `Restrict` para corretor e equipe), e o backfill inicial gravou uma
-participação `ordem = 1` por VENDA existente, com cobertura provada em integração.
+**Estado de implementação.** **IMPLEMENTADA.** A estrutura veio na **E2A**
+(`c6464b5`): `ParticipacaoVenda` com as duas unicidades e as FKs (`Cascade` para o
+lançamento, `Restrict` para corretor e equipe), mais o backfill inicial de uma
+participação `ordem = 1` por VENDA existente. O **cutover saiu na E3** (`2a50965`),
+como publicação atômica — schema, migration, núcleo, leitura, admin e testes no mesmo
+commit.
 
-**Mas a decisão não está implementada como um todo.** `Lancamento.corretorId` e
-`Lancamento.equipeId` continuam **`NOT NULL`**, preenchidos, e são **a fonte
-executável** do crédito de venda; não existe UI multi-participante; o `CHECK` final
-acima **não** foi instalado; nenhum campo de VENDA foi zerado. Os passos 5 a 10 do
-cutover permanecem na **E3**.
-**parcialmente implementada — estrutura e backfill na E2A (`c6464b5`); cutover na E3**
+No estado atual: `ParticipacaoVenda` é a **única fonte** do crédito de VENDA;
+`Lancamento.corretorId` e `equipeId` são `NULL` em toda venda e obrigatórios nos demais
+tipos, com o `CHECK lancamentos_venda_credito_check` garantindo os dois lados; a
+administração grava lançamento e participações **na mesma transação**, de modo que
+nenhuma venda observável fica sem elenco; e cada participação carrega o snapshot
+histórico da equipe, que a edição nunca rederiva.
+
+**Identidade das participações.** Numa edição, o participante que permanece continua
+sendo **a mesma `ParticipacaoVenda`**: `id`, `corretorId`, `equipeId` e `criadoEm`
+atravessam intactos, e só a `ordem` muda pela recompactação. O identificador nunca vem
+do cliente — a action cruza o `corretorId` submetido com as participações que releu da
+própria venda.
+**implementada — estrutura na E2A (`c6464b5`); cutover na E3 (`2a50965`)**
 
 ### DEC-052 — Crédito e VGV da venda compartilhada
 
@@ -1354,11 +1364,25 @@ R$ 900.000 com participantes A e B da equipe X e C da equipe Y (empresa: 1 venda
 R$ 900 mil; cada corretor: 1 venda e R$ 300 mil; equipe X: 1 venda e R$ 600 mil;
 equipe Y: 1 venda e R$ 300 mil).
 
-**Estado de implementação.** **Pendente.** A E2 criou o modelo onde esse crédito vai
-morar (`c6464b5`), mas a divisão igualitária, o crédito por participante e por equipe e
-o elenco derivado de participações **não existem em código**: `src/lib/metricas.ts`
-continua creditando venda por `Lancamento.corretorId`/`equipeId`.
-**invariante futura — cálculo na E3, sobre o modelo da E2**
+**Estado de implementação.** **IMPLEMENTADA na E3** (`2a50965`), em
+`src/lib/metricas.ts`. A empresa conta a venda e o valor **uma vez**, qualquer que seja
+o elenco; cada participante recebe +1 vendido e a sua fração igualitária; cada equipe
+recebe a soma das frações dos seus participantes, e a soma de todas fecha exatamente o
+valor. O elenco mensal (DEC-038) passou a considerar as participações: um participante
+ativo entra no quadro da equipe da **participação**, mesmo lotado hoje em outra.
+
+A divisão é inteira em centavos `bigint`; os centavos residuais vão para os primeiros
+por **`ParticipacaoVenda.ordem` crescente** — nunca pela ordem incidental do array, já
+que tudo é indexado pela própria `ordem`. `R$ 100,00` entre três dá
+`33,34 / 33,33 / 33,33`. A fração continua **não persistida**: deriva de
+(valor, N, ordem) no núcleo, toda vez.
+
+**Regra de ordem aprovada pelo proprietário em 2026-08-14, e implementada:** na
+criação, a `ordem` é a posição do participante no formulário; na edição, os que
+permanecem mantêm a ordem **relativa**, o participante novo entra **ao final**, e a
+remoção **recompacta** para `1..N` preservando a relativa dos remanescentes. Não há
+reordenação manual na v1 — sem arrastar, sem subir/descer, sem campo de ordem.
+**implementada na E3 (`2a50965`)**
 
 ### DEC-053 — Proposta tem status e valor próprios, fora do VGV
 
@@ -1533,8 +1557,8 @@ Ordem de entrega aprovada:
 |---|---|
 | E1 | contratos e modelo de dados — **concluída em `078f360`** |
 | E2 | migration **aditiva** + administração de propostas, saldo e reservas — **concluída em `c6464b5`, `fe00fd2` e `18a6599`** |
-| E3 | venda compartilhada + métricas + **cutover final** (DEC-051) — **próxima** |
-| E4 | painel operacional A/B e apresentação dos novos estados |
+| E3 | venda compartilhada + métricas + **cutover final** (DEC-051) — **concluída em `2a50965`** |
+| E4 | painel operacional A/B e apresentação dos novos estados — **próxima** |
 | E5 | gate completo |
 | E6 | go-live no Render + smoke test |
 

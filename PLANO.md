@@ -20,25 +20,33 @@ compartilhada, propostas com status, saldo mínimo conhecido, reservas de locaç
 faixa superior alternada —, gate completo e go-live provisório no Render. Depois da
 entrega, a F4.5 é retomada.
 
-A **E1 — contratos, documental — está concluída** (`078f360`), e a **E2 está
-concluída e publicada** em três commits: **`c6464b5`** (E2A — schema e migration
-aditiva com backfills), **`fe00fd2`** (E2B — administração de propostas e precisão do
-saldo) e **`18a6599`** (E2C — administração de reservas de locação). A **E3 é a
-próxima etapa**.
+A **E1 — contratos, documental — está concluída** (`078f360`); a **E2 está concluída**
+em três commits — **`c6464b5`** (E2A — schema e migration aditiva com backfills),
+**`fe00fd2`** (E2B — administração de propostas e precisão do saldo) e **`18a6599`**
+(E2C — administração de reservas de locação); e a **E3 está concluída e publicada** em
+**`2a50965`**, que fechou o cutover da venda compartilhada. A **E4 é a próxima etapa**.
 
-### Estado transitório da VENDA
+### Estado final da VENDA (E3, `2a50965`)
 
-A E2 criou `ParticipacaoVenda` e fez o backfill inicial, mas **a venda compartilhada
-não está pronta**. Hoje, e até o cutover da E3:
+O cutover foi executado e a dualidade que a E2 deixou aberta acabou. Hoje:
 
-- `Lancamento.corretorId` e `Lancamento.equipeId` continuam **`NOT NULL`**;
-- toda `VENDA` continua com os dois campos preenchidos;
-- o código executável e as métricas continuam creditando venda por esses campos;
-- **não existe UI de venda com múltiplos participantes**;
-- **não existe divisão igualitária de VGV em execução** (DEC-052);
-- o **CHECK final da DEC-051 não foi instalado**, e nenhum campo de VENDA foi zerado.
-
-Tudo isso é da **E3**.
+- `Lancamento.corretorId` e `Lancamento.equipeId` são **`NULL`** em toda `VENDA`, e o
+  crédito mora **exclusivamente** em `ParticipacaoVenda` (DEC-051);
+- os tipos não-VENDA continuam com os dois campos obrigatórios e nunca usam
+  participações; o `CHECK lancamentos_venda_credito_check` garante os dois lados;
+- a administração registra **venda com N participantes**, em transação: nenhuma venda
+  observável fica sem elenco;
+- o VGV é dividido em **partes iguais e exatas**, em centavos `bigint`, com os
+  centavos residuais distribuídos por `ordem` crescente (DEC-052) — a empresa conta a
+  venda e o valor **uma vez**, cada participante recebe +1 e a sua fração, e cada
+  equipe recebe a soma das frações dos seus participantes;
+- cada participação carrega o **snapshot histórico** da equipe, que a edição nunca
+  rederiva;
+- a `ordem` é contígua `1..N`: sai da posição no formulário na criação, preserva a
+  relativa na edição, o participante novo entra ao final e a remoção recompacta. Não
+  há reordenação manual na v1;
+- os filtros administrativos de corretor e equipe casam pelas participações; quando
+  combinados, exigem que **a mesma** participação satisfaça os dois.
 
 Desde a F3.5 a tela da TV está ligada, e desde a F3.6 ela se mantém sozinha:
 `/painel/[token]` valida o token e, só então, faz a leitura inicial no servidor —
@@ -136,14 +144,14 @@ Entra apenas nos big numbers acumulados. Nunca nos períodos.
 > recebem saldo, e existe no máximo uma linha por tipo, garantida por índice
 > único. Ver DEC-035.
 
-### Estrutura da Entrega v1 — implantada na E2, cutover pendente na E3
+### Estrutura da Entrega v1 — implantada
 
 Modelo aprovado em 2026-08-14 (DEC-051 a DEC-055). **As quatro estruturas abaixo
-existem no schema e no banco local de teste desde a E2** (`c6464b5`, `fe00fd2`,
-`18a6599`); o que continua pendente está marcado em cada bloco, e o cutover da VENDA é
-da E3.
+existem no schema e no banco local de teste** desde a E2 (`c6464b5`, `fe00fd2`,
+`18a6599`), e o cutover da VENDA foi concluído na E3 (`2a50965`). O que ainda depende
+da apresentação na TV está marcado em cada bloco.
 
-#### `participacoes_venda` (DEC-051) — **existe; cutover na E3**
+#### `participacoes_venda` (DEC-051) — **fonte única do crédito de VENDA**
 
 Uma venda comercial continua sendo **um** lançamento `VENDA`; o crédito passa para
 cá, um registro por corretor participante.
@@ -160,30 +168,23 @@ cá, um registro por corretor participante.
 `UNIQUE (lancamento_id, corretor_id)` e `UNIQUE (lancamento_id, ordem)`. Toda VENDA
 tem pelo menos uma participação (garantido por transação na aplicação).
 
-**Estado real (E2A, `c6464b5`).** Tabela criada com as duas unicidades e as FKs
-(`Cascade` para o lançamento, `Restrict` para corretor e equipe); o backfill inicial
-gravou **uma participação `ordem = 1` por VENDA existente**, com cobertura provada. O
-estado final ainda depende da E3.
+**Estado real.** A tabela nasceu na E2A (`c6464b5`) com as duas unicidades e as FKs
+(`Cascade` para o lançamento, `Restrict` para corretor e equipe), e o backfill inicial
+gravou uma participação `ordem = 1` por VENDA existente. O **cutover da E3**
+(`2a50965`) completou as vendas criadas na janela entre as duas etapas, provou
+cobertura integral, tornou `corretor_id`/`equipe_id` anuláveis, gravou `NULL` em toda
+VENDA e instalou o `CHECK lancamentos_venda_credito_check` —
+`(tipo = 'VENDA' AND ambos NULL) OR (tipo <> 'VENDA' AND ambos NOT NULL)`. A
+informação histórica só saiu dos campos antigos **depois** de materializada na
+participação: nenhuma venda mudou de dono ou de equipe.
 
-**Contrato excludente no estado final:** depois do **cutover da E3**, toda `VENDA`
-fica com `Lancamento.corretorId = NULL` e `Lancamento.equipeId = NULL` — o crédito
-mora exclusivamente nas participações; os tipos não-VENDA continuam exigindo os dois
-campos e nunca usam participações. O cutover protege isso com um CHECK
-semanticamente equivalente a `(tipo = 'VENDA' AND ambos NULL) OR (tipo <> 'VENDA'
-AND ambos NOT NULL)`.
-
-**Sequenciamento (DEC-051):** a **E2 é aditiva** — cria a estrutura, faz o backfill
-inicial (uma participação `ordem = 1` por VENDA existente) e o prova, mas **mantém**
-os campos antigos `NOT NULL`, preenchidos e como fonte executável, sem o CHECK final
-e **sem UI de múltiplos participantes**, porque a métrica ainda não sabe
-interpretá-los. A **E3 faz o cutover atômico**: completa idempotentemente a
-participação de qualquer VENDA criada entre E2 e E3, prova cobertura integral,
-adapta aplicação e métricas, torna os campos nullable, grava `NULL` nas VENDA e
-valida o CHECK. A dualidade da transição é temporária e controlada; o histórico só
-sai dos campos antigos depois de materializado na participação. Crédito e divisão de
-VGV: DEC-052 — empresa conta a venda e o valor uma vez; cada participante recebe +1
-e sua fração igualitária exata; cada equipe distinta recebe +1 e a soma das frações
-dos seus participantes.
+**Crédito e divisão (DEC-052), em execução desde a E3:** a empresa conta a venda e o
+valor **uma vez**, qualquer que seja o elenco; cada participante recebe +1 vendido e a
+sua fração igualitária; cada equipe distinta recebe a soma das frações dos seus
+participantes, e a soma de todas fecha exatamente o valor da venda. A divisão é
+inteira em centavos `bigint`, e os centavos residuais vão para os primeiros por
+`ordem` crescente — `R$ 100,00` entre três dá `33,34 / 33,33 / 33,33`. A fração não é
+persistida: deriva de (valor, N, ordem) no núcleo, toda vez.
 
 #### `lancamentos` — campos de proposta (DEC-053) — **implementado**
 
@@ -567,8 +568,8 @@ locação e a faixa superior alternando entre métricas e destaques operacionais
 |---|---|---|
 | E1 | contratos e modelo de dados | **concluída** — `078f360`, sem código |
 | E2 | migration **aditiva** + admin de propostas, saldo e reservas | **concluída** — `c6464b5` + `fe00fd2` + `18a6599` |
-| E3 | venda compartilhada + métricas + **cutover final** | **próxima** |
-| E4 | painel operacional A/B e novos estados | futura |
+| E3 | venda compartilhada + métricas + **cutover final** | **concluída** — `2a50965` |
+| E4 | painel operacional A/B e novos estados | **próxima** |
 | E5 | gate completo | futura |
 | E6 | go-live no Render + smoke test | futura |
 
@@ -576,7 +577,12 @@ A E2 saiu em três fatias: **E2A** (`c6464b5`) — enums, campos de proposta, pr
 saldo, `ParticipacaoVenda`, `ReservaLocacao`, migration aditiva e backfills, sem
 cutover; **E2B** (`fe00fd2`) — administração de propostas e precisão do saldo, mais o
 `CHECK` de integridade da proposta; **E2C** (`18a6599`) — administração de reservas de
-locação. Nenhuma das três aplicou migration em produção.
+locação.
+
+A **E3** saiu como uma **unidade atômica** (`2a50965`): schema, migration de cutover,
+núcleo de métricas, leitura Prisma, administração de venda compartilhada e testes no
+mesmo commit — publicar qualquer metade deixaria runtime e banco em contratos
+diferentes. **Nenhuma das quatro publicações aplicou migration em produção.**
 
 A decisão de infraestrutura/plano de produção é do E6 — nada de Render é configurado
 antes. Depois do E6, retoma-se a **F4.5**.

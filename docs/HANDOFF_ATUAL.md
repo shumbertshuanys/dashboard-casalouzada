@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `18a659995c8d967c6663b43fab991ffd01ca6a2a` — `feat: adiciona admin de reservas de locacao` |
+| Commit de referência | `2a50965394d2c477da1fad897750d2a0b4bdc388` — `feat: adiciona venda compartilhada e conclui cutover` |
 | Data do handoff | 2026-08-14 |
 
 ## Estado executivo
@@ -140,10 +140,33 @@ criação e edição, e o `CHECK` de integridade da proposta na migration
 `ATIVA`, snapshot de equipe lido pelo servidor, edição de status entre os três
 estados, **sem hard delete** e **sem `LOCACAO` automática**.
 
-A **próxima etapa é a E3 — venda compartilhada + métricas + cutover final**, que
-**não** foi iniciada. O cutover da venda compartilhada é dela (DEC-051): a E2 não zerou
-campo nenhum e não expõe venda multi-participante — `Lancamento.corretorId` e
-`equipeId` continuam `NOT NULL`, preenchidos e como fonte executável das métricas.
+A **E3 — venda compartilhada + métricas + cutover final — está CONCLUÍDA E PUBLICADA**
+em **`2a50965`**, numa unidade atômica: schema, migration, núcleo, leitura Prisma,
+administração e testes no mesmo commit.
+
+**Schema e banco.** `Lancamento.corretorId` e `equipeId` passaram a `String?`, com as
+relações opcionais e `onDelete: Restrict` preservado. A migration
+`20260814230000_cutover_venda_compartilhada` (SHA-256
+`3E2B1B498E7FCB60554F0289177ED260492DF842CCE20CB2F54C7F06CA44A17F`) fez, nesta ordem:
+backfill **idempotente** das vendas criadas entre a E2A e a E3, prova pré-cutover que
+aborta se faltar cobertura ou se a ordem não for contígua `1..N`, `DROP NOT NULL`,
+`UPDATE … WHERE tipo='VENDA'`, instalação do `CHECK lancamentos_venda_credito_check` e
+prova pós-cutover — que confere também a sobrevivência do CHECK de proposta da E2B.
+
+**Crédito.** `ParticipacaoVenda` é a **única fonte** do crédito de VENDA. A empresa
+conta a venda e o valor uma vez; cada participante recebe +1 e a sua fração
+igualitária; cada equipe recebe a soma das frações dos seus participantes.
+
+**Administração.** A venda passou a ser multi-participante, gravada em transação. Os
+snapshots de equipe são preservados na edição — um participante que permanece continua
+sendo **a mesma `ParticipacaoVenda`**: mesmo `id`, mesmo `equipeId`, mesmo `criadoEm`;
+só a `ordem` muda, pela recompactação. Participante novo entra ao final com a equipe
+atual validada pelo servidor; a remoção recompacta `1..N`; não há reordenação manual.
+Os filtros de corretor e equipe casam pelas participações e, combinados, exigem que a
+mesma participação satisfaça os dois.
+
+A **próxima etapa é a E4 — painel operacional A/B e novos estados**, que **não** foi
+iniciada.
 
 ## Fases
 
@@ -178,8 +201,8 @@ campo nenhum e não expõe venda multi-participante — `Lancamento.corretorId` 
 | E2B — Admin de propostas + precisão do saldo | **Concluída** | `fe00fd2` — inclui o CHECK da proposta |
 | E2C — Admin de reservas de locação | **Concluída** | `18a6599` |
 | **E2 — Migration aditiva + admin (propostas, saldo, reservas)** | **Concluída** | `c6464b5` + `fe00fd2` + `18a6599` |
-| E3 — Venda compartilhada + métricas + cutover final | **Próxima** | não iniciada |
-| E4 — Painel operacional A/B e novos estados | **Futura** | — |
+| E3 — Venda compartilhada + métricas + cutover final | **Concluída** | `2a50965` — publicação atômica |
+| E4 — Painel operacional A/B e novos estados | **Próxima** | não iniciada |
 | E5 — Gate completo | **Futura** | — |
 | E6 — Go-live no Render + smoke test | **Futura** | — |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
@@ -401,7 +424,7 @@ criada na F3.6 ao lado da página que a consome.
 
 ## Migrations
 
-Quatro migrations versionadas:
+Cinco migrations versionadas:
 
 1. `20260811014943_inicial` — cinco tabelas e o enum `tipo_lancamento`.
 2. `20260812120000_saldo_historico_tipo_unico` — troca o índice simples de
@@ -421,15 +444,31 @@ Quatro migrations versionadas:
    `NULL` e `valor_proposta` positivo quando presente; nos demais tipos, os dois
    campos de proposta `NULL`. **De propósito não exige `imovel_ref`** — a proposta
    legada sem imóvel continua válida (DEC-053).
+5. `20260814230000_cutover_venda_compartilhada` (E3, `2a50965`) — o **cutover**
+   (DEC-051). SHA-256
+   `3E2B1B498E7FCB60554F0289177ED260492DF842CCE20CB2F54C7F06CA44A17F`. Em seis blocos,
+   nesta ordem: **A)** backfill idempotente das VENDA criadas entre a E2A e a E3, com
+   `id` determinístico e `criado_em` do lançamento, e só onde não existe participação
+   nenhuma; **B)** prova pré-cutover — aborta a migration inteira se sobrar VENDA sem
+   participação ou se a ordem de alguma venda não for contígua `1..N` (verificado por
+   `MIN = 1`, `MAX = COUNT` e `COUNT(DISTINCT) = COUNT`); **C)** `DROP NOT NULL` nas
+   duas colunas; **D)** `UPDATE … SET NULL WHERE tipo = 'VENDA'`; **E)** o `CHECK`
+   `lancamentos_venda_credito_check`; **F)** prova pós-cutover — zero VENDA com crédito
+   antigo, zero não-VENDA sem crédito, zero VENDA sem participação, e o `CHECK` de
+   proposta da E2B ainda presente. Nenhuma migration anterior foi editada.
 
 > **Estado de produção.** A migration `20260812120000_saldo_historico_tipo_unico` foi
 > testada e aplicada somente no `casalouzada_test`, e **não há evidência de aplicação
-> em produção**. As migrations da E2A e da E2B foram igualmente aplicadas e testadas
-> **apenas no banco local de teste**; **nenhuma migration remota foi executada** nas
-> publicações da E2 — nem em Supabase, nem em qualquer outro ambiente. Publicar no Git
-> **não é** aplicar em produção. Portanto, antes do go-live (E6), existe **gate
-> operacional de migrations de produção** para as três: `20260812120000`,
-> `20260814150000` e `20260814210000`. Ver Pendências.
+> em produção**. As migrations da E2A, da E2B e a do cutover da E3 foram igualmente
+> aplicadas e testadas **apenas no banco local de teste**; **nenhuma migration remota
+> foi executada** em nenhuma das quatro publicações — nem em Supabase, nem em qualquer
+> outro ambiente. Publicar no Git **não é** aplicar em produção. Portanto, antes do
+> go-live (E6), existe **gate operacional de migrations de produção** para as quatro,
+> nesta ordem: `20260812120000_saldo_historico_tipo_unico`,
+> `20260814150000_entrega_v1_aditiva`, `20260814210000_contrato_proposta` e
+> `20260814230000_cutover_venda_compartilhada`. A última é especialmente sensível: ela
+> zera colunas, e o runtime que a acompanha exige o estado novo — migration e deploy do
+> mesmo commit têm de ir na mesma janela. Ver Pendências.
 
 ## Testes
 
@@ -720,9 +759,10 @@ sozinha. O que continua não existindo:
 | Comportamento offline de navegação | **existe** — Service Worker e tela institucional, sem guardar números (DEC-048) | F4.4 feita |
 | Persistência de métricas em disco | ausente **por decisão** (DEC-048) | — |
 | `ParticipacaoVenda` — tabela, unicidades e backfill inicial | **existe** — E2A (`c6464b5`) | E2 feita |
-| Crédito compartilhado em execução (divisão de VGV, DEC-052) | ausente — a fonte executável ainda é `Lancamento.corretorId`/`equipeId` | E3 |
-| UI de venda com múltiplos participantes | ausente | E3 |
-| Cutover da VENDA (campos nullable, `NULL`, CHECK da DEC-051) | ausente — nenhum campo foi zerado | E3 |
+| Crédito compartilhado em execução (divisão de VGV, DEC-052) | **existe** — fração igualitária em centavos, residual por `ordem` | E3 feita |
+| UI de venda com múltiplos participantes | **existe** — elenco na criação e na edição | E3 feita |
+| Cutover da VENDA (campos nullable, `NULL`, CHECK da DEC-051) | **concluído** — `lancamentos_venda_credito_check` instalado | E3 feita |
+| `ParticipacaoVenda` como fonte executável do crédito | **existe** — é a única, desde `2a50965` | E3 feita |
 | Status e valor de proposta — modelo e administração | **existem** — E2A + E2B (`fe00fd2`), com CHECK de integridade | E2 feita |
 | Lista operacional de propostas `AGUARDANDO` na TV | ausente (DEC-053, DEC-056) | E4 |
 | Precisão do saldo histórico — modelo e administração | **existem** — `EXATO` / `MINIMO_CONHECIDO` (E2A + E2B) | E2 feita |
@@ -1442,11 +1482,13 @@ Aprovada pelo proprietário em **2026-08-14** e registrada nas **DEC-051 a DEC-0
 `saldo_historico.precisao`, com os backfills feitos; a administração de propostas,
 precisão de saldo e reservas de locação está no ar.
 
-**O que continua pendente:** o núcleo de métricas ainda credita venda por
-`Lancamento.corretorId`/`equipeId` — a divisão igualitária da DEC-052 não está em
-execução e não há UI multi-participante (E3) —, e a faixa superior do painel continua
-estática, sem "+ de", sem lista de propostas `AGUARDANDO` e sem lista de reservas
-`ATIVA` (E4).
+**O que a E3 implantou (`2a50965`):** o cutover da venda compartilhada. O núcleo credita
+venda por `ParticipacaoVenda`, com divisão igualitária exata em centavos; a
+administração registra venda com N participantes; e o banco protege o estado final com
+o `CHECK lancamentos_venda_credito_check`.
+
+**O que continua pendente:** a faixa superior do painel continua estática — sem "+ de",
+sem lista de propostas `AGUARDANDO` e sem lista de reservas `ATIVA` (E4).
 
 ### Baseline do fechamento da E2
 
@@ -1478,6 +1520,40 @@ As três fatias da E2 foram publicadas em `c6464b5`, `fe00fd2` e `18a6599`; os
 baselines intermediários de E2A e E2B não são repetidos aqui — o que vale como
 snapshot do fechamento é a tabela acima.
 
+### Baseline do fechamento da E3
+
+Medido sobre a árvore que veio a ser publicada em `2a50965`, **antes** do commit. A
+publicação **não** reexecutou suíte nenhuma: ela publicou os **mesmos bytes
+auditados**, o que os SHA-256 dos 21 caminhos comprovaram um a um.
+
+| Comando | Resultado verificado |
+|---|---|
+| `npx prisma validate` | exit 0 |
+| `npx prisma generate` | exit 0 |
+| `npm test` | 545 testes, 144 suítes, 0 falhas |
+| `npm run test:fusos` | 545/545 em `UTC`, `America/Sao_Paulo` e `Asia/Tokyo` |
+| `npm run test:integracao` | 156 testes, 51 suítes, 0 falhas |
+| `npm run test:integracao:painel` | 39 testes, 13 suítes, 0 falhas |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `tsx scripts/banco-teste.ts npm run build` | exit 0, 23 rotas |
+| `git diff --check` | exit 0 |
+
+**Estabilidade:** depois do gate, `npm run test:integracao` rodou **mais três vezes
+consecutivas**, sem alteração de árvore entre elas — 156/51/0 nas três.
+
+**Prova de data migration E2→E3: 12/12**, no banco local. Cenário montado no estado E2
+(venda antiga com participação, venda da janela **sem** participação, captação e
+proposta válida sob o CHECK da E2B), migration aplicada, e então: zero VENDA sem
+participação; a participação antiga preservada; a da janela criada com `ordem = 1`,
+snapshot copiado e carimbo do lançamento; toda VENDA com os campos antigos `NULL`; todo
+não-VENDA com eles preenchidos; `CHECK` final presente; recusa de VENDA com crédito
+antigo e de não-VENDA sem crédito; `CHECK` de proposta ainda ativo; uniques e FKs de
+`participacoes_venda` funcionando; e `Cascade` no delete.
+
+**Fresh install:** `migrate reset --force` aplicou as **cinco** migrations do zero,
+exit 0, seguido de `db seed` OK.
+
 ### Venda compartilhada (DEC-051, DEC-052)
 
 - **Uma venda comercial = um lançamento `VENDA`**, sempre — nunca uma linha por
@@ -1500,18 +1576,20 @@ snapshot do fechamento é a tabela acima.
   Foram rejeitados o espelhamento do participante de ordem 1 nos campos antigos e a
   permanência **permanente** dos valores legados (duas representações permanentes do
   mesmo crédito divergem), além das participações genéricas para todos os tipos.
-- **Sequenciamento E2 aditiva → E3 cutover (DEC-051).** O código atual de métricas
-  lê os campos do lançamento; zerá-los antes de a camada de cálculo consumir
-  participações quebraria o painel. A **E2** cria a estrutura, faz o **backfill
-  inicial** (uma participação `ordem = 1` por VENDA existente) e o prova, mas
-  **mantém** os campos antigos `NOT NULL`, preenchidos e como fonte executável — sem
-  o `CHECK` final e **sem UI de múltiplos participantes**. A **E3** faz o cutover
-  atômico: completa idempotentemente a participação de qualquer VENDA criada entre
-  E2 e E3, **prova cobertura integral**, adapta aplicação e métricas, torna os
-  campos nullable, grava `NULL` em todas as VENDA e valida o `CHECK`. A dualidade da
-  transição é **temporária e controlada**; o histórico só sai dos campos antigos
-  depois de materializado na participação — nenhuma venda some ou muda de equipe, e
-  nenhum resíduo permanece no estado final.
+- **Sequenciamento E2 aditiva → E3 cutover (DEC-051).** *Plano aprovado na E1 e
+  **executado por inteiro**: a E2 saiu em `c6464b5`/`fe00fd2`/`18a6599` e a E3 em
+  `2a50965`.* O motivo do corte em duas etapas era que o código de métricas de então
+  lia os campos do lançamento, e zerá-los antes de a camada de cálculo consumir
+  participações quebraria o painel. A **E2** criou a estrutura, fez o **backfill
+  inicial** (uma participação `ordem = 1` por VENDA existente) e o provou, mas
+  **manteve** os campos antigos `NOT NULL`, preenchidos e como fonte executável — sem
+  o `CHECK` final e **sem UI de múltiplos participantes**. A **E3** fez o cutover
+  atômico: completou idempotentemente a participação de qualquer VENDA criada entre
+  E2 e E3, **provou cobertura integral**, adaptou aplicação e métricas, tornou os
+  campos nullable, gravou `NULL` em todas as VENDA e validou o `CHECK`. A dualidade da
+  transição foi **temporária e controlada**; o histórico só saiu dos campos antigos
+  depois de materializado na participação — nenhuma venda sumiu ou mudou de equipe, e
+  nenhum resíduo permaneceu no estado final.
 - **Contagem:** empresa soma **+1 venda e o valor integral uma única vez**; cada
   participante recebe **+1 vendido e sua fração igualitária**; cada **equipe
   distinta** nas participações recebe **+1 vendido** e o VGV igual à **soma das
@@ -1574,9 +1652,10 @@ são regra de domínio e moram no núcleo (DEC-013); o contrato de leitura/atual
 da F3.6 (DEC-044 a DEC-046) será estendido para transportar as listas — desenho na
 E3/E4.
 
-### Incompatibilidades mapeadas — o que a E2 resolveu e o que resta
+### Incompatibilidades mapeadas — o que a E2 e a E3 resolveram e o que resta
 
-Levantamento arquivo por arquivo feito na E1, atualizado pelo que a E2 publicou:
+Levantamento arquivo por arquivo feito na E1, atualizado pelo que a E2 e a E3
+publicaram:
 
 **Resolvido pela E2:**
 
@@ -1591,19 +1670,23 @@ Levantamento arquivo por arquivo feito na E1, atualizado pelo que a E2 publicou:
 - `src/app/admin/reservas-locacao/*` — administração completa das reservas
   (`18a6599`).
 
+**Resolvido pela E3 (`2a50965`):**
+
+- `prisma/schema.prisma` — `Lancamento.corretorId`/`equipeId` são `String?`, com
+  relações opcionais, e o `CHECK` final da DEC-051 está instalado;
+- `src/lib/metricas.ts` — `LancamentoMetrica` é união discriminada
+  (`VendaMetrica | EventoIndividualMetrica`); a venda não tem `corretorId`/`equipeId`,
+  o crédito sai das participações e a divisão de frações existe;
+- `src/lib/metricas-prisma.ts` — lê as participações aninhadas no próprio `findMany`
+  de lançamentos e exige o contrato final dos dois lados;
+- `src/lib/validacao/lancamento.ts` e `src/app/admin/lancamentos/*` — a venda passou a
+  ser multi-participante; o fluxo Q7 permanece intocado para os tipos de participante
+  único, em `src/lib/lancamento-equipe.ts`.
+
 **Continua pendente:**
 
-- `prisma/schema.prisma` — `Lancamento.corretorId`/`equipeId` ainda são `NOT NULL` e
-  não há o CHECK final da DEC-051 (E3);
-- `src/lib/validacao/lancamento.ts` e `src/app/admin/lancamentos/*` — ainda assumem
-  **um** corretor por evento; a edição resolve equipe pelo fluxo Q7, que permanece
-  para os tipos de participante único (E3);
-- `src/lib/metricas.ts` — `LancamentoMetrica` carrega um `corretorId`/`equipeId`;
-  rankings e elenco (DEC-038) creditam pelo lançamento; a divisão de frações não
-  existe (E3);
-- `src/lib/metricas-prisma.ts` / `leitura-painel.ts` /
-  `contrato-atualizacao-painel.ts` / `retencao-painel.ts` — não leem participações,
-  reservas nem listas operacionais (E3/E4);
+- `leitura-painel.ts` / `contrato-atualizacao-painel.ts` / `retencao-painel.ts` — não
+  transportam as listas operacionais da Tela B (E4);
 - `src/lib/apresentacao-painel.ts` — não conhece "+ de" nem as listas da Tela B (E4);
 - `src/components/painel/*` — faixa superior estática, sem rotação A/B (E4).
 
@@ -1612,26 +1695,29 @@ Levantamento arquivo por arquivo feito na E1, atualizado pelo que a E2 publicou:
 E1 (contratos, **concluída em `078f360`**) → E2 (migration **aditiva** + admin de
 propostas, saldo e reservas — sem cutover de VENDA; **concluída em `c6464b5`,
 `fe00fd2` e `18a6599`**) → E3 (venda compartilhada + métricas + **cutover final** —
-**próxima, não iniciada**) → E4 (painel A/B e novos estados) → E5 (gate completo)
-→ E6 (go-live no Render + smoke test). O go-live provisório precede a F4.5;
-plano/infraestrutura de produção se decide no E6, e nada de Render foi configurado.
-Depois do E6, retoma-se a F4.5. F5 não está iniciada. Se o transporte de
-precisão/listas para o painel exigir preparação já na E3, a dependência é registrada
-lá — o desenho visual continua sendo da E4.
+**concluída em `2a50965`**) → E4 (painel A/B e novos estados — **próxima, não
+iniciada**) → E5 (gate completo) → E6 (go-live no Render + smoke test). O go-live
+provisório precede a F4.5; plano/infraestrutura de produção se decide no E6, e nada de
+Render foi configurado. Depois do E6, retoma-se a F4.5. F5 não está iniciada. O
+transporte de precisão e das listas operacionais para o painel não exigiu preparação na
+E3: o contrato de leitura ficou intocado, e o desenho é inteiro da E4.
 
 ## Pendências
 
 1. **Rotacionar a credencial de produção exposta na P1.** Risco aceito pelo
    proprietário, mas não resolvido.
 2. **Aplicar as migrations pendentes em produção**, com gate apropriado, antes de
-   ativar lá a versão correspondente: `20260812120000_saldo_historico_tipo_unico`,
-   `20260814150000_entrega_v1_aditiva` e `20260814210000_contrato_proposta`. As três
-   estão versionadas no Git e foram exercitadas **somente** no banco local de teste;
-   nenhuma migration remota foi executada. É gate do E6.
-3. **Entrega v1 (E3 a E6)**: a E1 e a E2 estão concluídas (`078f360`; `c6464b5` +
-   `fe00fd2` + `18a6599`). Falta implementar venda compartilhada com métricas e
-   cutover final (E3), painel A/B com "+ de" e listas operacionais (E4), gate completo
-   (E5) e go-live no Render (E6).
+   ativar lá a versão correspondente, **nesta ordem**:
+   `20260812120000_saldo_historico_tipo_unico`, `20260814150000_entrega_v1_aditiva`,
+   `20260814210000_contrato_proposta` e
+   `20260814230000_cutover_venda_compartilhada`. As quatro estão versionadas no Git e
+   foram exercitadas **somente** no banco local de teste; **nenhuma migration remota
+   foi executada** em nenhuma publicação. É gate do E6. A do cutover zera colunas e o
+   runtime que a acompanha exige o estado novo — ela e o deploy do código têm de ir na
+   mesma janela.
+3. **Entrega v1 (E4 a E6)**: a E1, a E2 e a E3 estão concluídas (`078f360`;
+   `c6464b5` + `fe00fd2` + `18a6599`; `2a50965`). Falta o painel A/B com "+ de" e as
+   listas operacionais (E4), o gate completo (E5) e o go-live no Render (E6).
 4. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas e a
    **F4.5 adiada** até o go-live da v1 (DEC-057). O que falta nela, objetivamente:
    - o **hardware alvo é o `Phantom Alien 4K IPTV`**;
