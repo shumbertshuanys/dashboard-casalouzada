@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `16490f0` — `fix: estabiliza largura dos quadros do painel` |
+| Commit de referência | `8b9fce2` — `feat: adiciona fallback offline ao painel` |
 | Data do handoff | 2026-08-14 |
 
 ## Estado executivo
@@ -106,8 +106,12 @@ A **F4 — Identidade e modo TV está em andamento**, e isto é o que está prov
 - a **F4.3 — verificação 4K e microajustes** está **concluída**. O único defeito
   reproduzido foi corrigido em `16490f0`, e o gate visual em 3840×2160 foi executado
   depois dele **sem alterar o repositório**, por ser somente verificação;
-- **F4.4 é a próxima fatia** — offline de navegação, ainda não implementada;
-- **F4.5 continua futura** — operação em hardware real.
+- a **F4.4 — offline de navegação** está **concluída e publicada** em `8b9fce2`. Uma
+  navegação que falhe por rede ou por 5xx passa a mostrar a tela institucional, que
+  se recupera sozinha — **sem guardar número nenhum** (DEC-048);
+- **F4.5 é a próxima fatia** — operação em hardware real, ainda não iniciada.
+
+A **F4 como um todo continua em andamento**: ela só se encerra com a F4.5.
 
 ## Fases
 
@@ -134,9 +138,9 @@ A **F4 — Identidade e modo TV está em andamento**, e isto é o que está prov
 | F4.1 — Refinamento de modo TV | **Concluída** | `f49f912` |
 | F4.2 — Marca oficial e assets | **Concluída** | `7e0e35d` |
 | F4.3 — Verificação 4K e microajustes | **Concluída** | `16490f0` + evidência visual 4K sem commit |
-| F4.4 — Offline de navegação | **Próxima** | — |
-| F4.5 — Operação em hardware real | **Futura** | inventário do aparelho primeiro (DEC-049) |
-| **F4 — Identidade e modo TV** | **Em andamento** | `16490f0` |
+| F4.4 — Offline de navegação | **Concluída** | `8b9fce2` |
+| F4.5 — Operação em hardware real | **Próxima** | inventário do aparelho primeiro (DEC-049) |
+| **F4 — Identidade e modo TV** | **Em andamento** | `8b9fce2` |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
@@ -545,10 +549,10 @@ Não se pode dizer que a situação de credenciais esteja saneada hoje.
 
 ## O que ainda NÃO está implementado
 
-Levantado arquivo por arquivo na árvore em `888f779` e atualizado pelos três commits
-seguintes: `f49f912` alterou dois arquivos CSS e removeu cinco SVGs de scaffold,
-`7e0e35d` trouxe os assets da marca e o favicon, e `16490f0` acrescentou uma
-propriedade a `painel.module.css`.
+Levantado arquivo por arquivo na árvore em `888f779` e atualizado pelos quatro
+commits seguintes: `f49f912` alterou dois arquivos CSS e removeu cinco SVGs de
+scaffold, `7e0e35d` trouxe os assets da marca e o favicon, `16490f0` acrescentou uma
+propriedade a `painel.module.css` e `8b9fce2` criou o mecanismo offline.
 
 **A F3 está concluída.** A TV mostra os números reais e os mantém atualizados
 sozinha. O que continua não existindo:
@@ -556,9 +560,9 @@ sozinha. O que continua não existindo:
 - `error.tsx` específico do painel: exceção que escape segue o mecanismo padrão do
   Next, e não há fallback próprio. Isto é uma limitação registrada, não uma fatia
   atribuída;
-- comportamento offline persistente — a retenção da F3.6 vive só na memória da aba.
-  A tela institucional offline é F4.4, e por decisão **não** guardará números
-  (DEC-048);
+- **persistência de números** — a retenção da F3.6 continua vivendo só na memória da
+  aba, e o offline da F4.4 **não** a estende: por decisão, nenhuma métrica é
+  guardada em disco (DEC-048);
 - operação em hardware real — nada foi verificado no `Phantom Alien 4K IPTV`
   (DEC-049).
 
@@ -586,7 +590,8 @@ sozinha. O que continua não existindo:
 | Favicon derivado do símbolo oficial | **existe** — `src/app/icon.png` (DEC-047) | F4.2 feita |
 | Verificação em 3840×2160 real | **realizada** — Chrome headless, viewport medido | F4.3 feita |
 | Largura dos quadros estável sob nome longo | **existe** — `min-width: 0` em `.quadro` | F4.3 feita |
-| Comportamento offline de navegação | ausente — sem Service Worker e sem `offline.html` (DEC-048) | F4.4 |
+| Comportamento offline de navegação | **existe** — Service Worker e tela institucional, sem guardar números (DEC-048) | F4.4 feita |
+| Persistência de métricas em disco | ausente **por decisão** (DEC-048) | — |
 | Inventário e operação do `Phantom Alien 4K IPTV` | não realizados (DEC-049) | F4.5 |
 | Screen Wake Lock | ausente **por decisão** (DEC-050) | F4.5, só se o ensaio provar necessidade |
 | `public/marca/` | **existe** — duas imagens oficiais | F4.2 feita |
@@ -961,8 +966,8 @@ não bloqueia a F3 e não reabre a F2 agora.
 
 ## F4 — Identidade e modo TV
 
-Fase **em andamento**, com **F4.0 a F4.3 concluídas**. Restam a F4.4 — offline de
-navegação, a próxima fatia — e a F4.5 — operação em hardware real.
+Fase **em andamento**, com **F4.0 a F4.4 concluídas**. Resta a F4.5 — operação em
+hardware real, a próxima fatia.
 
 ### F4.0 — decisões de identidade e modo TV · concluída
 
@@ -980,7 +985,7 @@ F4.1 já ter sido publicada — e estão registradas nas **DEC-047 a DEC-050**. 
   uma vez com rede, uma navegação que falhe por falta de rede ou por 5xx pode mostrar
   uma tela institucional que se recupera sozinha e volta ao painel para leitura
   fresca. `404` de token inválido não é indisponibilidade e não é mascarado. A
-  implementação é F4.4.
+  implementação é F4.4, **já entregue em `8b9fce2`**.
 - **DEC-049** — o hardware alvo é o `Phantom Alien 4K IPTV`. Sistema, firmware,
   navegador e capacidade de quiosque/autostart **não estão comprovados** e não serão
   inferidos. A F4.5 começa por inspeção do aparelho real.
@@ -1152,13 +1157,135 @@ Não é falha da F4.3, e sim item a conferir no ensaio físico:
 - **nenhum ajuste adicional foi feito na F4.3**, por falta de evidência física que o
   justificasse.
 
-### F4.4 e F4.5 — não implementadas
+### F4.4 — offline de navegação · concluída
 
-- **F4.4 — offline de navegação.** Não existe Service Worker, `offline.html`,
-  manifest nem qualquer cache persistente. A retenção da F3.6 continua vivendo só na
-  memória da aba. O contrato está na DEC-048 e permanece **futuro**.
-- **F4.5 — operação em hardware real.** Nada foi verificado no aparelho. Ver as
-  Pendências abaixo.
+Publicada em `8b9fce2`, com quatro caminhos: três arquivos novos e a montagem na
+página do painel.
+
+#### Arquivos
+
+| Caminho | Papel |
+|---|---|
+| `public/painel/sw.js` | Service Worker escrito à mão, sem Workbox e sem dependência |
+| `public/painel/offline.html` | tela institucional autossuficiente, sem framework |
+| `src/components/painel/registrar-sw.tsx` | Client Component que só registra o SW e devolve `null` |
+| `src/app/painel/[token]/page.tsx` | monta `RegistrarSwPainel` ao lado do `AtualizadorPainel` |
+
+A página não ganhou nenhuma outra responsabilidade: validação do token, ordem token →
+banco, `agora` único, `lerPainel`, `metadata` e `force-dynamic` ficaram intactos.
+
+#### Escopo
+
+O Service Worker é registrado em `/painel/sw.js` com scope **`/painel/`**. O registro
+**não conhece o token** — o escopo cobre qualquer um sem precisar dele, e manter o
+segredo fora desse caminho evita que apareça em log de registro ou erro do navegador.
+
+`/preview`, `/login` e toda a administração **não são páginas controladas**.
+
+#### Cache
+
+Cache único, `casalouzada-painel-offline-v1`, com **exatamente dois** itens:
+
+- `/painel/offline.html`
+- `/marca/casa-louzada-horizontal-claro.png`
+
+O que **não** entra no cache, e é o ponto da DEC-048:
+
+- o **HTML normal do painel** não é cacheado;
+- `/painel/[token]/dados` **não** é interceptado nem cacheado;
+- nenhum **JSON** é cacheado;
+- nenhuma **métrica** é persistida;
+- o **token** não entra no cache — nenhuma URL com token é armazenada.
+
+Não há `cache.put` de resposta nenhuma; o único `addAll` é o dos dois institucionais.
+A limpeza no `activate` filtra pelo prefixo próprio, então nunca apaga cache de
+terceiros. **A retenção da F3.6 continua exclusivamente em memória da aba** — o
+offline não a estende nem a substitui.
+
+#### Fallback
+
+Só navegações (`request.mode === "navigate"`) entram na política:
+
+| Situação | Resposta |
+|---|---|
+| Erro de rede/transporte | tela institucional |
+| HTTP **500–599** | tela institucional |
+| Qualquer status **abaixo de 500** | a resposta real, sem cacheá-la |
+| `404` de token inválido | **continua sendo 404** (DEC-010) |
+
+O teste é pelo **status**, nunca por `response.ok` — `ok` é falso para 404, e usá-lo
+mascararia um erro de configuração da TV atrás de uma promessa de reconexão que nunca
+se cumpriria.
+
+#### Recuperação
+
+A tela institucional **mantém a URL do painel** na barra de endereços, tenta recuperar
+sozinha num ciclo de **15 segundos**, reage também ao evento `online`, e nunca deixa
+duas tentativas em voo ao mesmo tempo. Ao obter resposta de rede **abaixo de 500**,
+recarrega a URL real — o que devolve o painel em `200` e mostra o 404 verdadeiro se o
+token estiver errado. Em `>= 500`, erro de transporte ou timeout, permanece na tela.
+
+Ela não mostra número, nome, VGV nem horário de última leitura, e não lê storage.
+
+#### Provisionamento
+
+**Um perfil de navegador que nunca instalou o Service Worker continua dependendo de
+rede na primeira inicialização** — não existe tela institucional para mostrar antes do
+primeiro provisionamento online. Isso é parte explícita da DEC-048, não uma limitação a
+corrigir.
+
+Depois do primeiro provisionamento com rede, **registro e cache persistem entre
+processos do navegador**, o que foi comprovado (abaixo).
+
+#### Evidência funcional
+
+Aceites executados em Chrome real (headless, perfil temporário, dirigido por Chrome
+DevTools Protocol), em 2026-08-14, sobre o build de produção apontando para o banco
+local de teste:
+
+| # | Aceite | Resultado |
+|---|---|---|
+| 1 | Provisionamento online | SW `activated`, scope `/painel/`, página controlada |
+| 2 | Escopo restrito a `/painel/` | confirmado |
+| 3 | `/preview` | `controller === null` |
+| 4 | `/login` | `controller === null` |
+| 5 | Servidor morto + reload | tela institucional, URL preservada |
+| 6 | Recuperação automática | painel de volta sozinho |
+| 7 | HTTP 503 | tela institucional |
+| 8 | Token inválido | **404 real**, com a página controlada pelo SW |
+| 9 | `/dados` após leitura real | ausente do cache; cache segue com dois itens |
+| 10 | `offline.html` | meta robots presente, mais o `X-Robots-Tag` já existente |
+| 11 | Perfil virgem + servidor morto | sem fallback, como a DEC-048 prevê |
+| 12 | Chrome encerrado por completo após provisionar | 8 → 0 processos do perfil |
+| 13 | Novo processo, mesmo perfil, servidor já morto | **tela institucional** |
+| 14 | Registro e cache entre processos | persistiram, com os mesmos dois itens |
+| 15 | Servidor de volta | retorno automático ao painel real, vindo da rede |
+
+Em nenhum dos aceites apareceu número antigo em tela.
+
+#### Baseline da entrega da F4.4
+
+Medido sobre a árvore publicada em `8b9fce2`:
+
+| Comando | Resultado verificado |
+|---|---|
+| `npm test` | 462 testes, 130 suítes, 0 falhas |
+| `npm run test:fusos` | 462/462 nos três fusos |
+| `npm run test:integracao` | 88 testes, 33 suítes, 0 falhas |
+| `npm run test:integracao:painel` | 35 testes, 12 suítes, 0 falhas |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `tsx scripts/banco-teste.ts npm run build` | exit 0, 20 rotas |
+| `git diff --check` | exit 0 |
+
+As contagens repetem as das fatias anteriores porque a F4.4 não criou nem removeu
+teste algum: a lógica do Service Worker só existe dentro do runtime do navegador, e os
+aceites acima a exercitam melhor do que uma simulação faria. **Estes resultados
+pertencem à execução da implementação da F4.4, não a esta execução documental.**
+
+### F4.5 — operação em hardware real · próxima
+
+Nada foi verificado no aparelho. Ver as Pendências abaixo.
 
 ## Pendências
 
@@ -1166,10 +1293,8 @@ Não é falha da F4.3, e sim item a conferir no ensaio físico:
    proprietário, mas não resolvido.
 2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
    antes de ativar lá a versão correspondente, com gate apropriado.
-3. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.3 concluídas. O que
-   falta, objetivamente:
-   - **offline persistente de navegação é F4.4**, a próxima fatia, e por decisão não
-     guardará números (DEC-048);
+3. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas. O que
+   falta é a **F4.5**, e objetivamente:
    - o **hardware alvo é o `Phantom Alien 4K IPTV`**;
    - o **SO e o navegador do aparelho ainda não foram comprovados** — a F4.5 começa
      por inspecioná-lo (DEC-049). **O aparelho não foi validado**;
@@ -1182,6 +1307,33 @@ Pendências de informação herdadas do plano: número máximo de corretores por
 (dimensiona a altura dos quadros) e valores iniciais do saldo histórico. A terceira —
 arquivos da marca em alta resolução — **está encerrada**: os PNGs oficiais foram
 fornecidos em 2026-08-13 e integrados pela F4.2 em `7e0e35d`.
+
+### Observações para a validação da F4.5
+
+Nada aqui é afirmação sobre o `Phantom Alien 4K IPTV`: são pontos a **provar** no
+aparelho, e o que se sabe da plataforma dele continua sendo nada (DEC-049).
+
+**O mecanismo offline precisa ser reprovado no navegador real do aparelho.** A F4.4
+foi validada em Chrome desktop; no aparelho é preciso demonstrar, na ordem:
+
+- suporte a Service Worker;
+- instalação;
+- ativação;
+- Cache Storage funcional;
+- persistência de registro e cache após desligar e religar o equipamento;
+- fallback institucional quando a aplicação não responde;
+- recuperação automática quando ela volta.
+
+**Achado do ambiente de teste Windows, não do aparelho.** Durante os testes da F4.4,
+um perfil de Chrome em caminho temporário muito profundo fez `caches.open` falhar com
+`UnknownError`; o `install` do Service Worker rejeitava e o registro era descartado em
+silêncio, embora `register()` chegasse a resolver antes disso. Um perfil em caminho
+curto funcionou. Registrado aqui porque **uma falha de Cache Storage é silenciosa** e
+vale conhecer o sintoma ao validar qualquer outra plataforma — **não** porque se saiba
+que o Phantom usa Windows, Chrome ou sofre dessa limitação.
+
+**Hairlines.** A percepção física das duas hairlines a 3–6 metros continua pendente de
+conferência no ensaio da F4.5, conforme registrado na F4.3.
 
 ## Bloqueios
 

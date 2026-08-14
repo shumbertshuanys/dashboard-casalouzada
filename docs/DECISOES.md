@@ -489,11 +489,14 @@ concluídas, e a Fase 3 está concluída
 **Motivo.** Ajuste fino de tipografia, escala 4K e transições precisa de uma tela real
 para ser ajustado.
 
-**Impacto.** Os tokens de cor já existem em `src/app/globals.css` desde a F1; o
-restante da identidade — tipografia, escala, transições, comportamento offline,
-quiosque — é F4.
+**Impacto.** A ordem foi respeitada: a **F3 encerrou antes de a F4 começar**, e as
+fatias F4.0 a F4.4 foram executadas sobre o painel real já ligado aos dados. Os tokens
+de cor existiam desde a F1; o restante da identidade — tipografia, escala, transições
+e comportamento offline — veio depois, com a tela funcionando para ajustar contra. A
+**F4.5 permanece como última fatia da fase**.
 
-**Fonte.** `PLANO.md` §9; `src/app/globals.css`. **invariante futura**
+**Fonte.** `PLANO.md` §9; `src/app/globals.css`; F3 encerrada em `de91dce`; fatias da
+F4 de `f49f912` a `8b9fce2`. **cumprida**
 
 ---
 
@@ -1115,14 +1118,29 @@ mascarada pela tela offline (DEC-010).
 distinção entre dado real e dado não disponível (DEC-014). A tela institucional
 comunica indisponibilidade sem inventar desempenho.
 
-**Impacto.** O Service Worker futuro poderá cachear **somente** o necessário para a
-tela institucional; nunca `/painel/[token]/dados` nem qualquer payload de métricas. O
-primeiro boot de um perfil de navegador que nunca instalou o mecanismo **continua
-dependendo de rede** — não se deve afirmar offline mágico antes do provisionamento. A
-retenção da F3.6 permanece como está: em memória da aba, perdida no reload (DEC-045).
+**Impacto.** Implementado pela **F4.4**, em `public/painel/sw.js`,
+`public/painel/offline.html`, `src/components/painel/registrar-sw.tsx` e a montagem em
+`src/app/painel/[token]/page.tsx`:
 
-**Fonte.** DEC-014; DEC-045; decisão do proprietário em 2026-08-13.
-**invariante futura — implementação é F4.4**
+- o cache `casalouzada-painel-offline-v1` guarda **somente** a tela institucional e a
+  marca que ela desenha — **nenhum `/painel/[token]/dados`, nenhum JSON e nenhum HTML
+  normal do painel**, e nenhuma URL com token;
+- falha de rede ou resposta **500–599** numa navegação devolvem a tela institucional;
+- **`404` continua sendo `404`**: o teste é pelo status, nunca por `response.ok`, que
+  é falso para 404 e mascararia token inválido como indisponibilidade (DEC-010);
+- a tela mantém a URL do painel e **se recupera sozinha**, num ciclo de 15 segundos e
+  também no evento `online`, recarregando assim que a aplicação responde abaixo de 500;
+- o **primeiro boot** de um perfil que nunca instalou o mecanismo **continua dependendo
+  de rede** — não se deve afirmar offline mágico antes do provisionamento;
+- **o boot offline depois do provisionamento foi comprovado**: com o navegador
+  encerrado por completo e a aplicação fora do ar, um novo processo sobre o mesmo
+  perfil abriu a tela institucional, e registro e cache haviam persistido;
+- a retenção da F3.6 permanece como está: em memória da aba, perdida no reload
+  (DEC-045). O offline **não** a estende.
+
+**Fonte.** DEC-014; DEC-045; decisão do proprietário em 2026-08-13; commit `8b9fce2` —
+`feat: adiciona fallback offline ao painel`; evidência funcional em Chrome real de
+2026-08-14. **implementada na F4.4 — `8b9fce2`**
 
 ### DEC-049 — Phantom Alien 4K é o hardware alvo, mas sua plataforma precisa ser comprovada
 

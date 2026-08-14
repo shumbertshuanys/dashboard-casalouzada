@@ -9,10 +9,10 @@ desenho pretendido; o estado real do que está construído fica em
 `src/lib/metricas.ts` calcula (núcleo **puro**), `src/lib/metricas-prisma.ts` lê o
 banco e alimenta esse núcleo, e `src/lib/apresentacao-painel.ts` traduz o resultado
 no que a tela desenha. A **F4 — Identidade e modo TV está em andamento**, com F4.0 a
-F4.3 concluídas: decisões nas DEC-047 a DEC-050, modo TV em `f49f912`, **marca
-oficial aplicada** em `7e0e35d` e **verificação em 3840×2160** encerrada, com o
-microajuste dos quadros publicado em `16490f0`. Restam o **offline de navegação**
-(F4.4, próxima fatia) e a **operação em hardware real** (F4.5).
+F4.4 concluídas: decisões nas DEC-047 a DEC-050, modo TV em `f49f912`, **marca
+oficial aplicada** em `7e0e35d`, **verificação em 3840×2160** encerrada com o
+microajuste dos quadros em `16490f0`, e **offline de navegação** em `8b9fce2`. Resta a
+**operação em hardware real** (F4.5, próxima fatia).
 
 Desde a F3.5 a tela da TV está ligada, e desde a F3.6 ela se mantém sozinha:
 `/painel/[token]` valida o token e, só então, faz a leitura inicial no servidor —
@@ -370,8 +370,8 @@ Cores, tipografia, marca, ajuste fino para 3840×2160, transições, comportamen
 e operação da TV. Os tokens de cor existem desde a F1, e **a composição visual é
 compartilhada desde a F3.5**: a Jost está configurada dentro de `PainelVisual`, que
 serve `/preview` e `/painel/[token]`, então a tipografia da seção 6 **já chega ao painel
-real**. A **marca oficial e seus assets** e a **verificação em 4K** já foram entregues;
-o que resta da fase é o **offline de navegação** e a **operação na TV**.
+real**. A **marca oficial e seus assets**, a **verificação em 4K** e o **offline de
+navegação** já foram entregues; o que resta da fase é a **operação na TV**.
 
 A fase foi fatiada assim:
 
@@ -381,8 +381,8 @@ A fase foi fatiada assim:
 | F4.1 | refinamento de modo TV | **concluída** — commit `f49f912` |
 | F4.2 | marca oficial e assets | **concluída** — commit `7e0e35d` |
 | F4.3 | verificação 4K e microajustes | **concluída** — commit `16490f0`, mais evidência visual sem commit |
-| F4.4 | offline de navegação | **próxima** — não implementada |
-| F4.5 | operação em hardware real | **futura** — inventário do aparelho primeiro (DEC-049) |
+| F4.4 | offline de navegação | **concluída** — commit `8b9fce2` |
+| F4.5 | operação em hardware real | **próxima** — inventário do aparelho primeiro (DEC-049) |
 
 A **F4.1** trouxe o token `--color-moldura`, o cursor oculto no painel, as hairlines
 em `cqw` e a remoção dos SVGs de scaffold.
@@ -397,8 +397,13 @@ um **microajuste dos quadros** (`min-width: 0` em `.quadro`), que impede um nome
 de corretor de alargar a própria coluna e comprimir as demais. A percepção das
 hairlines à distância de operação ficou para o ensaio físico da F4.5.
 
-O **offline de navegação continua não implementado**: não há Service Worker,
-`offline.html` nem cache institucional, e o contrato da DEC-048 permanece futuro.
+A **F4.4** entregou o **offline de navegação**: um Service Worker com scope `/painel/`
+serve uma tela institucional quando a aplicação não responde — seja por falha de rede,
+seja por resposta `5xx`. Ela **não persiste métrica nenhuma** (DEC-048): o cache tem só
+a própria tela e a marca. Qualquer resposta abaixo de 500 passa normalmente, então o
+`404` de token inválido continua sendo 404. A tela mantém a URL do painel e se
+recupera sozinha assim que a aplicação volta. Exige **provisionamento online prévio**:
+um navegador que nunca instalou o mecanismo ainda depende de rede no primeiro boot.
 
 A **operação no `Phantom Alien 4K IPTV` continua futura**: a plataforma do aparelho
 ainda precisa ser comprovada (DEC-049) — o mini PC com Chrome em quiosque descrito na
