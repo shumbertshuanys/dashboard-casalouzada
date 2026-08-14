@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AtualizadorPainel } from "@/components/painel/atualizador-painel";
+import { RegistrarSwPainel } from "@/components/painel/registrar-sw";
 import { prisma } from "@/lib/db";
 import { lerPainel } from "@/lib/leitura-painel";
 import { tokenPainelConfere } from "@/lib/token-painel";
@@ -33,6 +34,10 @@ export const dynamic = "force-dynamic";
  * `AtualizadorPainel`, que roda no cliente. O token não é passado a ele por
  * prop — ele já está na URL, e `useParams` o lê de lá.
  *
+ * `RegistrarSwPainel` entra ao lado dele desde a F4.4, e só registra o Service
+ * Worker que serve a tela institucional quando a aplicação não responde. Ele não
+ * desenha nada, não recebe o token e não guarda número nenhum (DEC-048).
+ *
  * Não há `try`/`catch`: `INDISPONIVEL`, `SEM_DADOS`, `SEM_SALDO_HISTORICO` e
  * `CONFIGURACAO_INVALIDA` são **dados** e já chegam resolvidos. Uma exceção que
  * escape da leitura é defeito, e defeito não deve virar `—` na parede.
@@ -47,5 +52,10 @@ export default async function PaginaPainel({ params }: PageProps<"/painel/[token
   const agora = new Date();
   const inicial = await lerPainel(prisma, agora);
 
-  return <AtualizadorPainel inicial={inicial} />;
+  return (
+    <>
+      <RegistrarSwPainel />
+      <AtualizadorPainel inicial={inicial} />
+    </>
+  );
 }
