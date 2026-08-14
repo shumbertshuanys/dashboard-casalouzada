@@ -6,7 +6,7 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `8b9fce2` — `feat: adiciona fallback offline ao painel` |
+| Commit de referência | `36ab199` — `docs: encerra fase 4.4` |
 | Data do handoff | 2026-08-14 |
 
 ## Estado executivo
@@ -109,9 +109,19 @@ A **F4 — Identidade e modo TV está em andamento**, e isto é o que está prov
 - a **F4.4 — offline de navegação** está **concluída e publicada** em `8b9fce2`. Uma
   navegação que falhe por rede ou por 5xx passa a mostrar a tela institucional, que
   se recupera sozinha — **sem guardar número nenhum** (DEC-048);
-- **F4.5 é a próxima fatia** — operação em hardware real, ainda não iniciada.
+- a **F4.5 — operação em hardware real — está ADIADA, não cancelada** (DEC-057):
+  por decisão do proprietário em 2026-08-14, a prioridade imediata é a **entrega da
+  v1 por URL**, e o ensaio no aparelho vem depois do go-live.
 
 A **F4 como um todo continua em andamento**: ela só se encerra com a F4.5.
+
+A frente ativa agora é a **Entrega v1**, em seis etapas (E1 a E6). A **E1 — contratos
+e modelo de dados** é exclusivamente documental e está registrada neste handoff e nas
+**DEC-051 a DEC-057**: venda compartilhada por participações, propostas com status e
+valor próprios, saldo histórico mínimo conhecido, reservas de locação, faixa superior
+alternando A/B e o go-live provisório antes da F4.5. **Nada disso está
+implementado**: schema, código, testes e painel continuam exatamente no modelo
+anterior, e a primeira implementação é a E2.
 
 ## Fases
 
@@ -139,8 +149,14 @@ A **F4 como um todo continua em andamento**: ela só se encerra com a F4.5.
 | F4.2 — Marca oficial e assets | **Concluída** | `7e0e35d` |
 | F4.3 — Verificação 4K e microajustes | **Concluída** | `16490f0` + evidência visual 4K sem commit |
 | F4.4 — Offline de navegação | **Concluída** | `8b9fce2` |
-| F4.5 — Operação em hardware real | **Próxima** | inventário do aparelho primeiro (DEC-049) |
+| F4.5 — Operação em hardware real | **Adiada** | retomada após o go-live da v1 (DEC-057) |
 | **F4 — Identidade e modo TV** | **Em andamento** | `8b9fce2` |
+| E1 — Contratos e modelo de dados da v1 | **Documental — em revisão** | DEC-051 a DEC-057; sem código |
+| E2 — Migration + administração | **Futura** | — |
+| E3 — Métricas | **Futura** | — |
+| E4 — Painel operacional A/B | **Futura** | — |
+| E5 — Gate completo | **Futura** | — |
+| E6 — Go-live no Render + smoke test | **Futura** | — |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
@@ -592,7 +608,13 @@ sozinha. O que continua não existindo:
 | Largura dos quadros estável sob nome longo | **existe** — `min-width: 0` em `.quadro` | F4.3 feita |
 | Comportamento offline de navegação | **existe** — Service Worker e tela institucional, sem guardar números (DEC-048) | F4.4 feita |
 | Persistência de métricas em disco | ausente **por decisão** (DEC-048) | — |
-| Inventário e operação do `Phantom Alien 4K IPTV` | não realizados (DEC-049) | F4.5 |
+| `ParticipacaoVenda` / venda compartilhada | ausente — aprovado na E1 (DEC-051, DEC-052) | E2/E3 |
+| Status e valor de proposta | ausentes — aprovados na E1 (DEC-053) | E2 |
+| Precisão do saldo histórico ("+ de") | ausente — aprovada na E1 (DEC-054) | E2/E3 |
+| `ReservaLocacao` | ausente — aprovada na E1 (DEC-055) | E2 |
+| Faixa superior alternando A/B | ausente — aprovada na E1 (DEC-056) | E4 |
+| Deploy no Render | ausente — decisão de infraestrutura é do E6 (DEC-057) | E6 |
+| Inventário e operação do `Phantom Alien 4K IPTV` | não realizados (DEC-049) — **fatia adiada** (DEC-057) | F4.5 |
 | Screen Wake Lock | ausente **por decisão** (DEC-050) | F4.5, só se o ensaio provar necessidade |
 | `public/marca/` | **existe** — duas imagens oficiais | F4.2 feita |
 | `src/app/api/`, `src/components/ui/`, `src/styles/` | ausentes | sem fatia atribuída |
@@ -967,7 +989,8 @@ não bloqueia a F3 e não reabre a F2 agora.
 ## F4 — Identidade e modo TV
 
 Fase **em andamento**, com **F4.0 a F4.4 concluídas**. Resta a F4.5 — operação em
-hardware real, a próxima fatia.
+hardware real —, que está **adiada** pela DEC-057: a entrega da v1 (E1 a E6) vem
+antes dela.
 
 ### F4.0 — decisões de identidade e modo TV · concluída
 
@@ -1283,9 +1306,140 @@ teste algum: a lógica do Service Worker só existe dentro do runtime do navegad
 aceites acima a exercitam melhor do que uma simulação faria. **Estes resultados
 pertencem à execução da implementação da F4.4, não a esta execução documental.**
 
-### F4.5 — operação em hardware real · próxima
+### F4.5 — operação em hardware real · adiada
 
-Nada foi verificado no aparelho. Ver as Pendências abaixo.
+Nada foi verificado no aparelho, e por decisão do proprietário em 2026-08-14 a fatia
+está **adiada, não cancelada** (DEC-057): a entrega da v1 por URL vem antes, e a
+F4.5 é retomada depois do go-live. Ver as Pendências e a seção Entrega v1 abaixo.
+
+## Entrega v1 — decisões de produto e modelo (E1)
+
+Aprovada pelo proprietário em **2026-08-14** e registrada nas **DEC-051 a DEC-057**.
+
+**A E1 é exclusivamente documental.** Nada abaixo existe em código: o schema não tem
+`participacoes_venda`, `reservas_locacao`, `valor_proposta`, `status_proposta` nem
+`precisao`; a validação continua descartando valor de proposta; o núcleo de métricas
+continua creditando venda por `Lancamento.corretorId`/`equipeId`; e a faixa superior
+do painel continua estática. **A próxima ação, após aprovação desta E1, é a E2 —
+migration + administração.**
+
+### Venda compartilhada (DEC-051, DEC-052)
+
+- **Uma venda comercial = um lançamento `VENDA`**, sempre — nunca uma linha por
+  corretor. Preserva a DEC-001.
+- O crédito passa para **`ParticipacaoVenda`**: `id`, `lancamentoId` (FK `Cascade`),
+  `corretorId` (FK `Restrict`), `equipeId` (**snapshot** no fato, FK `Restrict`),
+  `ordem` (a partir de 1) e `criadoEm`, com `UNIQUE (lancamento_id, corretor_id)` e
+  `UNIQUE (lancamento_id, ordem)`. Toda VENDA tem **pelo menos um** participante,
+  garantido por transação na aplicação e coberto por integração — "no mínimo um
+  filho" não tem constraint declarativa simples.
+- **Contrato excludente para os campos antigos.** Depois da E2, toda `VENDA` tem
+  `Lancamento.corretorId = NULL` e `Lancamento.equipeId = NULL`: o crédito e a
+  autoria histórica moram **exclusivamente** em `ParticipacaoVenda` (corretor,
+  equipe histórica e ordem). Os demais tipos continuam usando exclusivamente os dois
+  campos do lançamento, obrigatórios, e nunca usam participações. A E2 protege isso
+  com um `CHECK` semanticamente equivalente a
+  `(tipo = 'VENDA' AND corretor_id IS NULL AND equipe_id IS NULL) OR
+  (tipo <> 'VENDA' AND corretor_id IS NOT NULL AND equipe_id IS NOT NULL)` —
+  sintaxe exata na E2; FKs continuam `Restrict` quando preenchidas. Foram rejeitados
+  o espelhamento do participante de ordem 1 nos campos antigos e a permanência dos
+  valores legados após o backfill (duas representações permanentes do mesmo crédito
+  divergem), além das participações genéricas para todos os tipos.
+- **Backfill (E2), em sequência obrigatória:** criar a estrutura; copiar
+  `corretorId`/`equipeId` de cada VENDA existente para uma participação de
+  `ordem = 1`; **provar** que toda VENDA tem exatamente uma participação; tornar os
+  dois campos nullable; gravar `NULL` neles em todas as VENDA; aplicar e validar o
+  `CHECK`. A informação histórica só sai dos campos antigos **depois** de
+  materializada na participação — nenhuma venda some ou muda de equipe, e nenhum
+  resíduo permanece.
+- **Contagem:** empresa soma **+1 venda e o valor integral uma única vez**; cada
+  participante recebe **+1 vendido e sua fração igualitária**; cada **equipe
+  distinta** nas participações recebe **+1 vendido** e o VGV igual à **soma das
+  frações dos seus participantes**. Exemplo canônico: R$ 900 mil com A e B da equipe
+  X e C da equipe Y → empresa 1/900; A, B e C 1/300 cada; X 1/600; Y 1/300.
+- **Divisão exata:** sempre igualitária, sem percentual manual; centavos em `bigint`;
+  divisão inteira e centavos residuais distribuídos um a um por `ordem` crescente
+  (R$ 100,00 / 3 → 33,34 / 33,33 / 33,33). Invariante: a soma das frações é o valor
+  integral, em centavos. **A fração não é persistida** — deriva de
+  (valor, N, ordem) no núcleo.
+- **Invariante formal:** a DEC-002 é **parcialmente superada** — para VENDA o
+  snapshot de equipe muda de `Lancamento.equipeId` para cada
+  `ParticipacaoVenda.equipeId`; para os demais tipos nada muda. O princípio
+  permanece: **equipe histórica nunca é derivada do corretor em tempo de consulta**.
+
+### Propostas (DEC-053)
+
+`PROPOSTA` continua lançamento e ganha `valorProposta` (dinheiro **opcional**, campo
+separado de `valor`) e `statusProposta` (`AGUARDANDO` padrão / `ACEITA` /
+`REJEITADA`). **Contrato de integridade:** em `PROPOSTA`, `statusProposta` e
+`imovelRef` são **obrigatórios**, `valorProposta` é opcional e o `valor` do
+lançamento permanece `NULL`; em qualquer outro tipo, `statusProposta` e
+`valorProposta` são **`NULL`** — garantido pela aplicação e, quando viável, por
+proteção equivalente no banco (sintaxe na E2). `valorProposta` **não é VGV** e não
+entra em nenhum agregado monetário nem no ranking de VGV; `PROPOSTA` não vira tipo
+monetário. Toda proposta conta na métrica mensal qualquer que seja o status; apenas
+`AGUARDANDO` entra na lista operacional da TV. Backfill: propostas existentes
+recebem `AGUARDANDO`; legadas sem imóvel permanecem válidas como histórico.
+
+### Saldo histórico mínimo conhecido (DEC-054)
+
+Cada linha de `saldo_historico` ganha `PrecisaoSaldoHistorico` — `EXATO` ou
+`MINIMO_CONHECIDO`. **Compatibilidade:** toda linha existente antes da migration E2
+recebe `EXATO` como backfill/default, preservando a semântica atual; **nenhum saldo
+é convertido automaticamente para mínimo conhecido** — só exibe "+ de" o que o
+administrador alterar explicitamente. Com mínimo conhecido o valor é um piso: o
+cálculo não muda e eventos posteriores ao corte seguem somando (DEC-036); a
+apresentação prefixa com **"+ de"** (500 cadastradas + 27 posteriores → "+ de 527";
+idem VGV, compondo com a DEC-043). Invariante preservada: saldo entra **somente**
+nos acumulados.
+
+### Reservas de locação (DEC-055)
+
+Reserva não é produção e **não usa** `Lancamento`: nasce `ReservaLocacao`
+(`corretorId`, `equipeId` snapshot na criação, `imovelRef` obrigatório, `status`
+`ATIVA` / `FINALIZADA` / `CANCELADA`, `dataReferencia`, `observacao?`, `criadoPor`,
+carimbos). **Toda reserva nasce `ATIVA`**; `FINALIZADA` e `CANCELADA` só entram por
+edição explícita. Não incrementa Locados, VGV nem rankings. Ao virar negócio,
+registra-se a `LOCACAO` e marca-se a reserva `FINALIZADA` — sem automação implícita
+na v1.
+
+### Faixa superior A/B (DEC-056)
+
+Dois estados, 20 segundos cada, `A → B → A → B`, sem terceira tela. **Tela A**: a
+atual, preservada. **Tela B**: "Propostas em andamento" (até 3 `AGUARDANDO`) e
+"Reservas de locação" (até 3 `ATIVA`), mais recentes primeiro, imóvel + corretor.
+Lista vazia mostra "Nenhuma proposta em andamento" / "Nenhuma reserva ativa" — nunca
+`0`: são listas operacionais, não métricas (DEC-014). Seleção, ordenação e corte em 3
+são regra de domínio e moram no núcleo (DEC-013); o contrato de leitura/atualização
+da F3.6 (DEC-044 a DEC-046) será estendido para transportar as listas — desenho na
+E3/E4.
+
+### Incompatibilidades mapeadas com o modelo atual
+
+O que a E2/E3/E4 terá de tocar, levantado arquivo por arquivo:
+
+- `prisma/schema.prisma` — `corretorId`/`equipeId` `NOT NULL`, sem participações,
+  sem reservas, sem status/valor de proposta, sem precisão de saldo;
+- `src/lib/validacao/lancamento.ts` — `TIPOS_MONETARIOS` descarta valor de PROPOSTA
+  e não conhece múltiplos participantes;
+- `src/app/admin/lancamentos/*` — criação/edição assumem um corretor por evento, e a
+  edição resolve equipe pelo fluxo Q7 (que permanece para os tipos de participante
+  único);
+- `src/lib/metricas.ts` — `LancamentoMetrica` carrega um `corretorId`/`equipeId`;
+  rankings e elenco (DEC-038) creditam pelo lançamento; a divisão de frações não
+  existe;
+- `src/lib/metricas-prisma.ts` / `leitura-painel.ts` /
+  `contrato-atualizacao-painel.ts` / `retencao-painel.ts` — não leem participações,
+  reservas nem listas operacionais;
+- `src/lib/apresentacao-painel.ts` — não conhece "+ de" nem as listas da Tela B;
+- `src/components/painel/*` — faixa superior estática, sem rotação A/B.
+
+### Ordem de entrega e deploy (DEC-057)
+
+E1 (esta, documental) → E2 (migration + administração) → E3 (métricas) → E4 (painel
+A/B) → E5 (gate completo) → E6 (go-live no Render + smoke test). O go-live
+provisório precede a F4.5; plano/infraestrutura de produção se decide no E6, e nada
+de Render foi configurado. Depois do E6, retoma-se a F4.5. F5 não está iniciada.
 
 ## Pendências
 
@@ -1293,15 +1447,18 @@ Nada foi verificado no aparelho. Ver as Pendências abaixo.
    proprietário, mas não resolvido.
 2. **Aplicar a migration `20260812120000_saldo_historico_tipo_unico` em produção**
    antes de ativar lá a versão correspondente, com gate apropriado.
-3. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas. O que
-   falta é a **F4.5**, e objetivamente:
+3. **Entrega v1 (E2 a E6)**: implementar o modelo e as regras aprovadas na E1
+   (DEC-051 a DEC-057) — migration com backfill, administração, métricas, painel
+   A/B, gate completo e go-live no Render.
+4. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas e a
+   **F4.5 adiada** até o go-live da v1 (DEC-057). O que falta nela, objetivamente:
    - o **hardware alvo é o `Phantom Alien 4K IPTV`**;
    - o **SO e o navegador do aparelho ainda não foram comprovados** — a F4.5 começa
      por inspecioná-lo (DEC-049). **O aparelho não foi validado**;
    - **o ensaio operacional real é F4.5**, e é ele que fecha quiosque, autostart e
      suspensão de tela (DEC-050). É também nele que se confere a percepção das
      hairlines a 3–6 metros, registrada na F4.3.
-4. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
+5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
 
 Pendências de informação herdadas do plano: número máximo de corretores por equipe
 (dimensiona a altura dos quadros) e valores iniciais do saldo histórico. A terceira —

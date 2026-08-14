@@ -1193,3 +1193,293 @@ adicionado, ou a insuficiência fica registrada e a API é justificada por ela.
 
 **Fonte.** Decisão do proprietário em 2026-08-13.
 **invariante futura — fechamento operacional em F4.5**
+
+### DEC-051 — Venda é um evento único, com participações
+
+**Decisão.** Uma venda comercial é **um** lançamento `VENDA` — nunca uma linha por
+corretor para atribuir crédito. O crédito passa a morar numa entidade própria,
+`ParticipacaoVenda`, com um registro por corretor participante:
+
+| Campo | Papel |
+|---|---|
+| `id` | uuid |
+| `lancamentoId` | a venda a que a participação pertence |
+| `corretorId` | quem participou |
+| `equipeId` | **snapshot** da equipe do corretor no momento do fato |
+| `ordem` | posição determinística dentro da venda, a partir de 1 |
+| `criadoEm` | carimbo |
+
+Constraints de banco: `UNIQUE (lancamento_id, corretor_id)` — o mesmo corretor não
+participa duas vezes da mesma venda — e `UNIQUE (lancamento_id, ordem)` — a ordem é
+única dentro da venda. A contiguidade da ordem (`1..N`, sem buracos) é validada pela
+aplicação. Toda `VENDA` precisa de **pelo menos uma** participação; como "no mínimo um
+filho" não tem constraint declarativa simples em SQL, essa invariante é garantida
+pela aplicação — criação e edição gravam lançamento e participações **na mesma
+transação** — e coberta por teste de integração.
+
+FKs: `lancamentoId` com `onDelete: Cascade` — a participação é parte do fato, e o
+hard delete de lançamento já existente leva as participações junto;
+`corretorId` e `equipeId` com `onDelete: Restrict`, como o resto do histórico
+(DEC-007).
+
+**Sobre `Lancamento.corretorId` e `Lancamento.equipeId`.** Os dois se tornam
+opcionais no schema, e o contrato final é **excludente**: depois da E2, toda `VENDA`
+tem os dois campos **`NULL`**, e todo o crédito e a autoria histórica da venda moram
+**exclusivamente** em `ParticipacaoVenda` — cada participação com `corretorId`,
+`equipeId` histórico e `ordem`. Os demais tipos continuam usando exclusivamente os
+dois campos do lançamento, obrigatórios como sempre, e **nunca** usam
+`ParticipacaoVenda`. Não existe estado intermediário permanente: manter os campos
+antigos preenchidos numa VENDA seria uma segunda representação do mesmo crédito, e
+duas representações permanentes divergem. Pelo mesmo motivo foi rejeitado espelhar o
+participante de ordem 1 nos campos antigos; e foi rejeitado generalizar
+participações para todos os tipos, que não têm o caso de uso.
+
+A migration da E2 deve garantir o contrato com um `CHECK` **semanticamente**
+equivalente a:
+
+```text
+(tipo = 'VENDA'  AND corretor_id IS NULL     AND equipe_id IS NULL)
+OR
+(tipo <> 'VENDA' AND corretor_id IS NOT NULL AND equipe_id IS NOT NULL)
+```
+
+A sintaxe SQL exata é decisão da E2, conforme os nomes reais de enum e colunas — o
+que está fixado aqui é o contrato. As FKs atuais continuam `Restrict` quando os
+campos estão preenchidos.
+
+**Backfill — sequência obrigatória.** A informação histórica não se perde: ela só
+sai dos campos antigos **depois** de materializada na participação.
+
+1. criar a estrutura de `ParticipacaoVenda`;
+2. para cada `VENDA` existente, copiar `Lancamento.corretorId` e
+   `Lancamento.equipeId` para **uma** participação de `ordem = 1`;
+3. **provar** que toda `VENDA` existente tem exatamente uma participação criada;
+4. tornar `Lancamento.corretorId`/`equipeId` nullable;
+5. gravar `NULL` nos dois campos de **todas** as `VENDA`;
+6. aplicar e validar o `CHECK` estrutural acima.
+
+Nenhuma venda desaparece, nenhuma muda de equipe, e nenhum "resíduo" fica para
+trás: ao final, `ParticipacaoVenda` é a única fonte de crédito de VENDA.
+
+**Edição.** Editar uma venda passa a gerir participações. O fluxo de conflito de
+equipe da Q7 (DEC-034) permanece como está para os tipos de participante único; para
+`VENDA`, o snapshot de equipe é decidido por participação.
+
+**Motivo.** Vendas compartilhadas existem no negócio, e duplicar a linha de venda por
+corretor quebraria a DEC-001 (cada fato é um registro) e contaria a mesma venda e o
+mesmo VGV duas vezes na empresa.
+
+**Preserva / supera.** Preserva a DEC-001 — a venda continua sendo um registro
+individual. **Supera parcialmente a DEC-002**: para eventos de participante único a
+equipe continua gravada no próprio `Lancamento`; para `VENDA`, o snapshot muda de
+lugar — vai para cada `ParticipacaoVenda.equipeId` — porque uma venda agora pode
+envolver mais de uma equipe. O princípio da DEC-002 fica intacto: **equipe histórica
+nunca é derivada do corretor em tempo de consulta**; muda só a entidade que carrega o
+snapshot.
+
+**Fonte.** Decisão do proprietário em 2026-08-14; `PLANO.md` §3.
+**invariante futura — implementação começa na E2**
+
+### DEC-052 — Crédito e VGV da venda compartilhada
+
+**Decisão.** Para uma venda de valor `V` com `N` participantes:
+
+- **Empresa** — número de vendas: **+1**; VGV: **`V` uma única vez**, qualquer que
+  seja o número de participantes e de equipes.
+- **Corretor** — cada participante recebe **+1** em vendidos e a sua **fração
+  igualitária** de `V` no VGV individual.
+- **Equipe** — cada equipe **distinta** presente nas participações recebe **+1** em
+  vendidos: dois participantes da mesma equipe rendem um só +1 para ela; equipes
+  diferentes recebem +1 cada. O VGV da equipe é a **soma das frações dos
+  participantes daquela equipe**.
+
+A divisão é sempre **igualitária** — nunca se pede percentual. O dinheiro continua
+exato: divisão inteira em centavos `bigint`, e os centavos residuais são
+distribuídos **um por participante, em `ordem` crescente**. `R$ 100,00` por 3 dá
+`33,34 / 33,33 / 33,33`. Invariante: **a soma das frações é exatamente `V`**, em
+centavos, sempre — e, por consequência, a soma dos VGVs de equipe de uma venda
+também é `V`.
+
+A fração **não é persistida**: ela é derivável de forma determinística de
+(`valor`, `N`, `ordem`) e é calculada no núcleo. Persisti-la criaria uma segunda
+verdade que precisaria ser reescrita a cada edição do valor ou do elenco da venda.
+
+**Elenco.** A regra de elenco mensal da DEC-038 se estende: para `VENDA`, "produção
+do mês creditada à equipe" significa **participação** do mês creditada a ela. Um
+participante ativo entra no elenco da equipe da sua participação, mesmo lotado hoje
+em outra.
+
+**Motivo.** O total da empresa não pode inflar com o número de participantes, e o
+reconhecimento individual e por equipe precisa somar de volta ao todo — sem
+percentual manual, que é fonte de erro e de negociação que o painel não arbitra.
+
+**Preserva.** DEC-013 — a regra mora inteira em `src/lib/metricas.ts`, numa fonte
+única; leitura e apresentação não somam, não dividem e não deduplicam venda.
+DEC-036/DEC-004 — acumulados e períodos não mudam de fórmula: a empresa continua
+somando `V` uma vez.
+
+**Fonte.** Decisão do proprietário em 2026-08-14, com o exemplo canônico da venda de
+R$ 900.000 com participantes A e B da equipe X e C da equipe Y (empresa: 1 venda e
+R$ 900 mil; cada corretor: 1 venda e R$ 300 mil; equipe X: 1 venda e R$ 600 mil;
+equipe Y: 1 venda e R$ 300 mil).
+**invariante futura — cálculo na E3, sobre o modelo da E2**
+
+### DEC-053 — Proposta tem status e valor próprios, fora do VGV
+
+**Decisão.** `PROPOSTA` continua sendo um lançamento, e ganha dois campos próprios:
+
+- `valorProposta` — dinheiro **opcional**, num campo separado de `valor`;
+- `statusProposta` — `AGUARDANDO` (padrão inicial), `ACEITA` ou `REJEITADA`.
+
+**Contrato de integridade**, por tipo:
+
+| | `statusProposta` | `valorProposta` | `imovelRef` | `valor` |
+|---|---|---|---|---|
+| `PROPOSTA` | **obrigatório** | opcional | **obrigatório** | permanece `NULL` |
+| demais tipos | **`NULL`** | **`NULL`** | regra atual | regra atual |
+
+A E2 garante isso por validação de aplicação e, quando viável, por proteção
+equivalente no banco — a sintaxe exata é decisão da E2, não desta DEC.
+
+`valorProposta` **não é VGV** e não entra em nenhum agregado monetário: nem VGV
+mensal, trimestral, anual ou acumulado, nem ranking de VGV. `PROPOSTA` não vira tipo
+monetário no sentido de `TIPOS_MONETARIOS` — o campo `valor` continua exclusivo de
+`VENDA` e `LOCACAO`.
+
+Toda proposta registrada continua contando na métrica mensal e no ranking de
+propostas, **qualquer que seja o status**. O status alimenta somente a lista
+operacional "Propostas em andamento" do painel, que exibe apenas `AGUARDANDO`
+(DEC-056).
+
+**Backfill.** Propostas existentes recebem `statusProposta = AGUARDANDO` — o padrão —
+e podem ser atualizadas pela administração. A obrigatoriedade do imóvel vale para
+novas submissões e edições; proposta legada sem imóvel permanece válida como
+histórico.
+
+**Motivo.** O proprietário quer ver o pipeline de propostas na TV, com valor
+informativo quando houver — sem que esse valor contamine o VGV, que é produção
+concluída.
+
+**Preserva.** DEC-003 e o quadro mensal como estão; DEC-013 — a seleção da lista
+operacional é regra de domínio no núcleo.
+
+**Fonte.** Decisão do proprietário em 2026-08-14.
+**invariante futura — implementação na E2 (modelo/admin) e E3/E4 (painel)**
+
+### DEC-054 — Saldo histórico pode ser mínimo conhecido
+
+**Decisão.** Cada linha de `saldo_historico` ganha uma precisão:
+
+`PrecisaoSaldoHistorico` — `EXATO` ou `MINIMO_CONHECIDO`.
+
+Com `MINIMO_CONHECIDO`, o valor cadastrado é um **piso**: o proprietário não tem o
+histórico completo, mas sabe que houve pelo menos aquilo. O cálculo não muda — novos
+eventos posteriores ao corte continuam somando normalmente (DEC-036) — e a
+**apresentação** passa a prefixar o acumulado com "+ de": saldo de 500 vendas mínimo
+conhecido com 27 vendas posteriores exibe **"+ de 527"**; mesmo mecanismo para o VGV
+("+ de R$ 800 mi"), compondo com o dinheiro compacto da DEC-043.
+
+**Compatibilidade — backfill obrigatório.** Toda linha de `SaldoHistorico` que
+exista antes da migration da E2 recebe **`EXATO`** como valor de backfill/default de
+migração — é o que preserva a semântica que essas linhas sempre tiveram. **Nenhum
+saldo existente é convertido automaticamente para `MINIMO_CONHECIDO`**: só passa a
+exibir "+ de" o saldo que o administrador alterar explicitamente para essa precisão.
+
+**Invariante preservada.** `saldo_historico` continua entrando **somente** nos
+acumulados — nunca em mês, trimestre, ano ou ranking (DEC-004, DEC-035). A precisão
+é um qualificador de exibição do acumulado, não uma nova participação de cálculo.
+
+**Motivo.** Sem isso, o proprietário teria de inventar um número exato que não
+possui, ou deixar o acumulado indisponível (DEC-037) — e "+ de 500" é a verdade que
+ele tem.
+
+**Fonte.** Decisão do proprietário em 2026-08-14; DEC-035; DEC-036; DEC-043.
+**invariante futura — implementação na E2 (modelo/admin) e E3/E4 (painel)**
+
+### DEC-055 — Reserva de locação é entidade operacional, não produção
+
+**Decisão.** Reserva de locação **não é** produção concluída e **não usa**
+`Lancamento.tipo = LOCACAO`. Nasce uma entidade separada, `ReservaLocacao`:
+
+`id`, `corretorId`, `equipeId` (snapshot no momento da criação, como nos
+lançamentos), `imovelRef` (obrigatório), `status`, `dataReferencia`, `observacao?`,
+`criadoPor`, `criadoEm`, `atualizadoEm` — com `StatusReservaLocacao` em `ATIVA`,
+`FINALIZADA` ou `CANCELADA`. **Toda reserva nasce com `status = ATIVA`**; os outros
+dois estados só entram por edição explícita posterior.
+
+Reserva **não** incrementa Locados, **não** entra em VGV e **não** entra em ranking
+de produção. Quando o negócio se concretiza, o operador registra a `LOCACAO`
+normalmente e marca a reserva como `FINALIZADA` — **sem automação implícita** entre
+as duas coisas na v1.
+
+No painel, somente reservas `ATIVA` aparecem, na lista "Reservas de locação", mais
+recentes primeiro, no máximo **3** (DEC-056).
+
+**Motivo.** O proprietário quer visibilidade do que está reservado sem inflar as
+métricas de produção — uma reserva pode não virar contrato.
+
+**Preserva.** DEC-001 (a locação concluída continua sendo um lançamento), DEC-002
+(snapshot de equipe no fato) e DEC-014 (reserva não conta como desempenho).
+
+**Fonte.** Decisão do proprietário em 2026-08-14.
+**invariante futura — implementação na E2 (modelo/admin) e E3/E4 (painel)**
+
+### DEC-056 — A faixa superior alterna entre métricas e destaques operacionais
+
+**Decisão.** A faixa superior do painel passa a ter **dois** estados, e somente dois:
+
+- **Tela A** — a atual, preservada: Imóveis vendidos, VGV acumulado, Avaliações
+  Google. 20 segundos.
+- **Tela B** — duas listas operacionais lado a lado, 20 segundos:
+  **Propostas em andamento** (até 3 propostas `AGUARDANDO`, mais recentes primeiro,
+  mostrando imóvel + corretor) e **Reservas de locação** (até 3 reservas `ATIVA`,
+  mais recentes primeiro, mostrando imóvel + corretor).
+
+Rotação `A → B → A → B`, sem terceira tela.
+
+Lista vazia mostra **"Nenhuma proposta em andamento"** ou **"Nenhuma reserva
+ativa"** — nunca `0`. São listas operacionais, não métricas de desempenho: `0` aqui
+afirmaria um desempenho que a lista não mede (DEC-014).
+
+A **seleção e a ordenação** das listas — filtro por status, mais recentes primeiro,
+corte em 3, desempate determinístico — são regra de domínio e moram no núcleo
+(DEC-013). A leitura e o contrato de atualização da F3.6 (DEC-044 a DEC-046) serão
+estendidos para transportar as listas; o desenho dessa extensão é da E3/E4.
+
+**Motivo.** A TV é o lugar onde o pipeline operacional fica visível para a equipe,
+e a alternância preserva os acumulados sem disputar espaço com eles.
+
+**Fonte.** Decisão do proprietário em 2026-08-14; DEC-013; DEC-014; DEC-053;
+DEC-055.
+**invariante futura — implementação na E4, sobre E2/E3**
+
+### DEC-057 — O go-live provisório por URL precede a F4.5
+
+**Decisão.** A prioridade imediata passa a ser a **entrega da v1 por URL**. A F4.5 —
+operação em hardware real — fica **ADIADA, não cancelada**: ela não bloqueia a
+entrega e será retomada depois do go-live.
+
+Ordem de entrega aprovada:
+
+| Etapa | Escopo |
+|---|---|
+| E1 | contratos e modelo de dados (documental) |
+| E2 | migration + administração |
+| E3 | métricas |
+| E4 | painel operacional A/B |
+| E5 | gate completo |
+| E6 | go-live no Render + smoke test |
+
+Depois da entrega, retoma-se a F4.5. A escolha de plano/infraestrutura de produção é
+do E6 — nada de Render é configurado antes dele. F5 continua futura e não se declara
+iniciada.
+
+**Motivo.** O valor imediato está em o painel existir numa URL acessível; o ensaio
+do aparelho físico pode vir depois sem atrasar isso.
+
+**Preserva.** DEC-049 e DEC-050 integralmente — nada sobre a plataforma do
+`Phantom Alien 4K IPTV` muda ou é inferido; apenas o momento da F4.5 muda. A F4
+continua **em andamento** e só se encerra com a F4.5.
+
+**Fonte.** Decisão do proprietário em 2026-08-14.
+**em vigor — fechamento no E6, com a F4.5 retomada em seguida**

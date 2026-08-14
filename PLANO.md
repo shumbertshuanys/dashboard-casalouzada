@@ -11,8 +11,15 @@ banco e alimenta esse núcleo, e `src/lib/apresentacao-painel.ts` traduz o resul
 no que a tela desenha. A **F4 — Identidade e modo TV está em andamento**, com F4.0 a
 F4.4 concluídas: decisões nas DEC-047 a DEC-050, modo TV em `f49f912`, **marca
 oficial aplicada** em `7e0e35d`, **verificação em 3840×2160** encerrada com o
-microajuste dos quadros em `16490f0`, e **offline de navegação** em `8b9fce2`. Resta a
-**operação em hardware real** (F4.5, próxima fatia).
+microajuste dos quadros em `16490f0`, e **offline de navegação** em `8b9fce2`.
+
+Por decisão do proprietário em 2026-08-14, a **F4.5 — operação em hardware real —
+está ADIADA, não cancelada** (DEC-057). A prioridade imediata é a **entrega da v1
+por URL**, em seis etapas (E1 a E6, ver §9): ajustes funcionais aprovados — venda
+compartilhada, propostas com status, saldo mínimo conhecido, reservas de locação e a
+faixa superior alternada —, gate completo e go-live provisório no Render. Depois da
+entrega, a F4.5 é retomada. **Nada dessas novidades está implementado ainda**: a E1
+é documental, e schema e código continuam no modelo anterior.
 
 Desde a F3.5 a tela da TV está ligada, e desde a F3.6 ela se mantém sozinha:
 `/painel/[token]` valida o token e, só então, faz a leitura inicial no servidor —
@@ -110,6 +117,87 @@ Entra apenas nos big numbers acumulados. Nunca nos períodos.
 > recebem saldo, e existe no máximo uma linha por tipo, garantida por índice
 > único. Ver DEC-035.
 
+### Aprovado para a v1, ainda NÃO implementado (E1 → E2)
+
+Modelo conceitual aprovado em 2026-08-14 (DEC-051 a DEC-055). A migration é da E2 —
+o schema atual continua exatamente como descrito acima.
+
+#### `participacoes_venda` (nova — DEC-051)
+
+Uma venda comercial continua sendo **um** lançamento `VENDA`; o crédito passa para
+cá, um registro por corretor participante.
+
+| Campo | Tipo | Observação |
+|---|---|---|
+| id | uuid | |
+| lancamento_id | uuid | FK `Cascade` — participação é parte do fato |
+| corretor_id | uuid | FK `Restrict` |
+| equipe_id | uuid | **snapshot** da equipe no momento do fato, FK `Restrict` |
+| ordem | int | determinística, a partir de 1; decide os centavos residuais |
+| criado_em | timestamptz | |
+
+`UNIQUE (lancamento_id, corretor_id)` e `UNIQUE (lancamento_id, ordem)`. Toda VENDA
+tem pelo menos uma participação (garantido por transação na aplicação).
+
+**Contrato excludente:** depois da E2, toda `VENDA` fica com
+`Lancamento.corretorId = NULL` e `Lancamento.equipeId = NULL` — o crédito mora
+exclusivamente nas participações; os tipos não-VENDA continuam exigindo os dois
+campos e nunca usam participações. A E2 protege isso com um CHECK semanticamente
+equivalente a `(tipo = 'VENDA' AND ambos NULL) OR (tipo <> 'VENDA' AND ambos NOT
+NULL)`. Backfill em sequência: criar a estrutura; copiar corretor/equipe de cada
+VENDA para uma participação de `ordem = 1`; provar que toda VENDA tem exatamente
+uma; tornar os campos nullable; gravar `NULL` neles em todas as VENDA; validar o
+CHECK — o histórico só sai dos campos antigos depois de materializado na
+participação. Crédito e divisão de VGV: DEC-052 — empresa conta a venda e o valor
+uma vez; cada participante recebe +1 e sua fração igualitária exata; cada equipe
+distinta recebe +1 e a soma das frações dos seus participantes.
+
+#### `lancamentos` — campos novos de proposta (DEC-053)
+
+| Campo | Tipo | Observação |
+|---|---|---|
+| valor_proposta | numeric? | opcional em `PROPOSTA`, **`NULL` nos demais tipos**; **não é VGV** e não entra em agregado monetário |
+| status_proposta | enum? | `AGUARDANDO` (padrão) / `ACEITA` / `REJEITADA`; **obrigatório em `PROPOSTA`, `NULL` nos demais** |
+
+Em `PROPOSTA`, imóvel é obrigatório (novas submissões) e o `valor` do lançamento
+permanece `NULL`. A integridade é da aplicação e, quando viável, de proteção
+equivalente no banco (E2). Toda proposta conta na métrica mensal qualquer que seja o
+status; só `AGUARDANDO` entra na lista operacional da TV. Backfill: existentes
+recebem `AGUARDANDO`.
+
+#### `saldo_historico` — precisão (DEC-054)
+
+| Campo | Tipo | Observação |
+|---|---|---|
+| precisao | enum | `EXATO` / `MINIMO_CONHECIDO` |
+
+Toda linha existente antes da migration E2 recebe **`EXATO`** como
+backfill/default, preservando a semântica atual — **nenhum saldo é convertido
+automaticamente** para mínimo conhecido; a troca é sempre edição explícita do
+administrador. `MINIMO_CONHECIDO` é um piso: o cálculo não muda, e a apresentação
+prefixa o acumulado com "+ de" (ex.: "+ de 527", "+ de R$ 800 mi"). Saldo continua
+entrando somente nos acumulados.
+
+#### `reservas_locacao` (nova — DEC-055)
+
+Reserva não é produção: não usa `Lancamento`, não conta em Locados, VGV ou ranking.
+
+| Campo | Tipo | Observação |
+|---|---|---|
+| id | uuid | |
+| corretor_id | uuid | FK `Restrict` |
+| equipe_id | uuid | snapshot na criação, FK `Restrict` |
+| imovel_ref | text | obrigatório |
+| status | enum | `ATIVA` / `FINALIZADA` / `CANCELADA` — **nasce sempre `ATIVA`** |
+| data_referencia | date | |
+| observacao | text? | |
+| criado_por | uuid | |
+| criado_em / atualizado_em | timestamptz | |
+
+Quando vira negócio: registra-se a `LOCACAO` normalmente e a reserva é marcada
+`FINALIZADA` — sem automação implícita na v1. A TV mostra só `ATIVA`, mais recentes
+primeiro, no máximo 3.
+
 ### `metas` — não entra na v1
 
 Desenhada aqui apenas para registro. Nenhuma tabela ou tela depende dela, então criar depois
@@ -204,6 +292,13 @@ Três faixas, sem rolagem, ocupando 3840×2160:
 1. **Big numbers** — imóveis vendidos, VGV total, avaliações Google.
 2. **Faixa de VGV** — anual, trimestral e mensal lado a lado.
 3. **Base** — quadro "mensal geral" à esquerda (7 métricas) e os três quadros de equipe à direita.
+
+> Aprovado para a v1, **ainda não implementado** (DEC-056, fatia E4): a faixa
+> superior passa a alternar entre duas telas de 20 segundos — a **Tela A** acima,
+> preservada, e a **Tela B** com duas listas operacionais: "Propostas em andamento"
+> (até 3 propostas `AGUARDANDO`) e "Reservas de locação" (até 3 reservas `ATIVA`),
+> mais recentes primeiro, imóvel + corretor. Lista vazia mostra "Nenhuma proposta em
+> andamento" / "Nenhuma reserva ativa", nunca `0`.
 
 Comportamentos: atualização dos dados a cada 60 segundos sem recarregar a página, e
 reconexão automática se a internet cair (mantém o último valor na tela em vez de zerar).
@@ -382,7 +477,7 @@ A fase foi fatiada assim:
 | F4.2 | marca oficial e assets | **concluída** — commit `7e0e35d` |
 | F4.3 | verificação 4K e microajustes | **concluída** — commit `16490f0`, mais evidência visual sem commit |
 | F4.4 | offline de navegação | **concluída** — commit `8b9fce2` |
-| F4.5 | operação em hardware real | **próxima** — inventário do aparelho primeiro (DEC-049) |
+| F4.5 | operação em hardware real | **adiada** — retomada após o go-live da v1 (DEC-057); inventário do aparelho primeiro (DEC-049) |
 
 A **F4.1** trouxe o token `--color-moldura`, o cursor oculto no painel, as hairlines
 em `cqw` e a remoção dos SVGs de scaffold.
@@ -405,9 +500,28 @@ a própria tela e a marca. Qualquer resposta abaixo de 500 passa normalmente, en
 recupera sozinha assim que a aplicação volta. Exige **provisionamento online prévio**:
 um navegador que nunca instalou o mecanismo ainda depende de rede no primeiro boot.
 
-A **operação no `Phantom Alien 4K IPTV` continua futura**: a plataforma do aparelho
-ainda precisa ser comprovada (DEC-049) — o mini PC com Chrome em quiosque descrito na
-§5.1 continua sendo alternativa, não o que está em mãos.
+A **operação no `Phantom Alien 4K IPTV` continua futura e está adiada** (DEC-057): a
+plataforma do aparelho ainda precisa ser comprovada (DEC-049) — o mini PC com Chrome
+em quiosque descrito na §5.1 continua sendo alternativa, não o que está em mãos. A F4
+segue **em andamento** e só se encerra com a F4.5.
+
+**Entrega v1** · *em andamento — prioridade imediata (DEC-057)*
+Aprovada pelo proprietário em 2026-08-14, entra **antes** da F4.5 e não abre a F5. As
+regras de produto estão nas DEC-051 a DEC-056: venda compartilhada por participações,
+propostas com status e valor próprios, saldo histórico mínimo conhecido, reservas de
+locação e a faixa superior alternando entre métricas e destaques operacionais.
+
+| Etapa | Escopo | Estado |
+|---|---|---|
+| E1 | contratos e modelo de dados | **documental — em revisão**, sem código |
+| E2 | migration + administração | futura |
+| E3 | métricas | futura |
+| E4 | painel operacional A/B | futura |
+| E5 | gate completo | futura |
+| E6 | go-live no Render + smoke test | futura |
+
+A decisão de infraestrutura/plano de produção é do E6 — nada de Render é configurado
+antes. Depois do E6, retoma-se a **F4.5**.
 
 **Fase 5 — Refinamentos** · *futura*
 Metas com barra de progresso, destaque do mês, comparativo com o mês anterior, fotos dos
