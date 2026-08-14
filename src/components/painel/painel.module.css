@@ -182,12 +182,21 @@
   flex: 1;
   min-height: 0;
 }
+/* `min-width: 0` acompanha o `min-height: 0`: sem ele o quadro é um item de grid com
+   mínimo automático igual ao próprio min-content, e o `white-space: nowrap` de
+   `.linha .lab` faz esse min-content ser o nome inteiro do corretor. Um nome longo
+   então alargava a própria coluna e espremia as outras três em vez de reticenciar —
+   e, como o elenco de cada ranking muda a cada 20s, as quatro colunas mudariam de
+   largura junto com a rotação. Medido num painel de 3840px: sem esta linha, um nome
+   de 35 caracteres levava as colunas de 922.88/878.94/878.94/878.92 para
+   912.90/907.91/869.44/869.42. */
 .quadro {
   background: var(--color-superficie);
   padding: 1.2cqw 1.4cqw;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
 }
 .quadro h2 {
   font-size: 1.02cqw;
