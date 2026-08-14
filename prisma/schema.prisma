@@ -27,6 +27,35 @@ enum TipoLancamento {
   @@map("tipo_lancamento")
 }
 
+/// Pipeline de uma PROPOSTA (DEC-053). Toda proposta conta na métrica mensal
+/// qualquer que seja o status; só AGUARDANDO entra na lista operacional da TV.
+enum StatusProposta {
+  AGUARDANDO
+  ACEITA
+  REJEITADA
+
+  @@map("status_proposta")
+}
+
+/// EXATO afirma o número; MINIMO_CONHECIDO é um piso e vira "+ de" na
+/// apresentação (DEC-054). O cálculo dos acumulados não muda.
+enum PrecisaoSaldoHistorico {
+  EXATO
+  MINIMO_CONHECIDO
+
+  @@map("precisao_saldo_historico")
+}
+
+/// Reserva é operação, não produção (DEC-055): nenhum status incrementa
+/// Locados, VGV ou ranking.
+enum StatusReservaLocacao {
+  ATIVA
+  FINALIZADA
+  CANCELADA
+
+  @@map("status_reserva_locacao")
+}
+
 model Equipe {
   id            String   @id @default(uuid()) @db.Uuid
   nome          String   @unique
@@ -36,8 +65,10 @@ model Equipe {
   criadoEm      DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
   atualizadoEm  DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(6)
 
-  corretores  Corretor[]
-  lancamentos Lancamento[]
+  corretores    Corretor[]
+  lancamentos   Lancamento[]
+  participacoes ParticipacaoVenda[]
+  reservas      ReservaLocacao[]
 
   @@index([ordemExibicao])
   @@map("equipes")
@@ -57,8 +88,10 @@ model Corretor {
   criadoEm     DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
   atualizadoEm DateTime  @updatedAt @map("atualizado_em") @db.Timestamptz(6)
 
-  equipe      Equipe       @relation(fields: [equipeId], references: [id], onDelete: Restrict)
-  lancamentos Lancamento[]
+  equipe        Equipe              @relation(fields: [equipeId], references: [id], onDelete: Restrict)
+  lancamentos   Lancamento[]
+  participacoes ParticipacaoVenda[]
+  reservas      ReservaLocacao[]
 
   @@index([equipeId])
   @@index([ativo])
@@ -66,25 +99,36 @@ model Corretor {
 }
 
 model Lancamento {
-  id         String         @id @default(uuid()) @db.Uuid
-  tipo       TipoLancamento
-  corretorId String         @map("corretor_id") @db.Uuid
+  id             String          @id @default(uuid()) @db.Uuid
+  tipo           TipoLancamento
+  corretorId     String          @map("corretor_id") @db.Uuid
   /// Gravado no momento do lançamento, para o histórico não mudar se o
   /// corretor trocar de equipe.
-  equipeId   String         @map("equipe_id") @db.Uuid
+  equipeId       String          @map("equipe_id") @db.Uuid
   /// Data do fato, não a data em que foi digitado.
-  dataReferencia DateTime   @map("data_referencia") @db.Date
+  dataReferencia DateTime        @map("data_referencia") @db.Date
   /// Preenchido apenas em vendas e locações.
-  valor      Decimal?       @db.Decimal(14, 2)
-  imovelRef  String?        @map("imovel_ref")
-  observacao String?
-  criadoPor  String?        @map("criado_por") @db.Uuid
-  criadoEm   DateTime       @default(now()) @map("criado_em") @db.Timestamptz(6)
-  atualizadoEm DateTime     @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+  valor          Decimal?        @db.Decimal(14, 2)
+  /// Valor pedido na proposta — informativo, nunca VGV (DEC-053). Campo
+  /// separado de `valor` de propósito: PROPOSTA não é tipo monetário.
+  valorProposta  Decimal?        @map("valor_proposta") @db.Decimal(14, 2)
+  /// Pipeline da proposta. Sem `@default` de coluna de propósito: um default
+  /// aqui atingiria também os tipos não-PROPOSTA. Na E2A o campo é nullable e a
+  /// migration faz backfill das propostas legadas; a E2B fecha o contrato na
+  /// aplicação (DEC-053).
+  statusProposta StatusProposta? @map("status_proposta")
+  imovelRef      String?         @map("imovel_ref")
+  observacao     String?
+  criadoPor      String?         @map("criado_por") @db.Uuid
+  criadoEm       DateTime        @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm   DateTime        @updatedAt @map("atualizado_em") @db.Timestamptz(6)
 
-  corretor Corretor @relation(fields: [corretorId], references: [id], onDelete: Restrict)
-  equipe   Equipe   @relation(fields: [equipeId], references: [id], onDelete: Restrict)
-  autor    Usuario? @relation(fields: [criadoPor], references: [id], onDelete: SetNull)
+  corretor      Corretor            @relation(fields: [corretorId], references: [id], onDelete: Restrict)
+  equipe        Equipe              @relation(fields: [equipeId], references: [id], onDelete: Restrict)
+  autor         Usuario?            @relation(fields: [criadoPor], references: [id], onDelete: SetNull)
+  /// Crédito da venda (DEC-051). Na E2A é estrutura + backfill: a fonte
+  /// executável continua sendo `corretorId`/`equipeId` até o cutover da E3.
+  participacoes ParticipacaoVenda[]
 
   @@index([tipo, dataReferencia])
   @@index([dataReferencia])
@@ -93,21 +137,82 @@ model Lancamento {
   @@map("lancamentos")
 }
 
+/// Uma linha por corretor participante de uma VENDA (DEC-051, DEC-052).
+///
+/// `equipeId` é o snapshot da equipe no momento do fato — nunca a lotação
+/// atual. `ordem` começa em 1, é única dentro da venda e decide quem recebe os
+/// centavos residuais da divisão igualitária. A fração em si não é persistida:
+/// deriva de (valor, N, ordem) no núcleo.
+model ParticipacaoVenda {
+  id           String   @id @default(uuid()) @db.Uuid
+  lancamentoId String   @map("lancamento_id") @db.Uuid
+  corretorId   String   @map("corretor_id") @db.Uuid
+  equipeId     String   @map("equipe_id") @db.Uuid
+  ordem        Int
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+
+  /// Cascade: a participação é parte do fato — o hard delete da venda leva as
+  /// participações junto. Corretor e equipe seguem Restrict (DEC-007).
+  lancamento Lancamento @relation(fields: [lancamentoId], references: [id], onDelete: Cascade)
+  corretor   Corretor   @relation(fields: [corretorId], references: [id], onDelete: Restrict)
+  equipe     Equipe     @relation(fields: [equipeId], references: [id], onDelete: Restrict)
+
+  @@unique([lancamentoId, corretorId])
+  @@unique([lancamentoId, ordem])
+  @@index([corretorId])
+  @@index([equipeId])
+  @@map("participacoes_venda")
+}
+
+/// Reserva de locação — entidade operacional, não produção (DEC-055).
+///
+/// Não usa `Lancamento` e não conta em Locados, VGV nem rankings. Quando o
+/// negócio se concretiza, o operador registra a LOCACAO normalmente e marca a
+/// reserva como FINALIZADA — sem automação implícita na v1.
+model ReservaLocacao {
+  id             String               @id @default(uuid()) @db.Uuid
+  corretorId     String               @map("corretor_id") @db.Uuid
+  /// Snapshot da equipe no momento da criação, como nos lançamentos (DEC-002).
+  equipeId       String               @map("equipe_id") @db.Uuid
+  imovelRef      String               @map("imovel_ref")
+  /// Toda reserva nasce ATIVA; os outros estados só entram por edição.
+  status         StatusReservaLocacao @default(ATIVA)
+  /// Data do fato, não a data em que foi digitado.
+  dataReferencia DateTime             @map("data_referencia") @db.Date
+  observacao     String?
+  criadoPor      String?              @map("criado_por") @db.Uuid
+  criadoEm       DateTime             @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm   DateTime             @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+
+  corretor Corretor @relation(fields: [corretorId], references: [id], onDelete: Restrict)
+  equipe   Equipe   @relation(fields: [equipeId], references: [id], onDelete: Restrict)
+  autor    Usuario? @relation(fields: [criadoPor], references: [id], onDelete: SetNull)
+
+  @@index([status, dataReferencia])
+  @@index([corretorId, dataReferencia])
+  @@index([equipeId, dataReferencia])
+  @@map("reservas_locacao")
+}
+
 /// Evita cadastrar retroativamente centenas de vendas antigas.
 /// Entra apenas nos big numbers acumulados. Nunca nos períodos.
 model SaldoHistorico {
-  id           String         @id @default(uuid()) @db.Uuid
+  id           String                 @id @default(uuid()) @db.Uuid
   /// Saldo de abertura: no máximo uma linha por tipo. A unicidade é do banco,
   /// não de código — checar antes de inserir abriria corrida entre o SELECT e
   /// o INSERT. O índice único também serve às buscas por tipo, então o
   /// `@@index([tipo])` que existia aqui virou redundante.
-  tipo         TipoLancamento @unique
-  quantidade   Int            @default(0)
-  valorTotal   Decimal        @default(0) @map("valor_total") @db.Decimal(14, 2)
-  dataCorte    DateTime       @map("data_corte") @db.Date
+  tipo         TipoLancamento         @unique
+  quantidade   Int                    @default(0)
+  valorTotal   Decimal                @default(0) @map("valor_total") @db.Decimal(14, 2)
+  /// EXATO afirma o número; MINIMO_CONHECIDO é um piso exibido como "+ de"
+  /// (DEC-054). O default preserva a semântica das linhas existentes — nenhuma
+  /// vira mínimo conhecido sem edição explícita.
+  precisao     PrecisaoSaldoHistorico @default(EXATO)
+  dataCorte    DateTime               @map("data_corte") @db.Date
   descricao    String?
-  criadoEm     DateTime       @default(now()) @map("criado_em") @db.Timestamptz(6)
-  atualizadoEm DateTime       @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+  criadoEm     DateTime               @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm DateTime               @updatedAt @map("atualizado_em") @db.Timestamptz(6)
 
   @@map("saldo_historico")
 }
@@ -122,6 +227,7 @@ model Usuario {
   atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(6)
 
   lancamentos Lancamento[]
+  reservas    ReservaLocacao[]
 
   @@map("usuarios")
 }

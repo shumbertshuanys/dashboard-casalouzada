@@ -43,8 +43,13 @@ describe("banco de teste", () => {
     const migrations = await prisma.$queryRaw<
       { migration_name: string }[]
     >`SELECT migration_name FROM _prisma_migrations ORDER BY finished_at`;
-    assert.equal(migrations.length, 2);
-    assert.match(migrations[1].migration_name, /saldo_historico_tipo_unico/);
+    // Pelo nome, não pela contagem: o total cresce a cada migration nova, e o
+    // que este teste prova é que a unicidade do saldo está aplicada.
+    const nomes = migrations.map((migration) => migration.migration_name);
+    assert.ok(
+      nomes.some((nome) => /saldo_historico_tipo_unico/.test(nome)),
+      "a migration de unicidade do saldo precisa estar aplicada",
+    );
   });
 
   it("existe índice único sobre tipo", async () => {
