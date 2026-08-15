@@ -2,15 +2,10 @@
 
 import { redirect } from "next/navigation";
 import { autenticar } from "@/lib/auth";
+import { destinoAposLogin } from "@/lib/destino-login";
 import { criarSessao, encerrarSessao } from "@/lib/sessao-servidor";
 
 export type EstadoLogin = { erro?: string };
-
-/** Só aceita caminhos internos, para o parâmetro `proximo` não virar open redirect. */
-function destinoSeguro(valor: FormDataEntryValue | null): string {
-  const caminho = typeof valor === "string" ? valor : "";
-  return caminho.startsWith("/") && !caminho.startsWith("//") ? caminho : "/admin";
-}
 
 export async function entrar(
   _estadoAnterior: EstadoLogin,
@@ -18,7 +13,7 @@ export async function entrar(
 ): Promise<EstadoLogin> {
   const email = String(formData.get("email") ?? "").trim();
   const senha = String(formData.get("senha") ?? "");
-  const proximo = destinoSeguro(formData.get("proximo"));
+  const proximo = destinoAposLogin(formData.get("proximo"));
 
   if (!email || !senha) {
     return { erro: "Preencha e-mail e senha." };
