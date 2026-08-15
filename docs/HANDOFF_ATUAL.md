@@ -6,11 +6,12 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `adabe2dfe8f442826fa9006aa12c10ab248c83b6` — `docs: encerra etapa E5 da entrega v1` |
-| **Release em produção** | **`adabe2dfe8f442826fa9006aa12c10ab248c83b6`** — o mesmo commit; a v1 está no ar |
+| Commit de referência | `5caecc38d346b8f72cfc6243826b5a112dbac09d` — `security: restringe redirect pós-login ao admin` |
+| **Release em produção** | **`5caecc38d346b8f72cfc6243826b5a112dbac09d`** — o mesmo commit; a v1 está no ar |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
-| Data do handoff | 2026-08-14 |
+| Data do handoff | 2026-08-15 |
+| Go-live original da v1 | `adabe2dfe8f442826fa9006aa12c10ab248c83b6`, em 2026-08-14 (histórico) |
 
 ## Estado executivo
 
@@ -210,13 +211,120 @@ A **E6 — go-live no Render + smoke público — está CONCLUÍDA**.
 
 ## A ENTREGA V1 ESTÁ CONCLUÍDA E EM PRODUÇÃO
 
-O release **`adabe2d`** roda em `https://dashboard-casalouzada.onrender.com`. **Nenhuma
-feature da v1 continua pendente**, as **cinco migrations estão aplicadas em produção** e
+O release **`5caecc3`** roda em `https://dashboard-casalouzada.onrender.com`. **Nenhuma
+feature da v1 continua pendente**, as **seis migrations estão aplicadas em produção** e
 a **credencial exposta na P1 foi rotacionada e revogada** antes do go-live. O painel da
 TV fica em `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>`.
 
-A próxima frente é a **F4.5 — operação em hardware real**, agora **liberada para
-retomada** e **não iniciada**, se o proprietário decidir retomá-la.
+O go-live original foi o `adabe2d`, em 2026-08-14. O release atual é posterior porque a
+**auditoria de segurança S1** entregou correções em produção — ver a seção abaixo.
+
+A próxima frente é a **F4.5 — operação em hardware real**, **liberada para retomada** e
+**não iniciada**, se o proprietário decidir retomá-la.
+
+## AUDITORIA DE SEGURANÇA S1 — SEC-001 A SEC-004 ENCERRADOS
+
+A auditoria S1 varreu o repositório, o histórico Git, as dependências, os cabeçalhos
+HTTP, o banco e a configuração de deployment. Produziu dez achados. **Os quatro
+obrigatórios foram corrigidos e verificados em produção**; os seis restantes são
+hardening e estão listados mais adiante, sem bloquear a v1.
+
+| Achado | Título | Estado |
+|---|---|---|
+| **SEC-001** | Data API do Supabase alcançava as tabelas: RLS desligado e grants amplos para `anon`/`authenticated` | **corrigido e verificado** |
+| **SEC-002** | Conexões PostgreSQL da aplicação trafegavam sem TLS | **corrigido e verificado** |
+| **SEC-003** | Open redirect no `proximo` do login | **corrigido e verificado** |
+| **SEC-004** | Runtime conectava ao banco com role administrativo | **corrigido e verificado** |
+
+### SEC-001 — isolamento da Data API
+
+A migration **`20260815190000_seguranca_data_api`** é a sexta aplicada em produção.
+Estado hoje, medido por catálogo:
+
+- as **oito** tabelas de `public` com **RLS habilitado**;
+- **`FORCE ROW LEVEL SECURITY` desligado** — é isso que mantém a aplicação enxergando
+  tudo, porque o dono e quem tem `BYPASSRLS` não são filtrados;
+- **zero policies** em `public`, deliberadamente: sem policy, o RLS nega;
+- **zero ACL direta** de tabela para `anon` e `authenticated`, e **zero privilégio
+  efetivo** desses dois roles nos oito alvos;
+- os **default privileges de TABLE em `public` do creator `postgres`** deixaram de
+  conceder a esses dois roles, então tabela nova não nasce aberta;
+- **`service_role` preservado**, sem alteração.
+
+A **Data API continua disponível** no projeto Supabase — ela não foi desligada. O que
+mudou é que `anon` e `authenticated` não alcançam mais as tabelas do produto por ela.
+Desligá-la é hardening opcional, não pendência.
+
+### SEC-002 — TLS nas conexões PostgreSQL
+
+O CA oficial do Supabase está no Render como **Secret File `supabase-ca.crt`**,
+disponível em `/etc/secrets/supabase-ca.crt`. As duas conexões usam TLS validado, e
+**cada uma exige uma sintaxe diferente** — este é o ponto que mais gera engano:
+
+| Conexão | Consumidor | Porta | Parâmetros de TLS |
+|---|---|---|---|
+| `DATABASE_URL` | runtime (`pg` via `@prisma/adapter-pg`) | 6543, `pgbouncer=true` | `sslmode=verify-full` + `sslrootcert=/etc/secrets/supabase-ca.crt` |
+| `DIRECT_URL` | Prisma CLI / migrations (engine Rust) | 5432 | `sslmode=require` + `sslaccept=strict` + `sslcert=/etc/secrets/supabase-ca.crt` |
+
+**Não trocar uma sintaxe pela outra.** O engine Rust do Prisma **aceita e ignora**
+`sslmode=verify-full` e `sslrootcert`: a conexão parece configurada e não valida nada.
+Quem liga a verificação ali é `sslaccept=strict`. Ambas as conexões foram comprovadas
+negociando TLS 1.3 com certificado autorizado.
+
+O **SSL Enforcement do Supabase continua desligado** — o servidor ainda aceitaria uma
+conexão sem TLS. Isso é **hardening futuro**, não SEC-002 em aberto: o cliente está
+correto e provado; o enforcement apenas impediria uma regressão de configuração.
+
+### SEC-003 — redirect pós-login restrito ao `/admin`
+
+O destino pós-login admite **somente o namespace `/admin`**. A regra é de alistamento,
+não de proibição: a entrada é resolvida pelo mesmo parser de URL que o navegador usa,
+contra uma origem sentinela; se a origem mudar na resolução, o texto era externo
+disfarçado. O julgamento é sobre o **pathname canonicalizado** — `/admin/../login` vale
+como `/login` e é recusado — e o que volta é a forma canônica, **nunca o texto do
+cliente**. Qualquer outra entrada cai em `/admin`.
+
+Implementado em `src/lib/destino-login.ts`, consumido por `src/app/login/acoes.ts`,
+coberto por `tests/destino-login.test.ts`.
+
+### SEC-004 — role dedicado de runtime
+
+O runtime deixou de usar `postgres`. Arquitetura atual:
+
+| Conexão | Role | Papel |
+|---|---|---|
+| `DATABASE_URL` | **`casalouzada_runtime`** | runtime da aplicação |
+| `DIRECT_URL` | **`postgres`** | migrations e scripts administrativos |
+
+Atributos duráveis de `casalouzada_runtime`: `LOGIN`, `NOSUPERUSER`, `NOCREATEDB`,
+`NOCREATEROLE`, `NOREPLICATION`, `NOINHERIT`, **`BYPASSRLS`**, zero memberships
+administrativas e **zero ownership** — não é dono de nenhuma tabela.
+
+O `BYPASSRLS` é intencional e é o que dispensa criar policies: o RLS do SEC-001 existe
+para barrar a Data API, não o servidor da aplicação. A alternativa sem ele exigiria 25
+policies `USING (true)` e quebraria a auto-prova da migration do SEC-001, que exige zero
+policies.
+
+Matriz de privilégios em produção:
+
+| tabela | SELECT | INSERT | UPDATE | DELETE |
+|---|:--:|:--:|:--:|:--:|
+| `equipes` | sim | sim | sim | **não** |
+| `corretores` | sim | sim | sim | **não** |
+| `lancamentos` | sim | sim | sim | sim |
+| `participacoes_venda` | sim | sim | **não** | sim |
+| `reservas_locacao` | sim | sim | sim | **não** |
+| `saldo_historico` | sim | sim | sim | sim |
+| `usuarios` | sim | **não** | **não** | **não** |
+| `_prisma_migrations` | **não** | **não** | **não** | **não** |
+
+Nenhuma tabela recebe **TRUNCATE, REFERENCES, TRIGGER ou MAINTAIN**. `usuarios` é
+somente leitura porque o runtime só lê — login e guarda; a troca de senha é o script
+`db:trocar-senha-admin`, que usa a `DIRECT_URL`.
+
+**Tabela nova não recebe acesso automático.** Não há default privilege concedendo ao
+runtime. A migration que criar um objeto deve conceder explicitamente o mínimo que ele
+exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 
 ## Fases
 
@@ -254,8 +362,9 @@ retomada** e **não iniciada**, se o proprietário decidir retomá-la.
 | E3 — Venda compartilhada + métricas + cutover final | **Concluída** | `2a50965` — publicação atômica |
 | E4 — Painel operacional A/B e novos estados | **Concluída** | `c24a0c9` — publicação atômica, sem migration |
 | E5 — Gate completo | **Concluída** | `RELEASE_CANDIDATE_READY_FOR_E6 = YES` — sem commit de código |
-| E6 — Go-live no Render + smoke público | **Concluída** | `adabe2d` LIVE, 5 migrations aplicadas, sem commit de código |
+| E6 — Go-live no Render + smoke público | **Concluída** | `adabe2d` implantado no go-live, 5 migrations aplicadas, sem commit de código |
 | **Entrega v1** | **Concluída e em produção** | `https://dashboard-casalouzada.onrender.com` |
+| Auditoria S1 — SEC-001 a SEC-004 | **Concluída** | corrigidos e verificados em produção; release atual `5caecc3`, 6 migrations |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
@@ -520,17 +629,28 @@ Cinco migrations versionadas:
    antigo, zero não-VENDA sem crédito, zero VENDA sem participação, e o `CHECK` de
    proposta da E2B ainda presente. Nenhuma migration anterior foi editada.
 
-> **Estado de produção — as cinco estão aplicadas.** Até o E5, só
+6. `20260815190000_seguranca_data_api` (auditoria S1 — SEC-001) — a barreira contra a
+   Data API, descrita na seção da auditoria. Não toca coluna, constraint, índice, FK
+   nem dado: só permissão. Habilita RLS **sem `FORCE`** nas oito tabelas, revoga todos
+   os privilégios de `anon` e `authenticated`, remove os default privileges de TABLE em
+   `public` do creator `postgres` para esses dois roles, e termina com uma prova que
+   relê o catálogo e aborta a migration inteira se RLS, ACL, default ACL ou policies
+   não estiverem como prometido. Tudo dentro de **um único statement `DO`**, o que
+   garante o "tudo ou nada" sem depender de o Prisma abrir transação.
+
+> **Estado de produção — as seis estão aplicadas.** Até o E5, só
 > `20260811014943_inicial` existia em produção; nenhuma das cinco publicações de código
 > aplicou migration remota, porque publicar no Git **não é** aplicar em produção. O
 > **E6 fechou esse gate**: num único deploy do commit `adabe2d`, o `pre-deploy`
 > (`npm run db:deploy`) aplicou as quatro pendentes **nesta ordem** —
 > `20260812120000_saldo_historico_tipo_unico`, `20260814150000_entrega_v1_aditiva`,
 > `20260814210000_contrato_proposta` e `20260814230000_cutover_venda_compartilhada` —,
-> respondendo *"All migrations have been successfully applied"*. O `migrate status`
-> seguinte diz **"Database schema is up to date!"**. **Não há migration pendente.**
+> respondendo *"All migrations have been successfully applied"*. A sexta,
+> `20260815190000_seguranca_data_api`, foi aplicada depois, pela auditoria S1, também
+> por `pre-deploy` em deploy próprio. O `migrate status` diz **"Database schema is up to
+> date!"** e **não há migration pendente**.
 >
-> O risco que a última carregava foi tratado por construção, não por sorte: ela zera
+> O risco que a quinta carregava foi tratado por construção, não por sorte: ela zera
 > colunas e o runtime que a acompanha exige o estado novo, então rodou no `pre-deploy`
 > — **antes** de o processo novo receber tráfego, no mesmo deploy do mesmo commit.
 
@@ -1877,14 +1997,20 @@ e para permitir o `pre-deploy` das migrations.
 
 #### Conexões de produção — arquitetura, sem valores
 
-| Variável | Papel | Modo |
-|---|---|---|
-| `DATABASE_URL` | runtime da aplicação | Supabase **Transaction Pooler**, porta 6543 |
-| `DIRECT_URL` | migrations do Prisma | Supabase **Session Pooler**, porta 5432 |
+| Variável | Papel | Modo | Role PostgreSQL | TLS |
+|---|---|---|---|---|
+| `DATABASE_URL` | runtime da aplicação | Supabase **Transaction Pooler**, porta 6543 | **`casalouzada_runtime`** | `sslmode=verify-full` + `sslrootcert` |
+| `DIRECT_URL` | migrations do Prisma | Supabase **Session Pooler**, porta 5432 | **`postgres`** | `sslmode=require` + `sslaccept=strict` + `sslcert` |
 
-A separação importa: `prisma migrate deploy` não pode rodar em transaction mode, porque
-o pooler nesse modo derruba os advisory locks do schema engine. O Session Pooler mantém
-sessão dedicada e evita depender de conectividade IPv6 do Render.
+A separação de **modo** importa: `prisma migrate deploy` não pode rodar em transaction
+mode, porque o pooler nesse modo derruba os advisory locks do schema engine. O Session
+Pooler mantém sessão dedicada e evita depender de conectividade IPv6 do Render.
+
+A separação de **role** é o SEC-004 e vale como invariante: o runtime nunca deve voltar
+a usar `postgres`. As duas apontam para `/etc/secrets/supabase-ca.crt`, o Secret File
+com o CA oficial do Supabase, e cada uma usa a sintaxe de TLS que o seu consumidor
+entende — ver a seção da auditoria S1 e as DEC-059 e DEC-060. O username do pooler
+carrega o sufixo do projeto (`<role>.<project-ref>`), inclusive para o role dedicado.
 
 #### Variáveis no serviço — somente nomes
 
@@ -2136,9 +2262,10 @@ propostas, saldo e reservas — sem cutover de VENDA; **concluída em `c6464b5`,
 `fe00fd2` e `18a6599`**) → E3 (venda compartilhada + métricas + **cutover final** —
 **concluída em `2a50965`**) → E4 (painel A/B e novos estados — **concluída em
 `c24a0c9`**) → E5 (gate completo — **concluída**, `RELEASE_CANDIDATE_READY_FOR_E6 =
-YES`) → E6 (go-live no Render + smoke público — **concluída**, `adabe2d` no ar). **As
-seis etapas estão concluídas e a Entrega v1 está em produção.** O go-live precedia a
-F4.5, que agora está **liberada para retomada** e não iniciada. A infraestrutura de
+YES`) → E6 (go-live no Render + smoke público — **concluída**, `adabe2d` implantado).
+**As seis etapas estão concluídas e a Entrega v1 está em produção**, hoje no release
+`5caecc3`, posterior ao go-live por conta das correções da auditoria S1. O go-live
+precedia a F4.5, que continua **liberada para retomada** e não iniciada. A infraestrutura de
 produção foi decidida no E6: **Render**, e não Vercel como a §7 do PLANO previa. F5
 continua futura e não está iniciada. O transporte de precisão e das listas
 operacionais para o painel não exigiu preparação na E3: o contrato de leitura ficou
@@ -2147,8 +2274,12 @@ intocado até a E4, que fez o desenho inteiro sem tocar schema nem migration.
 ## Pendências
 
 **Encerradas no E6:** a rotação da credencial da P1 (feita e revogação provada), a
-aplicação das quatro migrations em produção (5/5 aplicadas) e a própria Entrega v1
-(E1 a E6 concluídas, `adabe2d` no ar). Nenhuma das três é mais pendência.
+aplicação das quatro migrations em produção e a própria Entrega v1 (E1 a E6 concluídas,
+`adabe2d` implantado no go-live). Nenhuma das três é mais pendência.
+
+**Encerrados na auditoria S1:** SEC-001, SEC-002, SEC-003 e SEC-004, todos corrigidos e
+verificados em produção. O release passou a ser o `5caecc3` e as migrations aplicadas
+passaram a ser seis.
 
 O que resta:
 
@@ -2168,6 +2299,29 @@ O que resta:
      suspensão de tela (DEC-050). É também nele que se confere a percepção das
      hairlines a 3–6 metros, registrada na F4.3.
 5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
+6. **Hardening de segurança residual** — ver a lista logo abaixo. **Nenhum item bloqueia
+   a v1** e nenhum deles é regressão dos quatro achados encerrados.
+
+### Hardening residual da auditoria S1
+
+Estes seis achados foram medidos e classificados, e **não foram corrigidos**. Ficam
+registrados para priorização em ciclo próprio, separados dos SEC-001 a SEC-004:
+
+| Item | Classificação | Resumo |
+|---|---|---|
+| **SEC-005** | INFO / hardening | Sem proteção contra framing: as telas `/admin` podem ser embutidas em iframe (sem `X-Frame-Options` nem CSP `frame-ancestors`) |
+| **SEC-006** | LOW | Sem HSTS: `http://` redireciona para `https://`, mas a primeira visita de cada navegador percorre uma requisição em claro |
+| **SEC-007** | LOW | Login sem rate limiting nem bloqueio após falhas. Mitigado na prática pelo bcrypt de custo 12 e por haver uma única conta |
+| **SEC-008** | LOW | Logout apaga o cookie, mas o JWT emitido continua válido até expirar (7 dias). Não há revogação individual — trocar `AUTH_SECRET` é o botão global (DEC-018) |
+| **SEC-009** | LOW | `npm run db:seed` reativa (`ativo = true`) um administrador desativado. O pre-deploy do Render roda apenas `db:deploy`, então o gatilho é execução manual |
+| **SEC-010** | INFO / hardening | `fotoUrl` aceita qualquer esquema de URL. Hoje é inofensivo — o campo **não é renderizado em lugar nenhum**; o risco é diferido para quando passar a ser |
+
+Além destes, dois itens de plataforma, também opcionais:
+
+- **desligar a Data API** do Supabase, reduzindo superfície — hoje ela está no ar, mas
+  sem alcance às tabelas (SEC-001);
+- **habilitar o SSL Enforcement** do Supabase, que impediria regressão para conexão sem
+  TLS. Exige ciclo próprio: **provoca reboot do banco**.
 
 Pendências de informação herdadas do plano: número máximo de corretores por equipe
 (dimensiona a altura dos quadros) e valores iniciais do saldo histórico. A terceira —

@@ -31,12 +31,39 @@ e a **E6 — go-live — está CONCLUÍDA**.
 
 ## A Entrega v1 está CONCLUÍDA e EM PRODUÇÃO
 
-O release **`adabe2d`** roda em `https://dashboard-casalouzada.onrender.com`, num Web
+O release **`5caecc3`** roda em `https://dashboard-casalouzada.onrender.com`, num Web
 Service do Render (região Virginia, plano Starter, Node 24.19.0, auto-deploy **OFF**).
-As **cinco migrations estão aplicadas** no banco de produção e a **credencial exposta na
+As **seis migrations estão aplicadas** no banco de produção e a **credencial exposta na
 P1 foi rotacionada e revogada** antes do go-live. **Nenhuma feature da v1 continua
 pendente.** O painel da TV fica em
 `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>`.
+
+O go-live original foi o `adabe2d`; o release atual é posterior porque a **auditoria de
+segurança S1** entregou correções em produção.
+
+### Auditoria de segurança S1 — concluída
+
+A auditoria produziu dez achados. Os **quatro obrigatórios estão corrigidos e
+verificados em produção**:
+
+- **SEC-001** — as tabelas do produto deixaram de ser alcançáveis pela Data API do
+  Supabase: RLS habilitado nas oito, sem policy, e sem privilégio para `anon` e
+  `authenticated` (migration `20260815190000_seguranca_data_api`, a sexta aplicada);
+- **SEC-002** — as duas conexões PostgreSQL passaram a usar TLS com verificação de
+  certificado contra o CA oficial, entregue por Secret File do Render;
+- **SEC-003** — o redirect pós-login passou a admitir somente o namespace `/admin`,
+  decidido sobre a URL canonicalizada;
+- **SEC-004** — o runtime deixou de usar o role administrativo `postgres` e passou a
+  usar o role dedicado `casalouzada_runtime`, com privilégio mínimo; a `DIRECT_URL`
+  continua administrativa para migrations.
+
+As decisões duráveis estão nas **DEC-058 a DEC-062**; o estado detalhado, em
+`docs/HANDOFF_ATUAL.md`.
+
+Os **seis achados restantes são hardening** (SEC-005 a SEC-010: framing, HSTS, rate
+limiting, revogação de JWT, reativação por seed e validação de `fotoUrl`), classificados
+entre LOW e INFO. **Nenhum deles bloqueia a v1** e nenhum é regressão dos quatro
+encerrados. A priorização é ciclo próprio.
 
 ### Estado final da faixa superior (E4, `c24a0c9`)
 
@@ -620,7 +647,7 @@ locação e a faixa superior alternando entre métricas e destaques operacionais
 | E3 | venda compartilhada + métricas + **cutover final** | **concluída** — `2a50965` |
 | E4 | painel operacional A/B e novos estados | **concluída** — `c24a0c9` |
 | E5 | gate completo | **concluída** — `RELEASE_CANDIDATE_READY_FOR_E6 = YES`, sem commit de código |
-| E6 | go-live no Render + smoke público | **concluída** — `adabe2d` no ar, 5 migrations aplicadas |
+| E6 | go-live no Render + smoke público | **concluída** — `adabe2d` implantado no go-live, 5 migrations aplicadas |
 
 A E2 saiu em três fatias: **E2A** (`c6464b5`) — enums, campos de proposta, precisão do
 saldo, `ParticipacaoVenda`, `ReservaLocacao`, migration aditiva e backfills, sem

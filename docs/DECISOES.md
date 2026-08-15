@@ -1590,7 +1590,7 @@ Ordem de entrega aprovada:
 | E3 | venda compartilhada + métricas + **cutover final** (DEC-051) — **concluída em `2a50965`** |
 | E4 | painel operacional A/B e apresentação dos novos estados — **concluída em `c24a0c9`** |
 | E5 | gate completo — **concluída**: `RELEASE_CANDIDATE_READY_FOR_E6 = YES`, sem commit de código |
-| E6 | go-live no Render + smoke público — **concluída**: `adabe2d` em produção, 5 migrations aplicadas |
+| E6 | go-live no Render + smoke público — **concluída**: `adabe2d` implantado no go-live, 5 migrations aplicadas |
 
 Depois da entrega, retoma-se a F4.5. A escolha de plano/infraestrutura de produção é
 do E6. F5 continua futura e não se declara iniciada.
@@ -1621,3 +1621,171 @@ deploy manual até nova decisão.
 Com o go-live feito, a **F4.5 está liberada para retomada** e **não iniciada**. A F4
 continua **em andamento** e só se encerra com ela. **F5 segue futura e não iniciada.**
 **cumprida — go-live concluído; F4.5 liberada para retomada, ainda não iniciada**
+
+## Segurança — decisões da auditoria S1
+
+A auditoria S1 encerrou quatro achados obrigatórios (SEC-001 a SEC-004), todos
+corrigidos e verificados em produção. As decisões abaixo são as que **permanecem
+valendo** depois disso — não o relato do trabalho, que está no handoff.
+
+### DEC-058 — As tabelas do produto são isoladas da Data API do Supabase
+
+**Decisão.** As oito tabelas de `public` ficam com **Row Level Security habilitado** e
+**sem policy alguma**, e os roles `anon` e `authenticated` **não têm privilégio nenhum**
+sobre elas — nem direto, nem por default privilege do creator `postgres`. `FORCE ROW
+LEVEL SECURITY` **não** é usado.
+
+**Motivo.** `anon` e `authenticated` não são roles internos do banco: são os que a Data
+API (PostgREST) assume ao atender requisição vinda da internet com a chave pública do
+projeto. Com RLS desligado e grants amplos — o padrão da plataforma —, quem tivesse essa
+chave lia e escrevia em `usuarios` e `lancamentos` sem passar pelo Next.js, pelo
+`src/proxy.ts`, pela guarda administrativa ou pelo token do painel. A aplicação **não
+usa a Data API**: não há `@supabase/supabase-js`, nem chamada a `rest/v1`, nem variável
+`SUPABASE_*`. Não havia consumidor legítimo a preservar.
+
+São duas barreiras independentes de propósito: sem GRANT não há o que ler, e sem policy
+o RLS nega. Uma só bastaria hoje; duas continuam valendo quando a outra cair, porque os
+grants do schema `public` são reinstaláveis por fora.
+
+**Impacto.** A **ausência de policy é o contrato**, não um vazio a preencher: criar uma
+policy permissiva nessas tabelas devolve à Data API o acesso que se acabou de tirar. A
+omissão do `FORCE` também é deliberada — é ela que mantém o dono das tabelas e quem tem
+`BYPASSRLS` enxergando tudo, e portanto a aplicação funcionando sem policy nenhuma. A
+Data API **continua no ar**; o que mudou é o alcance dela. Desligá-la é hardening
+opcional, não pendência.
+
+**Fonte.** `prisma/migrations/20260815190000_seguranca_data_api/migration.sql`, cuja
+seção final relê o catálogo e aborta a migration se RLS, ACL, default ACL ou policies
+não estiverem como prometido. **implementada**
+
+### DEC-059 — As conexões PostgreSQL exigem TLS com verificação de certificado
+
+**Decisão.** As duas conexões da aplicação usam TLS com validação contra o **CA oficial
+do Supabase**, entregue como Secret File do Render em `/etc/secrets/supabase-ca.crt`.
+Nunca usar modo que desabilite verificação — nem `rejectUnauthorized: false`, nem
+`sslaccept=accept_invalid_certs`, nem omitir o CA.
+
+**Motivo.** Antes disso as duas connection strings não tinham `sslmode`, e o driver não
+negocia TLS por conta própria: o tráfego entre o Render e o Supabase — incluindo a senha
+do PostgreSQL no handshake e todo o conteúdo das tabelas — atravessava a internet em
+texto claro. O certificado do pooler é assinado por uma CA privada da Supabase, então o
+trust store público do sistema não basta: sem o CA fornecido, `verify-full` falha.
+
+**Impacto — e a armadilha que isto evita.** Cada conexão tem **um consumidor diferente,
+com sintaxe diferente**, e trocá-las é pior que não configurar nada:
+
+| Conexão | Consumidor | Sintaxe |
+|---|---|---|
+| `DATABASE_URL` | runtime, `pg` via `@prisma/adapter-pg` | `sslmode=verify-full` + `sslrootcert=<caminho do CA>` |
+| `DIRECT_URL` | Prisma CLI/migrations, engine Rust | `sslmode=require` + `sslaccept=strict` + `sslcert=<caminho do CA>` |
+
+O engine Rust do Prisma **aceita e ignora silenciosamente** `sslmode=verify-full` e
+`sslrootcert`: a URL parece correta em revisão de código e não valida coisa alguma. Quem
+liga a verificação ali é `sslaccept=strict` — comprovado por diferencial, já que com CA
+incorreto a conexão passa a falhar com `P1011`.
+
+O **SSL Enforcement do Supabase continua desligado**: o servidor ainda aceitaria conexão
+sem TLS. Isso é hardening — impediria regressão de configuração —, e não uma parte
+faltante desta decisão. Habilitá-lo provoca reboot do banco.
+
+**Fonte.** Configuração do serviço no Render (valores não versionados); Secret File
+`supabase-ca.crt`; provas de TLS 1.3 com certificado autorizado nas duas conexões,
+inclusive dentro do `pre-deploy`. **implementada**
+
+### DEC-060 — Runtime e migrations usam roles PostgreSQL distintos
+
+**Decisão.** A `DATABASE_URL` usa o role dedicado **`casalouzada_runtime`**; a
+`DIRECT_URL` continua com a credencial administrativa **`postgres`**. O runtime **nunca
+deve voltar a usar `postgres`**.
+
+Atributos duráveis do role de runtime: `LOGIN`, `NOSUPERUSER`, `NOCREATEDB`,
+`NOCREATEROLE`, `NOREPLICATION`, `NOINHERIT`, **`BYPASSRLS`**, zero memberships
+administrativas e **zero ownership**. Privilégios de tabela exatamente estes:
+
+| tabela | SELECT | INSERT | UPDATE | DELETE |
+|---|:--:|:--:|:--:|:--:|
+| `equipes` | sim | sim | sim | não |
+| `corretores` | sim | sim | sim | não |
+| `lancamentos` | sim | sim | sim | sim |
+| `participacoes_venda` | sim | sim | não | sim |
+| `reservas_locacao` | sim | sim | sim | não |
+| `saldo_historico` | sim | sim | sim | sim |
+| `usuarios` | sim | não | não | não |
+| `_prisma_migrations` | não | não | não | não |
+
+Nenhuma tabela recebe **TRUNCATE, REFERENCES, TRIGGER ou MAINTAIN**.
+
+**Motivo.** O `postgres` do projeto Supabase pode criar roles, criar bancos, iniciar
+replicação, alterar qualquer objeto do schema e ignorar RLS. O runtime não precisa de
+nada disso: ele lê e escreve sete tabelas. Usá-lo como conexão da aplicação
+transformava qualquer vazamento de credencial, ou qualquer injeção futura, em
+comprometimento administrativo do banco.
+
+A matriz é derivada do código, não de conveniência: `usuarios` é **somente leitura**
+porque o runtime só lê (login e guarda) — a troca de senha é o script
+`db:trocar-senha-admin`, que usa a `DIRECT_URL`; `participacoes_venda` não recebe UPDATE
+porque a reconciliação de elenco apaga e recria; e não há DELETE de equipe, corretor ou
+reserva porque encerrar é `ativo = false` / status, não exclusão.
+
+**Impacto.** O `BYPASSRLS` é o único atributo positivo, e é intencional: o RLS da
+DEC-058 existe para barrar a Data API, não o servidor da aplicação. A alternativa sem
+ele exigiria 25 policies `USING (true)` e **quebraria a auto-prova** da migration do
+SEC-001, que exige zero policies. Manter a `DIRECT_URL` administrativa é o que permite
+que o runtime seja tão restrito — migrations continuam podendo o que precisam.
+
+Ao trocar a senha do role, contar com o **cache de credencial do Supavisor**: a mudança
+leva alguns segundos para refletir no pooler, e uma primeira tentativa pode falhar com
+`password authentication failed` sem que nada esteja errado. Validar a conexão **antes**
+de disparar deploy.
+
+**Fonte.** Role `casalouzada_runtime` em produção; provas de `current_user`, TLS e
+capabilities negativas antes e depois do deploy. **implementada**
+
+### DEC-061 — Acesso do runtime a tabelas novas é explícito e versionado
+
+**Decisão.** Não existe default privilege concedendo ao role de runtime. **Tabela nova
+nasce inacessível a ele.** A migration que introduzir um objeto deve conceder
+explicitamente o mínimo que ele exige, e esse `GRANT` fica versionado junto do `CREATE
+TABLE`.
+
+**Motivo.** A alternativa — `ALTER DEFAULT PRIVILEGES` para o runtime — reintroduziria,
+em menor escala, exatamente o mecanismo que a DEC-058 acabou de remover: concessão
+automática e invisível. O custo desta decisão é uma linha por migration; o ganho é que o
+privilégio aparece no diff, onde pode ser revisado, e que o esquecimento **falha
+fechado** — a tela quebra em desenvolvimento, em vez de a tabela nascer aberta em
+produção.
+
+**Impacto.** Quem criar tabela precisa lembrar do `GRANT`, e é para lembrar mesmo: é uma
+decisão de segurança por objeto, não um detalhe de infraestrutura. Vale também para o
+`_prisma_migrations`, que permanece sem nenhum privilégio para o runtime.
+
+**Fonte.** Ausência deliberada de default privileges para `casalouzada_runtime`;
+DEC-060. **implementada**
+
+### DEC-062 — O redirect pós-login só admite o namespace `/admin`
+
+**Decisão.** O parâmetro `proximo` do login só produz destino dentro de `/admin`.
+Qualquer outra entrada — inclusive caminho interno legítimo como `/login` — vira
+`/admin`. A decisão é tomada sobre a **URL canonicalizada**, e o que se redireciona é a
+forma canônica, **nunca o texto recebido do cliente**.
+
+**Motivo.** A regra anterior era por proibição: exigia começar com `/` e não começar com
+`//`. `/\evil.example` cumpre as duas condições, e a especificação de URL trata a
+contrabarra como barra em esquemas web — o destino resolvia para outra origem, e o
+administrador recém-autenticado caía num site de terceiro pronto para pedir a senha de
+novo. Listas de proibidos falham sempre pelo mesmo motivo: exigem adivinhar de antemão
+toda forma de escrever um endereço externo.
+
+**Impacto.** O candidato é resolvido pelo mesmo parser que o navegador usa, contra uma
+origem sentinela sob `.invalid` que existe só para medir: se a origem sobreviveu à
+resolução, o texto era mesmo relativo. Resolver também canonicaliza, e é isso que faz
+`/admin/../login` ser julgado como `/login` — o que ele de fato é — em vez de aprovado
+por começar com o texto `/admin`. A fronteira exige o separador, então `/administrator`
+não se confunde com `/admin`.
+
+A decisão vive em `src/lib/destino-login.ts`, e não na Server Action, porque módulo
+`use server` tem contrato próprio de exports e não comporta função pura exportada só
+para teste.
+
+**Fonte.** `src/lib/destino-login.ts`; `src/app/login/acoes.ts`;
+`tests/destino-login.test.ts`. **implementada**
