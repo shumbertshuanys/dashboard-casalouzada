@@ -6,10 +6,10 @@ import { gerarHashSenha } from "../src/lib/senha";
 /**
  * Troca a senha de um usuário que JÁ EXISTE.
  *
- * Não confundir com `prisma/seed.ts`: o seed roda a cada deploy e por isso
- * preserva a senha de quem já está cadastrado. Este script é o contrário —
- * é rodado à mão, exige que o usuário exista e substitui a senha de propósito.
- * É por aqui que a senha de login é rotacionada.
+ * Não confundir com `prisma/seed.ts`: o seed é reexecutável e por isso preserva a
+ * senha e o estado `ativo` de quem já está cadastrado (DEC-019). Este script é o
+ * contrário — é rodado à mão, exige que o usuário exista e substitui a senha de
+ * propósito. É por aqui que a senha de login é rotacionada.
  *
  *   npm run db:trocar-senha-admin
  *

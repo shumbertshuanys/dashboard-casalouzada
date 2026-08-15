@@ -45,10 +45,14 @@ async function semearAdministrador() {
   const existente = await prisma.usuario.findUnique({ where: { email } });
 
   if (existente) {
-    // A senha não é sobrescrita: ela pode já ter sido trocada pela própria
-    // área administrativa, e o seed roda de novo a cada deploy.
-    await prisma.usuario.update({ where: { email }, data: { nome, ativo: true } });
-    console.log(`usuário já existia, senha preservada: ${email}`);
+    // Só o nome. `senhaHash` e `ativo` ficam de fora porque o seed é
+    // reexecutável, e uma reexecução não pode desfazer decisão administrativa:
+    // sobrescrever a senha devolveria o valor da variável de ambiente por cima
+    // de uma troca feita depois, e regravar `ativo` reativaria uma conta que foi
+    // desativada de propósito — que é hoje a forma de cortar acesso na hora,
+    // já que a guarda relê `ativo` no banco a cada operação.
+    await prisma.usuario.update({ where: { email }, data: { nome } });
+    console.log(`usuário já existia, senha e estado preservados: ${email}`);
     return;
   }
 

@@ -322,18 +322,35 @@ há revogação individual de sessão.
 
 **Fonte.** `src/lib/sessao.ts`; `src/lib/sessao-servidor.ts`. **implementada**
 
-### DEC-019 — O seed não sobrescreve senha de usuário existente
+### DEC-019 — O seed não sobrescreve senha nem estado de usuário existente
 
-**Decisão.** Se o e-mail do administrador já existe, o seed atualiza nome e `ativo` e
-**preserva** o hash da senha.
+**Decisão.** Se o e-mail do administrador já existe, o seed atualiza **apenas o nome**.
+`senhaHash` e `ativo` são **preservados** — o seed não escreve nesses campos. Se o
+e-mail não existe, a conta é criada normalmente, ativa pelo default do schema.
 
-**Motivo.** O seed roda a cada deploy. Sobrescrever devolveria a senha ao valor da
-variável de ambiente toda vez, desfazendo silenciosamente qualquer troca.
+**Motivo.** O seed é operação de inicialização e reconciliação, e é reexecutável. Sua
+repetição não pode desfazer decisão administrativa tomada depois dele. São duas, e cada
+uma por sua razão:
 
-**Impacto.** Mudar `SEED_ADMIN_SENHA` e rodar o seed **não** troca a senha de
-ninguém. É a razão de existir a DEC-020.
+- **senha** — sobrescrever devolveria o valor de `SEED_ADMIN_SENHA` por cima de uma
+  troca feita pela DEC-020, silenciosamente;
+- **`ativo`** — regravar `true` reativaria uma conta desativada de propósito.
+  Desativar é hoje a forma de cortar acesso imediatamente, porque
+  `exigirAdministradorAtivo()` relê `ativo` no banco a cada operação e o JWT emitido
+  sobrevive ao logout até expirar. Um seed que reativa desfaz exatamente a resposta a
+  incidente que existe hoje.
 
-**Fonte.** `prisma/seed.ts`, função `semearAdministrador`. **implementada**
+**Impacto.** Mudar `SEED_ADMIN_SENHA` e rodar o seed **não** troca a senha de ninguém —
+é a razão de existir a DEC-020. Desativar a conta e rodar o seed **não** a reativa; a
+reativação, se desejada, é ato administrativo explícito. O nome continua sendo
+atualizável, que é o uso legítimo da reexecução.
+
+**Estado operacional.** O deploy atual **não executa o seed**: o `preDeployCommand` do
+Render é `npm run db:deploy`, e `build`, `start` e `postinstall` também não o chamam.
+`npm run db:seed` é comando manual.
+
+**Fonte.** `prisma/seed.ts`, função `semearAdministrador`;
+`tests/integracao/seed-admin.integracao.test.ts`. **implementada**
 
 ### DEC-020 — Rotação de senha por script separado e explícito
 
