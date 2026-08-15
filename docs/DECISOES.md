@@ -1635,21 +1635,33 @@ valendo** depois disso — não o relato do trabalho, que está no handoff.
 sobre elas — nem direto, nem por default privilege do creator `postgres`. `FORCE ROW
 LEVEL SECURITY` **não** é usado.
 
-**Motivo.** `anon` e `authenticated` não são roles internos do banco: são os que a Data
-API (PostgREST) assume ao atender requisição vinda da internet com a chave pública do
-projeto. Com RLS desligado e grants amplos — o padrão da plataforma —, quem tivesse essa
-chave lia e escrevia em `usuarios` e `lancamentos` sem passar pelo Next.js, pelo
-`src/proxy.ts`, pela guarda administrativa ou pelo token do painel. A aplicação **não
-usa a Data API**: não há `@supabase/supabase-js`, nem chamada a `rest/v1`, nem variável
-`SUPABASE_*`. Não havia consumidor legítimo a preservar.
+**Motivo.** `anon` e `authenticated` **são roles PostgreSQL**, criados pela plataforma, e
+são os que a Data API (PostgREST) assume ao atender requisição vinda da internet com a
+chave pública do projeto. O que eles **não** são é parte do caminho da aplicação: o
+acesso do produto ao banco é Next.js → Prisma → PostgreSQL, com role próprio, e nunca
+passa por eles. Com RLS desligado e grants amplos — o padrão da plataforma —, quem
+tivesse essa chave lia e escrevia em `usuarios` e `lancamentos` sem passar pelo Next.js,
+pelo `src/proxy.ts`, pela guarda administrativa ou pelo token do painel. A aplicação
+**não usa a Data API**: não há `@supabase/supabase-js`, nem chamada a `rest/v1`, nem
+variável `SUPABASE_*`. Não havia consumidor legítimo a preservar.
 
 São duas barreiras independentes de propósito: sem GRANT não há o que ler, e sem policy
 o RLS nega. Uma só bastaria hoje; duas continuam valendo quando a outra cair, porque os
 grants do schema `public` são reinstaláveis por fora.
 
-**Impacto.** A **ausência de policy é o contrato**, não um vazio a preencher: criar uma
-policy permissiva nessas tabelas devolve à Data API o acesso que se acabou de tirar. A
-omissão do `FORCE` também é deliberada — é ela que mantém o dono das tabelas e quem tem
+**Impacto.** As duas barreiras são independentes, e é preciso ser exato sobre o que cada
+uma faz. Criar uma policy permissiva **não devolve acesso por si só**: enquanto os grants
+continuarem revogados, `anon` e `authenticated` não têm o privilégio que o PostgreSQL
+exige antes mesmo de avaliar RLS. O que uma policy permissiva faria é **remover uma das
+duas barreiras** — e, se os grants viessem a ser restaurados depois (o que é plausível,
+já que são o padrão da plataforma e reinstaláveis por fora), a Data API voltaria a ter
+caminho até as tabelas.
+
+Por isso **manter zero policies segue sendo decisão deliberada**: é a barreira que não
+depende de ninguém lembrar de conferir grants, e é simples de verificar — ou existe
+policy, ou não existe.
+
+A omissão do `FORCE` também é deliberada — é ela que mantém o dono das tabelas e quem tem
 `BYPASSRLS` enxergando tudo, e portanto a aplicação funcionando sem policy nenhuma. A
 Data API **continua no ar**; o que mudou é o alcance dela. Desligá-la é hardening
 opcional, não pendência.
@@ -1666,10 +1678,19 @@ Nunca usar modo que desabilite verificação — nem `rejectUnauthorized: false`
 `sslaccept=accept_invalid_certs`, nem omitir o CA.
 
 **Motivo.** Antes disso as duas connection strings não tinham `sslmode`, e o driver não
-negocia TLS por conta própria: o tráfego entre o Render e o Supabase — incluindo a senha
-do PostgreSQL no handshake e todo o conteúdo das tabelas — atravessava a internet em
-texto claro. O certificado do pooler é assinado por uma CA privada da Supabase, então o
-trust store público do sistema não basta: sem o CA fornecido, `verify-full` falha.
+negocia TLS por conta própria. A auditoria mediu isso no próprio socket
+(`socket.encrypted === false`): o **protocolo PostgreSQL e os dados da aplicação
+atravessavam a internet entre o Render e o Supabase sem a proteção de TLS**, expostos a
+observação e adulteração por quem estivesse no caminho de rede — incluindo o handshake
+de autenticação, que trafegava sem confidencialidade nem integridade de transporte.
+
+O que a auditoria **não** determinou foi o método de autenticação negociado, e portanto
+não se afirma aqui que a senha tenha sido transmitida em forma bruta. O ponto é
+suficiente sem isso: sem TLS não há garantia de sigilo nem de integridade para nada que
+passe pela conexão.
+
+O certificado do pooler é assinado por uma CA privada da Supabase, então o trust store
+público do sistema não basta: sem o CA fornecido, `verify-full` falha.
 
 **Impacto — e a armadilha que isto evita.** Cada conexão tem **um consumidor diferente,
 com sintaxe diferente**, e trocá-las é pior que não configurar nada:
@@ -1728,10 +1749,24 @@ porque a reconciliação de elenco apaga e recria; e não há DELETE de equipe, 
 reserva porque encerrar é `ativo = false` / status, não exclusão.
 
 **Impacto.** O `BYPASSRLS` é o único atributo positivo, e é intencional: o RLS da
-DEC-058 existe para barrar a Data API, não o servidor da aplicação. A alternativa sem
-ele exigiria 25 policies `USING (true)` e **quebraria a auto-prova** da migration do
-SEC-001, que exige zero policies. Manter a `DIRECT_URL` administrativa é o que permite
-que o runtime seja tão restrito — migrations continuam podendo o que precisam.
+DEC-058 existe para barrar a Data API, não o servidor da aplicação.
+
+A alternativa — runtime sem `BYPASSRLS` — exigiria **introduzir policies permissivas
+específicas para o role de runtime**, e é isso que se quer evitar, por três razões: elas
+não expressariam isolamento real por linha, já que o produto não é multi-tenant e a
+autorização é decidida no servidor antes de chegar ao banco; acrescentariam objetos a
+manter e revisar; e apagariam a leitura simples da arquitetura atual — **Data API
+bloqueada, runtime autorizado** —, que hoje se verifica olhando se existe policy.
+
+Vale registrar o que isso **não** é: adicionar policies numa migration futura não
+invalidaria a migration do SEC-001. Aquela prova afirma o estado ao final da própria
+execução, e uma migration posterior pode alterar o estado sem tornar retroativamente
+falso o que foi verificado. O que uma mudança dessas exigiria é uma **decisão
+arquitetural nova e deliberada**, substituindo esta — não é impedimento técnico, é
+escolha a ser refeita conscientemente.
+
+Manter a `DIRECT_URL` administrativa é o que permite que o runtime seja tão restrito —
+migrations continuam podendo o que precisam.
 
 Ao trocar a senha do role, contar com o **cache de credencial do Supavisor**: a mudança
 leva alguns segundos para refletir no pooler, e uma primeira tentativa pode falhar com

@@ -301,9 +301,12 @@ Atributos duráveis de `casalouzada_runtime`: `LOGIN`, `NOSUPERUSER`, `NOCREATED
 administrativas e **zero ownership** — não é dono de nenhuma tabela.
 
 O `BYPASSRLS` é intencional e é o que dispensa criar policies: o RLS do SEC-001 existe
-para barrar a Data API, não o servidor da aplicação. A alternativa sem ele exigiria 25
-policies `USING (true)` e quebraria a auto-prova da migration do SEC-001, que exige zero
-policies.
+para barrar a Data API, não o servidor da aplicação. A alternativa sem ele exigiria
+introduzir policies permissivas específicas para o role de runtime — regras que não
+expressariam isolamento real por linha, já que a autorização é decidida no servidor antes
+de chegar ao banco, e que apagariam a leitura simples da arquitetura atual: **Data API
+bloqueada, runtime autorizado**. Trocar isso é possível, mas seria uma decisão
+arquitetural nova, não um ajuste (DEC-060).
 
 Matriz de privilégios em produção:
 
