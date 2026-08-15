@@ -38,6 +38,24 @@
 -- permite, a migration avisa por NOTICE e segue. O que ela nunca faz é dar por
 -- aplicado o que não aplicou — daí a prova da seção E, que relê o catálogo e
 -- estoura se o resultado não for o prometido.
+--
+-- Fronteira desta migration: os defaults de **um** creator.
+--
+-- Default privilege não é do schema, é do par (role que cria, schema). Quem
+-- decide qual conjunto se aplica a uma tabela nova é o role que executa o
+-- CREATE TABLE. Num projeto Supabase há mais de um conjunto registrado para
+-- `public` — o preflight encontrou `postgres` e `supabase_admin` —, e o
+-- `postgres` não é membro do `supabase_admin`, logo não tem autoridade sobre os
+-- defaults dele. Tentar governá-los aqui não daria uma barreira a mais: daria um
+-- erro de permissão que derrubaria as barreiras que esta migration consegue
+-- levantar.
+--
+-- Por isso o contrato é declarado pelo que ela controla: os defaults cujo
+-- creator é `postgres`, que é justamente quem cria tabela neste projeto — as
+-- oito existentes são dele, e `prisma migrate deploy` roda como ele. Defaults de
+-- outros creators ficam de fora do predicado da prova, de propósito, e apenas
+-- rendem um NOTICE informativo. Fechá-los, se for o caso, é decisão de quem
+-- administra o banco, com autoridade que esta migration não tem.
 
 DO $$
 DECLARE
@@ -64,6 +82,8 @@ DECLARE
   /* `service_role` fica fora deste ciclo por decisão do mandato. */
   roles_data_api CONSTANT text[] := ARRAY['anon', 'authenticated'];
 
+  /* Os quatro verbos do acesso efetivo (E.3). Não confundir com a prova de ACL
+     direta (E.2), que é agnóstica ao nome do privilégio de propósito. */
   privilegios_provados CONSTANT text[] := ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE'];
 
   alvos text[];
@@ -73,8 +93,12 @@ DECLARE
   ausentes text[] := ARRAY[]::text[];
   restantes text[] := ARRAY[]::text[];
   sem_rls text[];
+  acl_remanescente text[];
+  defaults_remanescentes text[];
+  outros_creators text[];
   policies_encontradas integer;
   pode_mexer_em_defaults boolean := false;
+  oid_postgres oid;
 BEGIN
   ---------------------------------------------------------------------------
   -- Alvos: as sete obrigatórias, mais a de controle quando ela existir.
@@ -110,9 +134,11 @@ BEGIN
   ---------------------------------------------------------------------------
   -- B e C. Privilégios de `anon` e `authenticated` nas tabelas existentes.
   --
-  -- `REVOKE ALL` em vez de listar verbos: a auditoria encontrou sete deles
-  -- concedidos, e uma lista escrita à mão envelhece — PostgreSQL 17 acrescentou
-  -- MAINTAIN, e o próximo acrescentará outro.
+  -- `REVOKE ALL` em vez de listar verbos, e o preflight mostrou por quê: a
+  -- auditoria contou sete privilégios concedidos lendo
+  -- `information_schema.role_table_grants`, mas a ACL bruta tem oito — o oitavo é
+  -- `MAINTAIN`, que chegou no PostgreSQL 17 e que aquela view não expõe. Uma
+  -- lista escrita à mão já teria nascido incompleta.
   ---------------------------------------------------------------------------
   FOREACH papel IN ARRAY roles_data_api LOOP
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = papel) THEN
@@ -137,8 +163,15 @@ BEGIN
   -- ou membro dele. É verdade no Supabase, onde as migrations rodam como
   -- `postgres`, e tipicamente falso num banco local, onde o dono do schema é um
   -- role de aplicação. Por isso a condição é medida, e não presumida.
+  --
+  -- Só o creator `postgres` é tocado — ver a nota de fronteira no cabeçalho.
+  -- Nenhum outro creator entra aqui, e em particular não se tenta `FOR ROLE
+  -- supabase_admin`: o executor não é membro dele, e a tentativa terminaria em
+  -- erro de permissão levando junto o RLS e os REVOKEs desta mesma execução.
   ---------------------------------------------------------------------------
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
+  SELECT oid INTO oid_postgres FROM pg_roles WHERE rolname = 'postgres';
+
+  IF oid_postgres IS NOT NULL THEN
     -- Em duas etapas de propósito: `pg_has_role` estoura se o role não existir,
     -- e um AND numa expressão só não garante a ordem de avaliação.
     pode_mexer_em_defaults := pg_has_role(current_user, 'postgres', 'USAGE');
@@ -166,10 +199,28 @@ BEGIN
   END LOOP;
 
   ---------------------------------------------------------------------------
-  -- E. Prova. O que não puder ser demonstrado aqui derruba a migration inteira,
-  -- que o Prisma executa em transação única — meia barreira é pior que nenhuma,
-  -- porque parece proteção.
+  -- E. Prova. Meia barreira é pior que nenhuma, porque parece proteção.
+  --
+  -- O que sustenta o "tudo ou nada" aqui é a forma do arquivo, não uma garantia
+  -- do Prisma: da primeira linha à última existe **um único statement**, este
+  -- `DO`, e tudo o que as seções A a D executam acontece dentro dele, por
+  -- `EXECUTE`. Um `RAISE EXCEPTION` abaixo faz esse statement falhar, e um
+  -- statement que falha não deixa efeito parcial — nem quando é o único da
+  -- transação implícita. Não há, portanto, estado observável em que o RLS esteja
+  -- ligado e os privilégios continuem lá, ou vice-versa. Nada disso depende de o
+  -- Prisma envolver o arquivo numa transação própria; se envolver, o resultado é
+  -- o mesmo.
+  --
+  -- São quatro afirmações, e cada uma existe porque as outras não a cobrem:
+  --
+  --   E.1  RLS ligado nos alvos;
+  --   E.2  nenhuma ACL direta sobrando — agnóstica ao nome do privilégio;
+  --   E.3  nenhum acesso efetivo aos quatro verbos — pega herança e PUBLIC;
+  --   E.4  nenhum default privilege sobrando sob o creator `postgres`;
+  --   E.5  nenhuma policy.
   ---------------------------------------------------------------------------
+
+  -- E.1 -----------------------------------------------------------------
   SELECT array_agg(c.relname ORDER BY c.relname) INTO sem_rls
     FROM pg_class c
    WHERE c.relnamespace = 'public'::regnamespace
@@ -181,6 +232,37 @@ BEGIN
     RAISE EXCEPTION 'RLS nao ficou ativo em: %', array_to_string(sem_rls, ', ');
   END IF;
 
+  -- E.2 -----------------------------------------------------------------
+  -- A ACL da tabela, lida como ela é, sem lista de verbos a manter.
+  --
+  -- Esta é a prova do `REVOKE ALL`: qualquer entrada que sobre para `anon` ou
+  -- `authenticated` aparece aqui, tenha o nome que tiver. `MAINTAIN` chegou no
+  -- PostgreSQL 17 e não é o último — uma prova que enumerasse privilégios
+  -- deixaria de ver exatamente o que ainda não conhece.
+  --
+  -- O filtro é por OID de role, não por nome: `aclexplode` devolve `grantee = 0`
+  -- para PUBLIC, e comparar OIDs evita traduzir esse zero. Se os roles não
+  -- existirem, o subselect é vazio e a prova passa sem nada a dizer, que é o
+  -- correto num PostgreSQL comum. `relacl` nula — tabela que nunca recebeu GRANT
+  -- explícito — simplesmente não produz linha.
+  SELECT array_agg(
+           format('%s/%s/%s', pg_get_userbyid(a.grantee), c.relname, a.privilege_type)
+           ORDER BY pg_get_userbyid(a.grantee), c.relname, a.privilege_type
+         )
+    INTO acl_remanescente
+    FROM pg_class c
+    CROSS JOIN LATERAL aclexplode(c.relacl) a
+   WHERE c.relnamespace = 'public'::regnamespace
+     AND c.relkind = 'r'
+     AND c.relname = ANY(alvos)
+     AND a.grantee IN (SELECT oid FROM pg_roles WHERE rolname = ANY(roles_data_api));
+
+  IF acl_remanescente IS NOT NULL THEN
+    RAISE EXCEPTION 'privilegio direto sobrou na ACL apos o REVOKE ALL: %',
+      array_to_string(acl_remanescente, ', ');
+  END IF;
+
+  -- E.3 -----------------------------------------------------------------
   FOREACH papel IN ARRAY roles_data_api LOOP
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = papel) THEN
       CONTINUE;
@@ -199,9 +281,63 @@ BEGIN
   END LOOP;
 
   IF array_length(restantes, 1) IS NOT NULL THEN
-    RAISE EXCEPTION 'privilegio remanescente apos o REVOKE: %', array_to_string(restantes, ', ');
+    RAISE EXCEPTION 'acesso efetivo remanescente apos o REVOKE: %',
+      array_to_string(restantes, ', ');
   END IF;
 
+  -- E.4 -----------------------------------------------------------------
+  -- A barreira D era, até aqui, a única aplicada sem ser conferida.
+  --
+  -- O predicado tem três amarras e todas importam: `defaclrole = postgres`,
+  -- porque é o único creator sob autoridade desta migration; `defaclnamespace =
+  -- public`, porque defaults de `auth`, `storage` e afins não são assunto dela;
+  -- e `defaclobjtype = 'r'`, porque o contrato é sobre tabelas — SEQUENCE e
+  -- FUNCTION pertencem a outro ciclo.
+  --
+  -- A primeira amarra é o que impede um falso positivo: os defaults de
+  -- `supabase_admin` ficam fora do filtro e não derrubam nada. Se derrubassem, a
+  -- migration falharia por uma condição que ela não tem permissão para corrigir.
+  --
+  -- A conferência só roda quando a seção D de fato executou. Onde ela pulou, não
+  -- há o que provar, e afirmar um estado que ninguém tentou produzir seria mentir
+  -- em qualquer das duas direções.
+  IF pode_mexer_em_defaults THEN
+    SELECT array_agg(
+             format('%s/%s', pg_get_userbyid(a.grantee), a.privilege_type)
+             ORDER BY pg_get_userbyid(a.grantee), a.privilege_type
+           )
+      INTO defaults_remanescentes
+      FROM pg_default_acl d
+      CROSS JOIN LATERAL aclexplode(d.defaclacl) a
+     WHERE d.defaclrole = oid_postgres
+       AND d.defaclnamespace = 'public'::regnamespace
+       AND d.defaclobjtype = 'r'
+       AND a.grantee IN (SELECT oid FROM pg_roles WHERE rolname = ANY(roles_data_api));
+
+    IF defaults_remanescentes IS NOT NULL THEN
+      RAISE EXCEPTION 'default privilege de tabela sobrou sob o creator postgres: %',
+        array_to_string(defaults_remanescentes, ', ');
+    END IF;
+  END IF;
+
+  -- Informativo, nunca condição de sucesso: quem mais concede às futuras tabelas
+  -- de `public` e está fora do alcance desta migration.
+  SELECT array_agg(DISTINCT pg_get_userbyid(d.defaclrole))
+    INTO outros_creators
+    FROM pg_default_acl d
+    CROSS JOIN LATERAL aclexplode(d.defaclacl) a
+   WHERE d.defaclnamespace = 'public'::regnamespace
+     AND d.defaclobjtype = 'r'
+     AND d.defaclrole IS DISTINCT FROM oid_postgres
+     AND a.grantee IN (SELECT oid FROM pg_roles WHERE rolname = ANY(roles_data_api));
+
+  IF outros_creators IS NOT NULL THEN
+    RAISE NOTICE
+      'SEC-001: defaults de tabela em public tambem sao concedidos por % — fora da autoridade desta migration; tabela criada por esses roles ainda nasceria aberta.',
+      array_to_string(outros_creators, ', ');
+  END IF;
+
+  -- E.5 -----------------------------------------------------------------
   SELECT count(*) INTO policies_encontradas
     FROM pg_policies
    WHERE schemaname = 'public'
