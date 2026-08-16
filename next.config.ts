@@ -5,17 +5,25 @@ const nextConfig: NextConfig = {
     return [
       {
         // HSTS. O host já redireciona http → https, mas o redirecionamento só
-        // acontece depois de uma requisição em claro; este cabeçalho faz o
-        // navegador dispensar essa primeira ida nas visitas seguintes.
+        // acontece depois que uma requisição em claro saiu. Enquanto não
+        // conhece a política, o navegador emite esse primeiro salto — e a URL
+        // do painel carrega o token no path, que viaja nele. Depois de
+        // aprender a política, o navegador passa a trocar para https por conta
+        // própria, antes de enviar. Não cobre a primeira visita de um
+        // navegador que ainda não a conhece; isso é limite conhecido, não
+        // defeito de configuração.
         //
         // `:caminho*` casa zero ou mais segmentos, então cobre desde `/` até
         // `/painel/<token>/dados` — é a regra global, não há uma por rota.
         //
-        // Sem `includeSubDomains` e sem `preload` de propósito: ambos vão além
-        // do host servido. `includeSubDomains` imporia HTTPS a subdomínios que
-        // não são nossos enquanto o domínio for o `onrender.com`, e `preload`
-        // pede inclusão numa lista embutida nos navegadores, que é lenta de
-        // desfazer. Reavaliar quando houver domínio próprio.
+        // Sem `includeSubDomains`: a política pertence ao host que a emite, e a
+        // diretiva a estenderia apenas aos descendentes desse host — nunca a
+        // outros projetos vizinhos sob `onrender.com`, que emitem a sua. Como
+        // não existe subdomínio próprio abaixo do host atual, não há quem
+        // herde. Reavaliar se a topologia de domínio mudar.
+        //
+        // Sem `preload`: não faz parte desta decisão. Entra por decisão
+        // própria, não por cópia do exemplo genérico da documentação do Next.
         source: "/:caminho*",
         headers: [{ key: "Strict-Transport-Security", value: "max-age=31536000" }],
       },

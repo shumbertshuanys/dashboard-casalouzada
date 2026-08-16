@@ -9,10 +9,10 @@ import nextConfig from "../next.config";
  * procurar texto no arquivo: o que vale é a estrutura que o Next consome, e uma
  * busca textual passaria em um cabeçalho escrito dentro de um comentário.
  *
- * A ausência de `includeSubDomains` e de `preload` é asserção, não descuido —
- * ver o comentário da regra em `next.config.ts`. Os dois extrapolam o host
- * servido, e são justamente o que uma edição distraída acrescentaria por hábito,
- * copiando o exemplo da documentação do Next.
+ * A ausência de `includeSubDomains` e de `preload` é asserção, não descuido — o
+ * porquê de cada um está no comentário da regra em `next.config.ts`. São
+ * justamente o que uma edição distraída acrescentaria por hábito, copiando o
+ * exemplo da documentação do Next.
  */
 
 const HSTS = "strict-transport-security";
@@ -54,7 +54,7 @@ describe("Strict-Transport-Security (SEC-006)", () => {
 
     // Redundante com a igualdade acima, e de propósito: se alguém trocar o
     // valor esperado, estas duas continuam apontando o que não pode entrar.
-    assert.ok(!/includeSubDomains/i.test(value), "não assumir autoridade sobre subdomínios");
+    assert.ok(!/includeSubDomains/i.test(value), "não há subdomínio próprio para herdar a política");
     assert.ok(!/preload/i.test(value), "não pedir inclusão na lista embutida dos navegadores");
   });
 });
