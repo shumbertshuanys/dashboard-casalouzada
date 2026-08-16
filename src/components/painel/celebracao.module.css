@@ -1,0 +1,245 @@
+/* O overlay de celebração.
+
+   Mesma disciplina de escala do `painel.module.css`, e não por simetria: as duas
+   camadas dividem a mesma TV de 80" a 4K, e uma delas em px fixos apareceria
+   minúscula ao lado da outra. `.tv` aqui repete o retângulo 16:9 derivado da
+   viewport e o `container-type: inline-size`, de modo que 1cqw continua sendo 1%
+   da largura do painel — 38.4px numa TV de 3840px. Nenhuma dimensão visual
+   principal é declarada em px.
+
+   O overlay é temporário e não altera a identidade permanente do dashboard: ele
+   cobre, espera dez segundos e sai. O dashboard continua montado atrás.
+
+   Toda a coreografia sai de `--duracao`, que o componente injeta a partir de
+   `DURACAO_CELEBRACAO_MS`. Repetir "10s" aqui criaria dois relógios livres para
+   divergir: o JS desmontaria o overlay no meio de uma animação de saída, ou o
+   deixaria parado na tela depois que ela acabasse. */
+
+.moldura {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  /* Escurece o dashboard sem apagá-lo: ele continua lá, e a celebração é
+     visivelmente uma camada por cima, não outra tela. */
+  background: rgb(46 41 33 / 0.93);
+  cursor: none;
+  overflow: hidden;
+  animation: velar var(--duracao) linear both;
+}
+
+/* O mesmo retângulo 16:9 do painel, e a mesma referência de `cqw`. */
+.tv {
+  container-type: inline-size;
+  position: relative;
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  overflow: hidden;
+  /* Brilho dourado saindo do centro — a cor de destaque da identidade. */
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 45%,
+    rgb(201 169 106 / 0.22) 0%,
+    rgb(201 169 106 / 0.06) 45%,
+    transparent 72%
+  );
+}
+
+.conteudo {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.2cqw;
+  padding: 4cqw;
+  text-align: center;
+  animation:
+    entrar 700ms cubic-bezier(0.16, 1, 0.3, 1) both,
+    sair 600ms ease-in both calc(var(--duracao) - 600ms);
+}
+
+/* "É VENDA!" — 5.2cqw dá 200px a 3840px. É o anúncio, não o dado. */
+.titulo {
+  font-size: 5.2cqw;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-destaque);
+  text-shadow: 0 0 3cqw rgb(201 169 106 / 0.45);
+}
+
+/* O valor é o maior elemento da tela: 9cqw dá 346px a 3840px. É o número que a
+   sala inteira quer ver de longe. */
+.valor {
+  font-size: 9cqw;
+  font-weight: 300;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: var(--color-texto);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sem valor gravado, a venda continua digna de festa — só não se inventa um
+   número. Escala menor que `.valor` de propósito: é frase, não cifra. */
+.semValor {
+  font-size: 4.4cqw;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  color: var(--color-texto);
+}
+
+.participantes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1.4cqw 4cqw;
+  margin-top: 1cqw;
+  list-style: none;
+}
+
+.participante {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4cqw;
+  min-width: 0;
+}
+
+.nome {
+  font-size: 3.4cqw;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-texto);
+}
+
+.equipe {
+  font-size: 1.5cqw;
+  font-weight: 300;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-texto-secundario);
+}
+
+/* A escala do elenco cai conforme ele cresce, em degraus declarados — não há
+   número fixo de participantes, e medir no cliente para ajustar seria estado
+   novo por um problema que três regras resolvem. Uma venda de seis corretores
+   continua legível; uma de um ocupa a tela. */
+.participantes[data-quantidade="1"] .nome {
+  font-size: 4.6cqw;
+}
+.participantes[data-quantidade="1"] .equipe {
+  font-size: 1.8cqw;
+}
+.participantes[data-quantidade="muitos"] .nome {
+  font-size: 2.4cqw;
+}
+.participantes[data-quantidade="muitos"] .equipe {
+  font-size: 1.15cqw;
+}
+
+/* Confete ------------------------------------------------------------
+
+   Elementos determinísticos: quantidade fixa, e posição, atraso, duração e
+   deriva derivadas do índice por aritmética. Nada de `Math.random`, que daria
+   valores diferentes no servidor e no cliente e quebraria a hidratação. */
+
+.confete {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  /* Decoração pura: nada aqui é informação, e um leitor de tela não deve
+     encontrar dezenas de elementos vazios no meio do anúncio. */
+  pointer-events: none;
+}
+
+.particula {
+  position: absolute;
+  top: -6cqw;
+  left: var(--esquerda);
+  width: 0.55cqw;
+  height: 1.1cqw;
+  background: var(--cor);
+  opacity: 0;
+  border-radius: 0.1cqw;
+  animation: cair var(--tempo) linear infinite var(--atraso);
+}
+
+@keyframes cair {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--deriva), 118cqh, 0) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+@keyframes entrar {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sair {
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+/* O véu entra e sai junto com o conteúdo, para o dashboard não reaparecer de
+   supetão nem ficar escurecido depois que a celebração já saiu. */
+@keyframes velar {
+  0% {
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Movimento reduzido ------------------------------------------------
+
+   A informação principal continua inteira e legível: o que sai é o movimento.
+   O overlay ainda aparece e ainda desaparece no mesmo tempo, porque quem
+   controla isso é o temporizador do vigia, não a animação. */
+@media (prefers-reduced-motion: reduce) {
+  .moldura,
+  .conteudo {
+    animation: none;
+    opacity: 1;
+  }
+  .conteudo {
+    transform: none;
+  }
+  /* Partículas caindo sem parar são exatamente o tipo de movimento que esta
+     preferência pede para não existir. */
+  .confete {
+    display: none;
+  }
+}

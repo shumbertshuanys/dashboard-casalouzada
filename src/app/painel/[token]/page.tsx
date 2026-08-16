@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AtualizadorPainel } from "@/components/painel/atualizador-painel";
 import { RegistrarSwPainel } from "@/components/painel/registrar-sw";
+import { VigiaCelebracao } from "@/components/painel/vigia-celebracao";
 import { prisma } from "@/lib/db";
 import { lerPainel } from "@/lib/leitura-painel";
 import { tokenPainelConfere } from "@/lib/token-painel";
@@ -38,6 +39,13 @@ export const dynamic = "force-dynamic";
  * Worker que serve a tela institucional quando a aplicação não responde. Ele não
  * desenha nada, não recebe o token e não guarda número nenhum (DEC-048).
  *
+ * `VigiaCelebracao` é o terceiro irmão, e a palavra importa: ele **não**
+ * substitui o `AtualizadorPainel`. O dashboard fica montado e continua
+ * atualizando por baixo; a celebração é uma camada que aparece por dez segundos
+ * e sai. Ele também não recebe o token por prop nem a leitura inicial — a
+ * celebração é evento de UX, não faz parte da primeira pintura, e nada dela
+ * entra em métrica.
+ *
  * Não há `try`/`catch`: `INDISPONIVEL`, `SEM_DADOS`, `SEM_SALDO_HISTORICO` e
  * `CONFIGURACAO_INVALIDA` são **dados** e já chegam resolvidos. Uma exceção que
  * escape da leitura é defeito, e defeito não deve virar `—` na parede.
@@ -56,6 +64,7 @@ export default async function PaginaPainel({ params }: PageProps<"/painel/[token
     <>
       <RegistrarSwPainel />
       <AtualizadorPainel inicial={inicial} />
+      <VigiaCelebracao />
     </>
   );
 }

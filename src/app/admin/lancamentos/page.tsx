@@ -11,6 +11,7 @@ import {
   interpretarFiltrosLancamentos,
   interpretarPagina,
 } from "@/lib/validacao/lancamento";
+import { BotaoCelebracao } from "./botao-celebracao";
 import { FiltrosLancamento, type OpcaoFiltro } from "./filtros";
 
 export const metadata: Metadata = {
@@ -139,12 +140,18 @@ export default async function PaginaLancamentos({
             {total} {total === 1 ? "lançamento" : "lançamentos"}
           </p>
         </div>
-        <Link
-          href="/admin/lancamentos/novo"
-          className="rounded-md bg-destaque px-4 py-2 text-sm font-medium text-fundo"
-        >
-          Novo lançamento
-        </Link>
+        {/* Comemorar fica ao lado de cadastrar, mas com peso visual menor: um é
+            o trabalho, o outro é acessório. O botão não cria lançamento nenhum
+            — só pede à TV que comemore a última venda já registrada. */}
+        <div className="flex items-start gap-3">
+          <BotaoCelebracao />
+          <Link
+            href="/admin/lancamentos/novo"
+            className="rounded-md bg-destaque px-4 py-2 text-sm font-medium text-fundo"
+          >
+            Novo lançamento
+          </Link>
+        </div>
       </div>
 
       <FiltrosLancamento filtros={filtros} corretores={opcoesCorretor} equipes={opcoesEquipe} />
