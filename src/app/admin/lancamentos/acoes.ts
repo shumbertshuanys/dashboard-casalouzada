@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { exigirAdministradorAtivo } from "@/lib/admin/guarda";
+import { buscarUltimaVendaCadastrada, celebrarSemBloquear, registrarCelebracao } from "@/lib/celebracao";
 import { prisma } from "@/lib/db";
 import { resolverEquipeDoLancamento } from "@/lib/lancamento-equipe";
 import {
@@ -171,7 +172,7 @@ export async function criarLancamento(
     // transação do Prisma. Se qualquer participação for recusada — pela unique
     // de corretor ou de ordem —, o lançamento não fica para trás. Não existe
     // venda observável sem participação (DEC-051).
-    await prisma.lancamento.create({
+    const venda = await prisma.lancamento.create({
       data: {
         ...camposComuns(validado.dados),
         // O crédito da venda mora nas participações; o lançamento não credita.
@@ -180,7 +181,23 @@ export async function criarLancamento(
         criadoPor: administrador.id,
         participacoes: { create: resolvidos.participantes },
       },
+      select: { id: true },
     });
+
+    // A comemoração na TV, e só para VENDA nova.
+    //
+    // O id sai do **próprio `create`**, nunca de uma consulta por "última
+    // venda": duas vendas cadastradas ao mesmo tempo em duas abas fariam a
+    // segunda leitura devolver a venda da outra pessoa, e a TV comemoraria o
+    // fato errado. O `create` já sabe o que acabou de escrever.
+    //
+    // Fora da escrita comercial e depois dela, de propósito. Se estivesse na
+    // mesma transação, uma falha ao gravar a celebração desfaria a venda — um
+    // evento de tela derrubando um fato comercial que o operador acabou de
+    // registrar. `celebrarSemBloquear` engole a falha e devolve se conseguiu;
+    // o retorno é ignorado aqui porque não há nada a fazer com ele: o cadastro
+    // deu certo de qualquer modo, e é isso que a tela precisa dizer.
+    await celebrarSemBloquear(prisma, venda.id);
   } else {
     // O corretor e a equipe atual dele são lidos agora, imediatamente antes do
     // create: é este `equipeId` que fica gravado no evento.
@@ -596,4 +613,67 @@ export async function excluirLancamento(form: FormData): Promise<void> {
 
   revalidatePath(ROTA);
   redirect(ROTA);
+}
+
+/* ------------------------------------------------------------------ */
+/* Celebração                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * O resultado do disparo manual, para o botão que o C3 vai montar.
+ *
+ * Dois campos, e a separação importa: `sucesso` é "a TV vai comemorar";
+ * `mensagem` é um estado operacional normal que merece explicação — não é erro,
+ * e não deve chegar à tela com cara de falha.
+ */
+export type EstadoCelebracao = {
+  sucesso?: string;
+  mensagem?: string;
+};
+
+/**
+ * Comemora de novo a última venda cadastrada.
+ *
+ * Existe porque o disparo automático acontece uma vez, no cadastro, e o
+ * escritório às vezes quer a comemoração noutro momento — a TV estava desligada,
+ * a sala estava vazia, o cliente chegou depois. Repetir o evento é o caminho
+ * previsto para isso; editar a venda para "reativar" a celebração não é, e por
+ * isso a edição continua sem gatilho nenhum.
+ *
+ * **A guarda é a primeira linha.** Nada é lido nem escrito antes dela: sem
+ * sessão de administrador ativo agora, `exigirAdministradorAtivo` lança e a
+ * execução para aí. Layout de `/admin` não autoriza coisa alguma, então a
+ * verificação é feita aqui, perto da escrita.
+ *
+ * "Última venda" não é redecidida aqui: quem responde é
+ * `buscarUltimaVendaCadastrada`, com o contrato do C1 — `criadoEm DESC, id
+ * DESC`, e não `dataReferencia`. Reescrever a consulta nesta camada criaria uma
+ * segunda definição de "última" para divergir da primeira.
+ *
+ * Cada acionamento grava uma `Celebracao` nova, com identidade e carimbo
+ * próprios: é um evento a mais, não o mesmo evento reaproveitado. Nada do fato
+ * comercial é tocado — nem valor, nem participantes, nem data, nem métrica.
+ *
+ * Sem `celebrarSemBloquear` aqui, e a assimetria é o ponto: no cadastro a
+ * celebração é acessória e não pode derrubar a venda; aqui ela **é** a operação
+ * pedida, e uma falha precisa aparecer em vez de virar um sucesso silencioso.
+ *
+ * Sem parâmetros: a ação não recebe entrada nenhuma — o alvo sai do banco, e
+ * nada do cliente influencia qual venda é comemorada. O botão do C3 liga um
+ * `useActionState` a ela com um invólucro de uma linha, que é menos superfície
+ * do que carregar aqui dois argumentos que ninguém lê.
+ */
+export async function comemorarUltimaVenda(): Promise<EstadoCelebracao> {
+  await exigirAdministradorAtivo();
+
+  const ultima = await buscarUltimaVendaCadastrada(prisma);
+  if (ultima === null) {
+    // Estado operacional normal, não falha: um escritório que ainda não
+    // registrou venda nenhuma não tem o que comemorar.
+    return { mensagem: "Nenhuma venda cadastrada para comemorar." };
+  }
+
+  await registrarCelebracao(prisma, ultima.id);
+
+  return { sucesso: "Comemoração enviada para a TV." };
 }

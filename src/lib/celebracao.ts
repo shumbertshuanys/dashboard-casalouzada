@@ -165,6 +165,41 @@ export async function registrarCelebracao(
 }
 
 /**
+ * Tenta celebrar sem deixar a falha escapar. Devolve se conseguiu.
+ *
+ * Esta é a fronteira entre o fato comercial e o evento de UX, e ela existe
+ * porque a direção da dependência é de mão única: a venda sustenta a
+ * celebração, nunca o contrário. Quando o cadastro de uma venda chama isto, a
+ * venda **já está persistida** — e uma falha ao gravar a comemoração não pode
+ * desfazê-la, transformá-la em erro na tela nem escondê-la do operador. O que
+ * se perde numa falha aqui é a animação na TV; a venda continua lá, contando em
+ * tudo o que ela conta.
+ *
+ * Por isso o `catch` engole. É o oposto do resto do projeto — onde exceção
+ * continua sendo exceção —, e a exceção à regra é deliberada e local: só vale
+ * para o caminho automático, que é acessório ao que o operador pediu. O disparo
+ * manual não usa esta função: lá a celebração **é** a operação, e falhar tem de
+ * aparecer.
+ *
+ * O log é uma frase fixa, na convenção dos dois `console.warn` que o projeto já
+ * tem. O erro não é anexado de propósito: exceção de inicialização do Prisma
+ * carrega a string de conexão na mensagem, e stack trace num log de UX é
+ * superfície sem contrapartida.
+ */
+export async function celebrarSemBloquear(
+  prisma: PrismaClient,
+  lancamentoId: string,
+): Promise<boolean> {
+  try {
+    await registrarCelebracao(prisma, lancamentoId);
+    return true;
+  } catch {
+    console.warn("Registro da celebração da venda falhou.");
+    return false;
+  }
+}
+
+/**
  * A última venda **cadastrada**, para o futuro botão "Comemorar última venda".
  *
  * A ordem é `criadoEm DESC, id DESC` — o instante do cadastro, não
