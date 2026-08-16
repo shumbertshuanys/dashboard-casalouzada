@@ -23,8 +23,9 @@ Preencha o `.env`:
 
 | Variável | Para que serve |
 |---|---|
-| `DATABASE_URL` | Conexão via **pooler**. É o que a aplicação usa em runtime. |
-| `DIRECT_URL` | Conexão **direta** (ou pooler em modo session). Usada por migrações e seed — o modo transaction derruba os advisory locks do Prisma. |
+| `DATABASE_URL` | Conexão via **pooler**, para a aplicação em **runtime** (node-postgres, `src/lib/db.ts`). |
+| `DIRECT_URL` | Conexão **direta**, para o **Prisma CLI** — migrações e introspecção (engine Rust, `prisma.config.ts`). O modo transaction do pooler derruba os advisory locks do schema engine. |
+| `ADMIN_DATABASE_URL` | Conexão **direta** com role administrativo, para os **scripts Node** — `db:seed` e `db:trocar-senha-admin` (node-postgres). Local/operacional: o Web Service não precisa dela. |
 | `AUTH_SECRET` | Assina o cookie de sessão. Mínimo de 32 caracteres. |
 | `PAINEL_TOKEN` | Token que entra na URL do painel. |
 | `SEED_ADMIN_NOME` / `SEED_ADMIN_EMAIL` / `SEED_ADMIN_SENHA` | Usuário administrador criado pelo seed. |
@@ -55,7 +56,8 @@ sobrescrita — ele pode já ter trocado a senha pela área administrativa.
 | `npm run db:migrate` | `prisma migrate dev` — cria e aplica migração em desenvolvimento |
 | `npm run db:deploy` | `prisma migrate deploy` — aplica migrações pendentes em produção |
 | `npm run db:generate` | Regenera o Prisma Client |
-| `npm run db:seed` | Roda `prisma/seed.ts` |
+| `npm run db:seed` | Roda `prisma/seed.ts` — exige `ADMIN_DATABASE_URL` |
+| `npm run db:trocar-senha-admin` | Rotaciona a senha de login — exige `ADMIN_DATABASE_URL` |
 | `npm run db:studio` | Prisma Studio |
 
 ## Estrutura
@@ -85,6 +87,13 @@ prisma.config.ts     # a partir do Prisma 7 é aqui que mora a URL das migraçõ
 - **Prisma 7**: as URLs de conexão saíram do `schema.prisma`. Migrações leem
   `datasource.url` do `prisma.config.ts` (`DIRECT_URL`); a aplicação conecta pelo
   driver adapter em `src/lib/db.ts` (`DATABASE_URL`).
+- **Três conexões, não duas** (DEC-066). Os scripts administrativos em Node usam
+  `ADMIN_DATABASE_URL` e **não** têm fallback. O motivo não é organização: o
+  engine Rust do Prisma lê `sslaccept=strict`/`sslcert` e **ignora**
+  `sslmode=verify-full`/`sslrootcert`; o node-postgres faz o inverso. Reaproveitar
+  a `DIRECT_URL` num script Node dá uma conexão que parece verificada e não valida
+  certificado nenhum — e a `DATABASE_URL` sequer tem privilégio de escrita em
+  `usuarios`.
 - **Client gerado** em `src/generated/prisma` não vai para o git — o `postinstall`
   roda `prisma generate`.
 - **Captação exclusiva** é um tipo de lançamento independente de captação de venda.

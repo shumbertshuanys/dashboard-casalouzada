@@ -3,9 +3,31 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { gerarHashSenha } from "../src/lib/senha";
 
-const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+/**
+ * Conexão administrativa **própria**, por `ADMIN_DATABASE_URL`.
+ *
+ * Não é preciosismo: as três variáveis do projeto têm consumidores diferentes e
+ * **duas sintaxes de TLS incompatíveis** (DEC-066).
+ *
+ *   - `DATABASE_URL` é o runtime, pelo pooler, com o role `casalouzada_runtime`
+ *     — que tem `usuarios` **somente leitura** e não consegue semear;
+ *   - `DIRECT_URL` é do Prisma CLI, cujo engine Rust lê `sslaccept=strict` e
+ *     `sslcert`; este arquivo roda sobre node-postgres, que ignora as duas e
+ *     quer `sslmode=verify-full` + `sslrootcert`. Reaproveitá-la aqui produz uma
+ *     conexão que *parece* verificada e não valida certificado nenhum;
+ *   - `ADMIN_DATABASE_URL` é esta: conexão direta, role administrativo, sintaxe
+ *     de node-postgres. É local/operacional e **não** vai para o Web Service.
+ *
+ * Sem fallback de propósito: um fallback silencioso escolheria a URL errada e o
+ * erro só apareceria como falha de permissão ou como TLS não verificado.
+ */
+const connectionString = process.env.ADMIN_DATABASE_URL;
 if (!connectionString) {
-  throw new Error("DIRECT_URL ou DATABASE_URL precisa estar definida — veja o .env.example");
+  throw new Error(
+    "ADMIN_DATABASE_URL precisa estar definida para rodar o seed — veja o .env.example. " +
+      "DATABASE_URL e DIRECT_URL não servem: a primeira usa o role de runtime, " +
+      "a segunda tem a sintaxe de TLS do Prisma CLI.",
+  );
 }
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
@@ -35,7 +57,7 @@ async function semearAdministrador() {
 
   if (!email || !senha) {
     throw new Error(
-      "Defina SEED_ADMIN_EMAIL e SEED_ADMIN_SENHA no .env antes de rodar o seed — veja o .env.example",
+      "Defina SEED_ADMIN_EMAIL e SEED_ADMIN_SENHA antes de rodar o seed — veja o .env.example",
     );
   }
   if (senha.length < 8) {

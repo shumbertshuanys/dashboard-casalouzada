@@ -51,6 +51,10 @@ function rodarSeed(nome: string): { status: number | null; saida: string } {
     encoding: "utf8",
     env: {
       ...process.env,
+      // `ADMIN_DATABASE_URL` é a conexão que o próprio seed usa (DEC-066); as
+      // outras duas ficam porque o `prisma db seed` carrega o prisma.config.ts
+      // e ele exige um datasource. Todas apontam para o mesmo banco local.
+      ADMIN_DATABASE_URL: url,
       DATABASE_URL: url,
       DIRECT_URL: url,
       SEED_ADMIN_NOME: nome,

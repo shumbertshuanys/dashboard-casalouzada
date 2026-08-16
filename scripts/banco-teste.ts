@@ -8,8 +8,8 @@ import { urlBancoTeste } from "../tests/helpers/banco-teste";
  *   tsx scripts/banco-teste.ts npx prisma migrate deploy
  *   tsx scripts/banco-teste.ts npx next dev
  *
- * O `.env` não é tocado: `DATABASE_URL` e `DIRECT_URL` são sobrescritas apenas
- * no `env` do processo filho. A URL passa antes pelas exigências de
+ * O `.env` não é tocado: `DATABASE_URL`, `DIRECT_URL` e `ADMIN_DATABASE_URL` são
+ * sobrescritas apenas no `env` do processo filho. A URL passa antes pelas exigências de
  * `urlBancoTeste()`, então um comando destrutivo não tem como cair em produção
  * por descuido de ambiente.
  *
@@ -72,10 +72,13 @@ const resultado = spawnSync(comando[0], comando.slice(1), {
   env: {
     ...process.env,
     ...variaveis,
-    // As duas apontam para o mesmo banco local: não há pooler aqui, então a
-    // distinção entre runtime e migração deixa de ter efeito.
+    // As três apontam para o mesmo banco local: não há pooler, não há TLS e o
+    // role é um só, então a distinção entre runtime, Prisma CLI e scripts
+    // administrativos (DEC-066) deixa de ter efeito aqui. Ela existe para o
+    // ambiente real, e é lá que as três divergem.
     DATABASE_URL: url,
     DIRECT_URL: url,
+    ADMIN_DATABASE_URL: url,
   },
 });
 

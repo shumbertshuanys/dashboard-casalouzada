@@ -280,6 +280,11 @@ disponível em `/etc/secrets/supabase-ca.crt`. As duas conexões usam TLS valida
 Quem liga a verificação ali é `sslaccept=strict`. Ambas as conexões foram comprovadas
 negociando TLS 1.3 com certificado autorizado.
 
+**E a recíproca também vale — foi ela que gerou a DEC-066.** O node-postgres ignora
+`sslaccept` e trata `sslcert` como certificado de **cliente**, não como CA. Por isso os
+scripts administrativos em Node ganharam conexão própria, **`ADMIN_DATABASE_URL`**, em
+vez de reaproveitar a `DIRECT_URL` do CLI — ver a seção "Conexões de banco" adiante.
+
 O **SSL Enforcement do Supabase continua desligado** — o servidor ainda aceitaria uma
 conexão sem TLS. Isso é **hardening futuro**, não SEC-002 em aberto: o cliente está
 correto e provado; o enforcement apenas impediria uma regressão de configuração.
@@ -392,7 +397,9 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 - **Next.js 16.3.0 (App Router) + TypeScript**, **Tailwind CSS v4**.
 - **Prisma 7.9.1 sobre PostgreSQL**, com driver adapter em `src/lib/db.ts`. As URLs
   saíram do `schema.prisma`: migrações leem `DIRECT_URL` pelo `prisma.config.ts` e a
-  aplicação usa `DATABASE_URL` em runtime (DEC-031).
+  aplicação usa `DATABASE_URL` em runtime (DEC-031). Desde a **DEC-066** existe uma
+  terceira, **`ADMIN_DATABASE_URL`**, exclusiva dos scripts administrativos em Node —
+  ver "Conexões de banco" abaixo.
 - **Sessão em JWT HS256** em cookie `httpOnly`, validade de 7 dias.
 - **Middleware** em `src/proxy.ts` — no Next 16 a convenção passou a ser `proxy`
   (DEC-032).
@@ -449,6 +456,44 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
   `faixa-superior.tsx` e `faixa-operacional.tsx`, desde a E4. A regra de rotação mora
   num módulo **sem JSX e sem CSS** justamente para ser testável — o componente importa
   o módulo de estilos, e o runner do Node não parseia CSS.
+
+## Conexões de banco
+
+São **três**, uma por consumidor, e **nenhuma serve no lugar da outra** (DEC-066):
+
+| Variável | Consumidor | Driver | Conexão | Role |
+|---|---|---|---|---|
+| `DATABASE_URL` | runtime (`src/lib/db.ts`) | node-postgres | pooler, 6543 | `casalouzada_runtime` |
+| `DIRECT_URL` | Prisma CLI — migrations e introspecção (`prisma.config.ts`) | engine Rust | direta, 5432 | administrativo |
+| `ADMIN_DATABASE_URL` | `db:seed` e `db:trocar-senha-admin` | node-postgres | direta, 5432 | administrativo |
+
+Dois motivos independentes, e cada um bastaria. **Privilégio**: o role de runtime tem
+`usuarios` somente leitura desde o SEC-004, então um script administrativo que caísse na
+`DATABASE_URL` morreria com erro de permissão. **TLS**: as duas sintaxes da seção do
+SEC-002 pertencem a drivers diferentes e cada driver **ignora a do outro** — o
+node-postgres desconsidera `sslaccept` e lê `sslcert` como certificado de **cliente**.
+Reaproveitar a `DIRECT_URL` num script Node dá, na melhor hipótese, erro de conexão; na
+pior, conexão que sobe **parecendo verificada sem validar certificado nenhum**.
+
+Isso não é hipótese: na rotação emergencial da senha administrativa (O1-S0, 2026-08-16)
+o script só rodou depois de a URL ser traduzida à mão para a sintaxe do node-postgres.
+
+Os dois scripts **falham fechado** — sem `ADMIN_DATABASE_URL` eles abortam **antes de
+abrir conexão** e não caem para as outras duas. A mensagem nomeia a variável e explica
+por que as outras não servem, **sem imprimir valor**.
+`tests/contrato-conexao-admin.test.ts` prova isso com as outras duas definidas como
+chamariz, exigindo ausência de qualquer sinal de tentativa de rede;
+`tests/integracao/trocar-senha-admin.integracao.test.ts` prova o comando inteiro contra
+o banco local.
+
+**`ADMIN_DATABASE_URL` é local/operacional e não vai para o Render.** O Web Service não
+precisa dela: o runtime usa `DATABASE_URL` e o `pre-deploy` usa o CLI com `DIRECT_URL`.
+Cadastrá-la lá reporia uma credencial administrativa no ambiente do processo web — o que
+o SEC-004 tirou de propósito. `scripts/banco-teste.ts` injeta as três apontando para o
+banco local, onde a distinção não tem efeito.
+
+> **Estado.** Implementado e testado, **ainda não publicado**: o release em produção
+> continua sendo `25e62b5`, e nenhuma variável do Render foi alterada.
 
 ## Administração implementada
 

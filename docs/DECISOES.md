@@ -2006,3 +2006,85 @@ sendo **uma alternativa entre outras**, e não a escolha da F4.5B.
 
 **Fonte.** Inspeção física do aparelho em 2026-08-16 (F4.5A) e decisão do proprietário na
 mesma data. **decisão registrada — F4.5B a F4.5E pendentes**
+
+## Conexões de banco
+
+### DEC-066 — Três conexões de banco, uma por consumidor, sem fallback
+
+**Decisão.** O projeto tem **três** variáveis de conexão, cada uma com **um**
+consumidor, e nenhuma delas substitui outra:
+
+| Variável | Consumidor | Driver | Conexão | Role |
+|---|---|---|---|---|
+| `DATABASE_URL` | runtime da aplicação (`src/lib/db.ts`) | node-postgres via `@prisma/adapter-pg` | pooler | `casalouzada_runtime` |
+| `DIRECT_URL` | Prisma CLI — migrations e introspecção (`prisma.config.ts`) | engine Rust | direta | administrativo |
+| `ADMIN_DATABASE_URL` | scripts administrativos em Node — `db:seed` e `db:trocar-senha-admin` | node-postgres via `@prisma/adapter-pg` | direta | administrativo |
+
+Os dois scripts administrativos **falham fechado**: sem `ADMIN_DATABASE_URL` eles
+abortam **antes de abrir conexão**, e **não** caem para `DIRECT_URL` nem para
+`DATABASE_URL`.
+
+**Motivo.** Dois problemas independentes, e cada um sozinho já justifica a separação.
+
+O primeiro é de **privilégio**. Desde o SEC-004 (DEC-060) o role de runtime tem
+`usuarios` **somente leitura**. Um script de seed ou de troca de senha que caísse na
+`DATABASE_URL` falharia por permissão — um erro obscuro, longe da causa.
+
+O segundo é o que motivou esta decisão, e é uma **armadilha silenciosa**. As duas
+sintaxes de TLS descritas na DEC-059 não são estilo: elas pertencem a drivers
+diferentes e **cada driver ignora a do outro**.
+
+| Driver | Liga a verificação com | Ignora |
+|---|---|---|
+| engine Rust do Prisma | `sslaccept=strict` (+ `sslcert` como CA) | `sslmode=verify-full`, `sslrootcert` |
+| node-postgres | `sslmode=verify-full` + `sslrootcert` | `sslaccept`; e trata `sslcert` como certificado de **cliente**, não como CA |
+
+Reaproveitar a `DIRECT_URL` — que é do CLI — dentro de um script Node produz, na
+melhor hipótese, um erro de conexão; na pior, uma conexão que **sobe parecendo
+verificada e não valida certificado nenhum**. É o mesmo tipo de engano que a DEC-059
+já registrava numa direção, agora fechado na outra.
+
+**Como isso apareceu.** Não foi teoria. Durante a rotação emergencial da senha
+administrativa (O1-S0, 2026-08-16), o `scripts/trocar-senha-admin.ts` recebia a
+`DIRECT_URL` operacional e **falhava**: o node-postgres tentava usar o CA como
+certificado de cliente. A execução só passou depois de a URL ser traduzida à mão para
+a sintaxe do node-postgres. Uma tradução manual necessária em todo uso é a definição
+de contrato inconsistente — daí esta decisão.
+
+**Impacto.**
+
+- `src/lib/db.ts` fica como está: runtime é `DATABASE_URL`, sem fallback (já era
+  assim);
+- `prisma.config.ts` fica como está: `DIRECT_URL ?? DATABASE_URL` continua sendo o
+  contrato do CLI;
+- `prisma/seed.ts` e `scripts/trocar-senha-admin.ts` passam a exigir
+  `ADMIN_DATABASE_URL`, **sem fallback**, e a mensagem de erro nomeia a variável e
+  explica por que as outras duas não servem — **sem nunca imprimir valor**;
+- `scripts/banco-teste.ts` injeta as **três** apontando para o banco local, onde a
+  distinção não tem efeito: não há pooler, não há TLS e o role é um só;
+- `ADMIN_DATABASE_URL` é **local/operacional**. O Web Service **não** precisa dela
+  para servir a aplicação: o runtime usa `DATABASE_URL` e o `pre-deploy`
+  (`prisma migrate deploy`) usa o CLI com `DIRECT_URL`. Cadastrá-la no Render
+  colocaria uma credencial administrativa no ambiente do processo web sem consumidor
+  — exatamente o que o SEC-004 removeu de lá.
+
+**Prova.** `tests/contrato-conexao-admin.test.ts` roda os dois comandos sem
+`ADMIN_DATABASE_URL` e **com** `DATABASE_URL` e `DIRECT_URL` definidas como
+chamariz apontando para uma porta morta: exige falha, exige que a mensagem nomeie a
+variável ausente e exige **ausência de qualquer sinal de tentativa de rede** — é isso
+que distingue "falhou fechado" de "tentou e não conseguiu".
+`tests/integracao/trocar-senha-admin.integracao.test.ts` prova o comando inteiro
+contra o banco local: senha nova confere, **anterior deixa de conferir**, hash muda,
+`id`/`nome`/`email`/`ativo` sobrevivem, e-mail desconhecido não cria conta, senha curta
+é recusada sem tocar no hash, e nada disso aparece em stdout.
+
+**Preserva.** DEC-059 integralmente — as duas sintaxes de TLS continuam sendo o que
+eram; esta decisão apenas impede que uma seja usada no lugar da outra. DEC-060
+integralmente — o runtime segue com privilégio mínimo, e é justamente por isso que ele
+não pode ser o caminho dos scripts administrativos.
+
+**Fonte.** `prisma/seed.ts`; `scripts/trocar-senha-admin.ts`; `.env.example`;
+`scripts/banco-teste.ts`; `tests/contrato-conexao-admin.test.ts`;
+`tests/integracao/trocar-senha-admin.integracao.test.ts`. Evidência de campo na
+execução O1-S0 de 2026-08-16. **implementada — ainda não publicada em produção; o
+release em produção continua sendo `25e62b5`**
