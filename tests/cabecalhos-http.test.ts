@@ -14,8 +14,8 @@ import nextConfig from "../next.config";
  * justamente o que uma edição distraída acrescentaria por hábito, copiando o
  * exemplo da documentação do Next. Pelo mesmo motivo a CSP é medida diretiva a
  * diretiva: ela existe aqui só para `frame-ancestors`, e o risco real é alguém
- * pendurar `script-src` ou `default-src` na mesma string sem o nonce e a
- * renderização dinâmica que essas diretivas exigem.
+ * pendurar `script-src` ou `default-src` na mesma string sem o desenho que
+ * essas diretivas exigem.
  */
 
 const HSTS = "strict-transport-security";
@@ -98,8 +98,9 @@ describe("Content-Security-Policy (SEC-005)", () => {
     assert.equal(diretivas.length, 1, `a CSP deveria ter uma diretiva só, tem ${diretivas.length}: ${valor}`);
     assert.equal(diretivas[0].split(/\s+/)[0].toLowerCase(), "frame-ancestors");
 
-    // Restringir script e estilo exige nonce por requisição e renderização
-    // dinâmica; entrar aqui de carona quebraria a aplicação em silêncio.
+    // Restringir script e estilo pede desenho próprio — ver o comentário da
+    // regra em `next.config.ts`; entrar aqui de carona quebraria a aplicação
+    // em silêncio.
     for (const proibida of [
       "default-src", "script-src", "style-src", "img-src", "connect-src",
       "frame-src", "object-src", "base-uri", "form-action",

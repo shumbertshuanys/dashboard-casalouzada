@@ -38,9 +38,12 @@ const nextConfig: NextConfig = {
         // produto, e o painel da TV abre como página inteira.
         //
         // A CSP para em `frame-ancestors` de propósito. Restringir script e
-        // estilo é outro problema: exige nonce por requisição e renderização
-        // dinâmica, conforme o guia do Next, e teria de nascer em `proxy.ts`,
-        // não aqui.
+        // estilo é outro problema, e pede um desenho próprio, compatível com a
+        // estratégia de rendering e de build. O guia do Next documenta mais de
+        // um caminho: nonce por requisição, que implica `proxy.ts` e
+        // renderização dinâmica, e SRI por hash, experimental, que preserva a
+        // geração estática. Escolher entre eles é ciclo próprio — nenhum entra
+        // de carona nesta regra.
         source: "/:caminho*",
         headers: [
           { key: "Strict-Transport-Security", value: "max-age=31536000" },
