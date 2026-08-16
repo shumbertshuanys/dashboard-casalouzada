@@ -125,6 +125,19 @@ const SELECT_APRESENTAVEL = {
   },
 } as const;
 
+/**
+ * A linha como o Prisma a devolve — com a relação **opcional em runtime**.
+ *
+ * O schema declara `lancamento` obrigatório e a FK garante isso em todo estado
+ * consistente do banco. O tipo aqui é mais frouxo de propósito, porque a leitura
+ * não é atômica: o Prisma resolve `select` aninhado em mais de uma consulta, e
+ * entre elas o Admin pode excluir a venda. O `ON DELETE CASCADE` leva a
+ * celebração junto, e a consulta que resolveria a relação não acha mais o pai —
+ * a linha já lida chega aqui com `lancamento: null`.
+ *
+ * Não é estado inválido do banco: é uma leitura composta observando o fato
+ * comercial deixar de existir no meio do caminho.
+ */
 type LinhaApresentavel = {
   id: string;
   criadoEm: Date;
@@ -137,7 +150,7 @@ type LinhaApresentavel = {
       corretor: { nomeExibicao: string };
       equipe: { nome: string };
     }[];
-  };
+  } | null;
 };
 
 /**
@@ -154,16 +167,34 @@ function textoOuNulo(valor: string | null): string | null {
   return limpo === "" ? null : limpo;
 }
 
-function paraApresentavel(linha: LinhaApresentavel): CelebracaoApresentavel {
+/**
+ * Projeta a linha, ou `null` quando ela deixou de ser apresentável.
+ *
+ * As duas exigências verificadas aqui são as **mesmas** que o `where` da
+ * consulta já impôs na seleção: existir um lançamento, e ele ter elenco. A
+ * repetição não é redundante — entre a seleção e a projeção existe uma janela
+ * real em que o fato comercial pode sumir, e é nela que a venda excluída pelo
+ * Admin aparece como relação nula ou elenco vazio.
+ *
+ * Descartar é a resposta certa, e não lançar: uma venda que não existe mais não
+ * é erro de leitura, é um evento que perdeu o sentido. Comemorá-la seria pior —
+ * a TV anunciaria uma venda que o Admin acabou de desfazer. Também não vira
+ * objeto vazio, valor zero nem celebração sem participante: some inteira.
+ */
+function paraApresentavel(linha: LinhaApresentavel): CelebracaoApresentavel | null {
+  const lancamento = linha.lancamento;
+  if (lancamento === null) return null;
+  if (lancamento.participacoes.length === 0) return null;
+
   return {
     id: linha.id,
     criadoEm: linha.criadoEm,
     lancamentoId: linha.lancamentoId,
-    valor: linha.lancamento.valor === null ? null : linha.lancamento.valor.toFixed(2),
-    imovelRef: textoOuNulo(linha.lancamento.imovelRef),
+    valor: lancamento.valor === null ? null : lancamento.valor.toFixed(2),
+    imovelRef: textoOuNulo(lancamento.imovelRef),
     // A ordem vem do banco (`ordem` crescente) e não é rederivada aqui: ela é o
     // que decide quem aparece primeiro na TV, e é a mesma do formulário.
-    participantes: linha.lancamento.participacoes.map((participacao) => ({
+    participantes: lancamento.participacoes.map((participacao) => ({
       ordem: participacao.ordem,
       corretorNome: participacao.corretor.nomeExibicao,
       equipeNome: participacao.equipe.nome,
@@ -294,5 +325,14 @@ export async function listarCelebracoesRecentes(
 
   // `reverse` sobre uma lista já ordenada por (criadoEm, id) DESC produz
   // exatamente (criadoEm, id) ASC — determinístico, inclusive no empate.
-  return maisRecentesPrimeiro.reverse().map(paraApresentavel);
+  //
+  // O `filter` descarta o que deixou de ser apresentável entre a seleção e a
+  // projeção — venda excluída no meio da leitura. Ele vem **depois** do
+  // `reverse`, então a ordem relativa das que sobram não muda: some um evento,
+  // não a sequência. O teto continua sendo do banco; devolver menos de dez aqui
+  // é o comportamento certo quando dez não existem mais.
+  return maisRecentesPrimeiro
+    .reverse()
+    .map(paraApresentavel)
+    .filter((celebracao): celebracao is CelebracaoApresentavel => celebracao !== null);
 }
