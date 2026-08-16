@@ -32,6 +32,11 @@ publicada** em **`c24a0c9`**, que entregou o painel operacional; e a **E5 — ga
 completo — está concluída**, com resultado **`RELEASE_CANDIDATE_READY_FOR_E6 = YES`**;
 e a **E6 — go-live — está CONCLUÍDA**.
 
+Depois da v1, a **Celebração de Venda** foi implementada na `main` e **aprovada em gate
+visual local em 2026-08-16**. Ela **não está em produção**: o release publicado continua
+sendo o anterior, e a próxima ação do projeto é o **deploy controlado** dessa feature —
+ver a seção logo abaixo do bloco da v1.
+
 ## A Entrega v1 está CONCLUÍDA e EM PRODUÇÃO
 
 O release **`25e62b5`** roda em `https://dashboard-casalouzada.onrender.com`, num Web
@@ -336,6 +341,56 @@ servidor na criação e imutável na edição; **não há hard delete** — `CAN
 estado de uma reserva que deixou de valer; e finalizar **não cria `LOCACAO`
 automaticamente**. A **lista de reservas `ATIVA` na TV foi entregue na E4**
 (`c24a0c9`): só `ATIVA`, no máximo três, imóvel e corretor.
+
+## Celebração de Venda — implementada na `main`, deploy PENDENTE
+
+Feature de **integração da equipe**, aprovada pelo proprietário depois da v1. A
+finalidade é comemorar: quando uma venda é fechada, a TV do escritório para o que está
+mostrando por alguns segundos e anuncia quem vendeu. O ganho é de ambiente, não de
+informação — os números já estavam na parede.
+
+O que a define é a separação: a celebração é **evento de UX, nunca dado comercial**.
+Ela não entra em métrica, VGV, ranking, contagem, saldo nem período, e a tabela guarda
+apenas a referência ao lançamento e o instante do pedido. Valor, imóvel, participantes
+e equipe histórica são **resolvidos do fato comercial** pela relação, e não copiados —
+um snapshot criaria uma segunda versão da venda, livre para divergir da primeira depois
+de uma edição. A decisão durável está na **DEC-067**.
+
+Como funciona, em uma passada:
+
+- **disparo automático** — cadastrar uma nova `VENDA` gera **uma** celebração, usando o
+  id devolvido pelo próprio `create`. É uma venda, uma celebração: elenco de três
+  participantes não gera três. A tentativa acontece **depois** da escrita comercial e
+  fora dela, e falhar **não** desfaz a venda nem transforma o cadastro em erro — o que
+  se perde é a animação;
+- **disparo manual** — o botão "Comemorar última venda", no `/admin/lancamentos`, cria
+  um evento novo a cada acionamento. Serve para quando a TV estava desligada ou a sala
+  vazia. Não cria lançamento, participação, valor nem ranking;
+- **a TV** — consulta uma rota **irmã** de `/dados`, a cada 5 segundos, e recebe todas
+  as celebrações dos últimos 5 minutos, no máximo 10, da mais antiga para a mais nova.
+  A leitura é plural de propósito: devolver só a última perderia eventos quando duas
+  vendas são cadastradas entre duas consultas;
+- **fila e deduplicação** — o cliente guarda os ids já vistos e enfileira os inéditos.
+  Cada celebração ocupa a tela por ~10 s e a próxima entra sozinha. O estado é **só em
+  memória**: recarregar a página pode repetir um evento ainda dentro da janela, e isso
+  foi aceito no MVP — não há `localStorage`, cookie nem campo `consumido` no banco;
+- **o popup** — "É VENDA!", o valor em destaque, o **imóvel** quando houver, os
+  participantes com a **equipe histórica** de cada um, confete em CSS puro e a **marca
+  oficial assinando embaixo**. Escala em unidades relativas à viewport, como o painel.
+  Sem áudio. O **dashboard continua montado atrás**: a celebração é camada, não tela;
+- **zero impacto em métricas** — `metricas.ts`, `metricas-prisma.ts`,
+  `leitura-painel.ts` e a rota `/dados` não foram tocados por nenhuma das fatias.
+
+**Estado.** Implementada e provada na `main` (C1, C1-R1, C2, C3, C3-R1, mais o
+saneamento T1 e o hardening T1-R1). Gate visual executado pelo proprietário **no
+navegador local** em 2026-08-16 — **não** há verificação na TV física de 80" nesta
+feature. **Nada disso está publicado:** o release em produção continua sendo o anterior
+e as **duas migrations da celebração ainda não foram aplicadas no Supabase**. A próxima
+ação é o **deploy controlado**. O detalhamento e os commits estão em
+`docs/HANDOFF_ATUAL.md`.
+
+Esta feature **não** encerra a F4: a **F4.5 — operação em hardware real** continua
+pendente, com a plataforma substituta ainda não escolhida (DEC-065).
 
 ### `metas` — não entra na v1
 

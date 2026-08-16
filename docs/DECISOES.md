@@ -2109,3 +2109,97 @@ não pode ser o caminho dos scripts administrativos.
 `tests/integracao/trocar-senha-admin.integracao.test.ts`. Evidência de campo na
 execução O1-S0 de 2026-08-16. **implementada — ainda não publicada em produção; o
 release em produção continua sendo `25e62b5`**
+
+## Celebração de venda
+
+### DEC-067 — Celebração de venda é evento de UX separado do fato comercial
+
+**Decisão.** A celebração de venda é um **evento de interface**, e nunca um dado
+comercial. Ela não participa de métrica, VGV, ranking, contagem, saldo histórico nem de
+qualquer recorte por período, e nenhum módulo de cálculo a conhece.
+
+A tabela `celebracoes` guarda **referência e instante** — `lancamento_id` e `criado_em`
+— e nada mais. Valor, imóvel, participantes e equipe histórica são **resolvidos do
+lançamento** pela relação, no momento da leitura. A FK usa `ON DELETE CASCADE`.
+
+O contrato completo, ponto a ponto:
+
+- **uma nova `VENDA` gera uma tentativa automática de celebração**, disparada **depois**
+  da persistência e **fora** da transação comercial, usando o id devolvido pelo próprio
+  `create`;
+- **a falha da celebração automática nunca desfaz a venda** nem transforma o cadastro em
+  erro na tela. O retorno é ignorado de propósito;
+- **o disparo manual cria um evento novo** a cada acionamento, e não reaproveita o
+  anterior. Ele não altera lançamento, participação, valor, equipe, data nem métrica;
+- **a TV lê por uma rota irmã de `/dados`**, nunca dentro dela;
+- **o polling é de 5 segundos**;
+- **a leitura é plural** — todas as celebrações da janela de 5 minutos, no máximo 10, da
+  mais antiga para a mais nova — e a **deduplicação é do cliente**, por conjunto de ids
+  já incorporados;
+- **os ids vistos vivem só em memória.** Recarregar a página pode repetir um evento
+  ainda dentro da janela, e isso é aceito;
+- **não existe estado `consumido`** no banco;
+- **uma venda apagada durante a leitura faz a celebração ser descartada**, não estourar;
+- **não há Realtime, WebSocket nem Redis** nesta versão.
+
+**Motivo.** O ganho da feature é de ambiente — a sala comemora junto —, e o risco é
+contaminar o que a empresa usa para decidir. Se a celebração fosse dado comercial, cada
+pergunta sobre ela viraria uma pergunta sobre o VGV: uma comemoração repetida contaria
+duas vendas, um evento perdido sumiria de um ranking. Mantendo-a fora do cálculo, o pior
+caso de qualquer defeito aqui é **uma animação que não aconteceu**.
+
+O **snapshot é recusado pela mesma lógica**. Copiar valor e nomes para `celebracoes`
+criaria uma segunda versão do fato, livre para divergir da primeira depois de uma edição
+— a TV anunciaria um valor que o painel já não confirma. Lendo pela relação, corrigir o
+lançamento corrige a celebração junto.
+
+O `CASCADE` segue o princípio já usado em `ParticipacaoVenda`: o dependente morre com o
+fato que o sustenta. `Restrict` faria um evento de tela impedir a exclusão de uma venda
+lançada por engano.
+
+A **assimetria entre os dois disparos é deliberada.** No cadastro a celebração é
+acessória e não pode derrubar a venda, então a falha é engolida e registrada com uma
+frase fixa. No disparo manual ela **é** a operação pedida, então falhar precisa
+aparecer.
+
+A **leitura plural** existe porque o teto de uma celebração por consulta perderia
+eventos: duas vendas cadastradas entre dois polls e a primeira nunca chegaria à tela.
+Como o endpoint repete as mesmas celebrações a cada 5 segundos, guardar só o último id
+não bastaria — é o **conjunto** de ids que separa o inédito do repetido, e o id é
+marcado ao **entrar na fila**, não ao terminar de aparecer.
+
+A **memória volátil** é escolha de MVP com custo conhecido: persistir "já comemorado"
+exigiria estado por dispositivo ou uma coluna de consumo no banco, e as duas opções
+trazem mais problema — sincronizar telas, decidir quem consome — do que o incômodo de
+uma repetição eventual após um refresh manual da TV.
+
+**Impacto.** `src/lib/metricas.ts`, `src/lib/metricas-prisma.ts`,
+`src/lib/leitura-painel.ts` e a rota `/painel/[token]/dados` permanecem intocados pela
+feature. O dashboard **continua montado** atrás do overlay: a celebração é camada
+temporária, não outra tela, e não altera a identidade permanente do painel.
+
+A tolerância a `lancamento` nulo na projeção é defesa **de runtime**, não afrouxamento
+do modelo: o banco garante a relação em todo estado consistente, mas a leitura composta
+do Prisma resolve o `select` aninhado em mais de uma consulta e pode observar o fato
+comercial desaparecer entre elas.
+
+**Prova.** `tests/celebracao-cliente.test.ts` (fila e dedup),
+`tests/contrato-celebracao.test.ts` (serialização e validação runtime),
+`tests/celebracao-leitura.test.ts` (venda que some durante a leitura),
+`tests/celebracao-ui.test.ts` (fiação do vigia, do overlay e do botão),
+`tests/rota-celebracao-painel.test.ts` (token antes do Prisma),
+`tests/integracao/celebracao.integracao.test.ts` e
+`tests/integracao/celebracao-fluxo.integracao.test.ts` (banco real).
+
+**Fonte.** `prisma/schema.prisma` (`model Celebracao`); migrations
+`20260816120000_celebracao_venda` e `20260816160000_celebracao_runtime_grants`;
+`src/lib/celebracao.ts`; `src/lib/contrato-celebracao.ts`;
+`src/lib/celebracao-cliente.ts`; `src/app/admin/lancamentos/acoes.ts`;
+`src/app/painel/[token]/celebracao/route.ts`;
+`src/components/painel/vigia-celebracao.tsx`;
+`src/components/painel/celebracao-overlay.tsx`;
+`src/app/admin/lancamentos/botao-celebracao.tsx`. Commits `c06fe38`, `7ddf8c0`,
+`1d32543`, `ae565e6`, `4f61803`, `292cf43` e `07b109c`. Gate visual local aprovado pelo
+proprietário em 2026-08-16, **no navegador** — não na TV física.
+**implementada — ainda não publicada em produção; o release em produção continua sendo
+`25e62b5`, e as duas migrations da celebração ainda não foram aplicadas no Supabase**
