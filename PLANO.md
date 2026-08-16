@@ -31,7 +31,7 @@ e a **E6 — go-live — está CONCLUÍDA**.
 
 ## A Entrega v1 está CONCLUÍDA e EM PRODUÇÃO
 
-O release **`5491fb2`** roda em `https://dashboard-casalouzada.onrender.com`, num Web
+O release **`25e62b5`** roda em `https://dashboard-casalouzada.onrender.com`, num Web
 Service do Render (região Virginia, plano Starter, Node 24.19.0, auto-deploy **OFF**).
 As **seis migrations estão aplicadas** no banco de produção e a **credencial exposta na
 P1 foi rotacionada e revogada** antes do go-live. **Nenhuma feature da v1 continua
@@ -62,18 +62,20 @@ As decisões duráveis estão nas **DEC-058 a DEC-062**; o estado detalhado, em
 
 Os outros seis achados (SEC-005 a SEC-010) foram classificados como hardening, entre LOW
 e INFO. **Nenhum deles bloqueia a v1** e nenhum é regressão dos quatro encerrados. Depois
-da priorização, **dois foram corrigidos**:
+da priorização, **três foram corrigidos e verificados em produção**:
 
 - **SEC-009** — o seed deixou de reativar administrador desativado: ao encontrar usuário
   já cadastrado, atualiza apenas o nome (DEC-019 reescrita);
 - **SEC-006** — a aplicação passou a enviar `Strict-Transport-Security: max-age=31536000`
-  em todas as respostas, sem `includeSubDomains` e sem `preload` (**DEC-063**),
-  verificado por HTTP real em produção.
+  em todas as respostas, sem `includeSubDomains` e sem `preload` (**DEC-063**);
+- **SEC-005** — a aplicação deixou de poder ser embutida: `Content-Security-Policy:
+  frame-ancestors 'none'` como política, com `X-Frame-Options: DENY` de encosto legado
+  (**DEC-064**). A CSP tem essa diretiva e nenhuma outra.
 
-O restante foi repriorizado: **SEC-005** (framing) e **SEC-008** (revogação de JWT)
-seguem abertos; **SEC-007** (rate limiting) é risco aceito na v1; o **SSL Enforcement**
-do Supabase fica para depois porque exige reboot do banco; e **SEC-010** saiu do backlog
-de segurança por não ter sink — vira requisito da feature que vier a renderizar a foto.
+O restante foi repriorizado: **SEC-008** (revogação de JWT) segue aberto; **SEC-007**
+(rate limiting) é risco aceito na v1; o **SSL Enforcement** do Supabase fica para depois
+porque exige reboot do banco; e **SEC-010** saiu do backlog de segurança por não ter
+sink — vira requisito da feature que vier a renderizar a foto.
 
 ### Estado final da faixa superior (E4, `c24a0c9`)
 

@@ -6,8 +6,8 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `5491fb220346806e1b4c3af8f7c9baf18c2a90d8` — `docs: corrige justificativa do HSTS` |
-| **Release em produção** | **`5491fb220346806e1b4c3af8f7c9baf18c2a90d8`** — o mesmo commit; a v1 está no ar |
+| Commit de referência | `25e62b5984543e9754e0bc370958c0fb6bcd8a8b` — `docs: corrige justificativa da CSP` |
+| **Release em produção** | **`25e62b5984543e9754e0bc370958c0fb6bcd8a8b`** — o mesmo commit; a v1 está no ar |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
 | Data do handoff | 2026-08-15 |
@@ -211,7 +211,7 @@ A **E6 — go-live no Render + smoke público — está CONCLUÍDA**.
 
 ## A ENTREGA V1 ESTÁ CONCLUÍDA E EM PRODUÇÃO
 
-O release **`5491fb2`** roda em `https://dashboard-casalouzada.onrender.com`. **Nenhuma
+O release **`25e62b5`** roda em `https://dashboard-casalouzada.onrender.com`. **Nenhuma
 feature da v1 continua pendente**, as **seis migrations estão aplicadas em produção** e
 a **credencial exposta na P1 foi rotacionada e revogada** antes do go-live. O painel da
 TV fica em `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>`.
@@ -228,8 +228,8 @@ A próxima frente é a **F4.5 — operação em hardware real**, **liberada para
 A auditoria S1 varreu o repositório, o histórico Git, as dependências, os cabeçalhos
 HTTP, o banco e a configuração de deployment. Produziu dez achados. **Os quatro
 obrigatórios foram corrigidos e verificados em produção**. Dos seis restantes,
-classificados como hardening, **dois já foram encerrados** — SEC-006 e SEC-009 — e o
-resto está listado mais adiante, sem bloquear a v1.
+classificados como hardening, **três já foram encerrados** — SEC-005, SEC-006 e
+SEC-009 — e o resto está listado mais adiante, sem bloquear a v1.
 
 | Achado | Título | Estado |
 |---|---|---|
@@ -370,7 +370,7 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 | E6 — Go-live no Render + smoke público | **Concluída** | `adabe2d` implantado no go-live, 5 migrations aplicadas, sem commit de código |
 | **Entrega v1** | **Concluída e em produção** | `https://dashboard-casalouzada.onrender.com` |
 | Auditoria S1 — SEC-001 a SEC-004 | **Concluída** | corrigidos e verificados em produção; 6 migrations |
-| Hardening S1 — SEC-006 e SEC-009 | **Concluída** | encerrados; release atual `5491fb2` |
+| Hardening S1 — SEC-005, SEC-006 e SEC-009 | **Concluída** | encerrados; release atual `25e62b5` |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
@@ -2270,7 +2270,7 @@ propostas, saldo e reservas — sem cutover de VENDA; **concluída em `c6464b5`,
 `c24a0c9`**) → E5 (gate completo — **concluída**, `RELEASE_CANDIDATE_READY_FOR_E6 =
 YES`) → E6 (go-live no Render + smoke público — **concluída**, `adabe2d` implantado).
 **As seis etapas estão concluídas e a Entrega v1 está em produção**, hoje no release
-`5491fb2`, posterior ao go-live por conta das correções da auditoria S1. O go-live
+`25e62b5`, posterior ao go-live por conta das correções da auditoria S1. O go-live
 precedia a F4.5, que continua **liberada para retomada** e não iniciada. A infraestrutura de
 produção foi decidida no E6: **Render**, e não Vercel como a §7 do PLANO previa. F5
 continua futura e não está iniciada. O transporte de precisão e das listas
@@ -2287,8 +2287,9 @@ aplicação das quatro migrations em produção e a própria Entrega v1 (E1 a E6
 verificados em produção. Ao final dessa faixa o release era o `5caecc3` e as migrations
 aplicadas passaram a ser seis.
 
-**Encerrados no hardening que veio depois:** SEC-009 e SEC-006, nessa ordem. O release
-passou a ser o `5491fb2`; o número de migrations não mudou.
+**Encerrados no hardening que veio depois:** SEC-009, SEC-006 e SEC-005, nessa ordem. O
+release era o `5491fb2` ao fim do SEC-006 e passou a ser o `25e62b5` com o SEC-005; o
+número de migrations não mudou em nenhum dos três.
 
 O que resta:
 
@@ -2308,20 +2309,21 @@ O que resta:
      suspensão de tela (DEC-050). É também nele que se confere a percepção das
      hairlines a 3–6 metros, registrada na F4.3.
 5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
-6. **Hardening de segurança residual** — ver a lista logo abaixo. Dois dos seis já foram
+6. **Hardening de segurança residual** — ver a lista logo abaixo. Três dos seis já foram
    encerrados. **Nenhum item bloqueia a v1** e nenhum deles é regressão dos quatro
    achados obrigatórios.
 
 ### Hardening da auditoria S1 — estado por item
 
 Os seis achados de hardening foram medidos, classificados e priorizados em ciclo
-próprio. Dois estão encerrados; os demais estão separados por decisão tomada, não por
+próprio. Três estão encerrados; os demais estão separados por decisão tomada, não por
 severidade.
 
 #### Encerrados
 
 | Item | Estado | O que foi feito |
 |---|---|---|
+| **SEC-005** | **corrigido e verificado em produção** | Bloqueio de framing global: `Content-Security-Policy: frame-ancestors 'none'` como política, com `X-Frame-Options: DENY` de encosto legado (DEC-064). A CSP contém **essa diretiva e nenhuma outra**. Verificado por HTTP real no deploy `dep-da0ggsk9v7es739aj24g` — presente em `/`, `/login`, `/preview`, `/admin`, `/painel/<TOKEN>` e `/painel/<TOKEN>/dados`, com HSTS e `X-Robots-Tag` preservados |
 | **SEC-006** | **corrigido e verificado em produção** | HSTS global: `Strict-Transport-Security: max-age=31536000` em todas as respostas, sem `includeSubDomains` e sem `preload` (DEC-063). Verificado por HTTP real no deploy `dep-da0fume7bikc73f2dc40` — presente em `/`, `/login`, `/preview`, `/admin`, `/painel/<TOKEN>` e `/painel/<TOKEN>/dados`, com o `X-Robots-Tag` do painel preservado |
 | **SEC-009** | **corrigido e encerrado** | O seed, ao encontrar usuário já cadastrado, atualiza **apenas o nome**: `senhaHash` e `ativo` não entram no update, então uma reexecução não reativa conta desativada nem devolve senha antiga (DEC-019). Commit funcional `9b59663` |
 
@@ -2331,11 +2333,21 @@ pre-deploy do Render é `npm run db:deploy` — e o serviço não possui as vari
 barreiras foram verificadas antes de fechar. A correção chegou ao artefato live depois,
 carregada naturalmente pelo deploy do SEC-006.
 
+O SEC-005 permanece classificado como **INFO / defense-in-depth**, a classificação que
+recebeu na medição — o fechamento não a reescreve para cima. O `SameSite=Lax` do cookie
+(DEC-018) já mitigava o cenário autenticado cross-site, porque o cookie não acompanha
+iframe cross-site; o que ele não fazia era impedir o enquadramento em si, que continuava
+possível. A política explícita impede, com ou sem sessão.
+
+Como contraprova adicional — não como fundamento do fechamento, que se apoia nos
+cabeçalhos reais — um iframe servido de outra origem para `/login` foi bloqueado no
+navegador, enquanto um iframe de controle para uma origem sem a política renderizou
+normalmente na mesma página.
+
 #### Ainda abertos
 
 | Item | Classificação | Resumo |
 |---|---|---|
-| **SEC-005** | INFO / defense-in-depth | Sem proteção contra framing: as telas `/admin` podem ser embutidas em iframe (sem `X-Frame-Options` nem CSP `frame-ancestors`). O cookie de sessão é `SameSite=Lax`, então **não acompanha iframe cross-site** — o cenário autenticado cross-site fica mitigado por aí. Isso reduz o risco, **não o zera**: a mitigação depende do cookie e não impede o enquadramento em si |
 | **SEC-008** | LOW | Logout apaga o cookie, mas o JWT emitido continua válido até expirar (7 dias). Não há revogação individual — trocar `AUTH_SECRET` é o botão global (DEC-018). Fazer depois |
 
 #### Risco aceito na v1

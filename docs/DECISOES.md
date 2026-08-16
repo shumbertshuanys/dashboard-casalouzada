@@ -1875,3 +1875,34 @@ resposta: as duas regras se aplicam juntas nas rotas do painel, com chaves disti
 
 **Fonte.** `next.config.ts`; `tests/cabecalhos-http.test.ts`. Verificado em produção no
 deploy `dep-da0fume7bikc73f2dc40`. **implementada**
+
+### DEC-064 — A aplicação não pode ser embutida
+
+**Decisão.** Nenhuma origem pode enquadrar a aplicação. A política é
+`Content-Security-Policy: frame-ancestors 'none'`, enviada em todas as respostas pela
+mesma regra global do `next.config.ts` que carrega o HSTS. `X-Frame-Options: DENY`
+acompanha como encosto legado, para navegador que não leia `frame-ancestors`; quem lê as
+duas ignora a segunda.
+
+**Motivo.** Não existe caso legítimo de embutir a aplicação — nem por origem de
+terceiro, nem pela própria. Não há iframe, object ou embed em ponto nenhum do produto, e
+o painel da TV abre como página inteira. Daí `DENY` em vez de `SAMEORIGIN`: permitir o
+mesmo domínio custaria a mesma linha e não compraria nada.
+
+O cookie de sessão é `SameSite=Lax` (DEC-018) e já não acompanha iframe cross-site, o
+que cobria o cenário autenticado. Mas essa mitigação depende do cookie e não impede o
+enquadramento em si — a página continuava podendo ser desenhada dentro de um frame
+alheio. A política impede, com ou sem sessão. As duas coisas somam; nenhuma substitui a
+outra.
+
+**Escopo.** A CSP contém **somente** `frame-ancestors 'none'`. Restringir script e
+estilo é problema separado: pede um desenho próprio de CSP, compatível com a estratégia
+de rendering e de build do projeto, e a escolha entre as abordagens disponíveis é ciclo
+próprio. Nada disso entra de carona nesta regra — o teste mede a política diretiva a
+diretiva e falha se qualquer outra aparecer.
+
+HSTS (DEC-063) e `X-Robots-Tag` do painel (DEC-011) são políticas independentes e seguem
+intactas: a primeira na mesma regra global, a segunda na regra específica do painel.
+
+**Fonte.** `next.config.ts`; `tests/cabecalhos-http.test.ts`. Verificado em produção no
+deploy `dep-da0ggsk9v7es739aj24g`. **implementada**
