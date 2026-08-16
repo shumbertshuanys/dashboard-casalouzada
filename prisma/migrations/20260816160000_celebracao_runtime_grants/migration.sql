@@ -107,8 +107,16 @@ BEGIN
   -- `has_table_privilege`, que estoura em vez de responder `false`. A versão é
   -- medida, não presumida: onde o privilégio não existe não há o que negar, e
   -- inventar a pergunta derrubaria a migration num banco perfeitamente correto.
+  --
+  -- `array_append`, e não `||`: com um literal sem tipo declarado, o `||` resolve
+  -- para `anyarray || anyarray` e o PostgreSQL tenta ler `'MAINTAIN'` como
+  -- **literal de array**, falhando com `22P02 malformed array literal`. Foi
+  -- exatamente isso que derrubou esta migration na primeira tentativa de deploy:
+  -- o ramo só executa a partir do 17, então nenhum gate num PostgreSQL 16 tinha
+  -- como alcançá-lo. `array_append` nomeia a operação e não deixa o operador
+  -- ambíguo escolher por conta própria.
   IF current_setting('server_version_num')::int >= 170000 THEN
-    negados := negados || 'MAINTAIN';
+    negados := array_append(negados, 'MAINTAIN');
   ELSE
     RAISE NOTICE
       'C1-R1: MAINTAIN so existe a partir do PostgreSQL 17; nada a provar em %.',
