@@ -133,6 +133,9 @@ model Lancamento {
   autor         Usuario?            @relation(fields: [criadoPor], references: [id], onDelete: SetNull)
   /// Crédito da venda (DEC-051) — **a** fonte executável desde o cutover da E3.
   participacoes ParticipacaoVenda[]
+  /// Comemorações disparadas para este lançamento. Relação reversa apenas: a
+  /// celebração é evento de UX e não participa de nenhuma conta.
+  celebracoes   Celebracao[]
 
   @@index([tipo, dataReferencia])
   @@index([dataReferencia])
@@ -166,6 +169,31 @@ model ParticipacaoVenda {
   @@index([corretorId])
   @@index([equipeId])
   @@map("participacoes_venda")
+}
+
+/// Um pedido de comemoração na TV. **Evento de UX, nunca dado comercial.**
+///
+/// Não entra em métrica, VGV, ranking, contagem, saldo nem período: a tabela
+/// existe só para a TV saber que algo aconteceu agora. Nada é copiado para cá —
+/// valor, corretor, equipe e imóvel continuam morando no lançamento e nas
+/// participações, e a leitura os alcança pela relação. Um snapshot aqui criaria
+/// uma segunda versão do fato comercial, que poderia divergir da primeira.
+///
+/// `Cascade` pelo mesmo princípio de `ParticipacaoVenda`: o registro dependente
+/// morre com o fato que o sustenta. `Lancamento` tem hard delete (a action de
+/// exclusão apaga de vez), e `Restrict` aqui quebraria essa exclusão por causa
+/// de um evento de tela.
+model Celebracao {
+  id           String   @id @default(uuid()) @db.Uuid
+  lancamentoId String   @map("lancamento_id") @db.Uuid
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+
+  lancamento Lancamento @relation(fields: [lancamentoId], references: [id], onDelete: Cascade)
+
+  /// A leitura recente é sempre `criado_em` com `id` como desempate — o índice
+  /// segue o mesmo par para que a janela de frescor não vire varredura.
+  @@index([criadoEm, id])
+  @@map("celebracoes")
 }
 
 /// Reserva de locação — entidade operacional, não produção (DEC-055).
