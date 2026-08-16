@@ -1841,3 +1841,37 @@ para teste.
 
 **Fonte.** `src/lib/destino-login.ts`; `src/app/login/acoes.ts`;
 `tests/destino-login.test.ts`. **implementada**
+
+### DEC-063 — HSTS global com max-age de um ano, sem includeSubDomains e sem preload
+
+**Decisão.** A aplicação envia `Strict-Transport-Security: max-age=31536000` em todas as
+respostas, por uma regra única no `headers()` do `next.config.ts` cujo `source` é
+`/:caminho*`. Sem `includeSubDomains` e sem `preload`.
+
+**Motivo.** O host redireciona `http` para `https`, mas o redirecionamento só acontece
+depois que uma requisição em claro saiu. Enquanto não conhece a política, o navegador
+emite esse primeiro salto — e a URL do painel carrega o token no **path**, que viaja
+nele. É esse o dado sensível em jogo. O cookie de sessão **não** é: ele é gravado com
+`secure` em produção (`src/lib/sessao-servidor.ts`), e navegador não envia cookie
+`Secure` por `http`. Depois de aprender a política, o navegador troca para `https` por
+conta própria, antes de enviar.
+
+**Limite.** Sem `preload`, o cabeçalho não protege a primeira visita de um navegador que
+ainda não conhece a política — ele precisa recebê-lo ao menos uma vez por HTTPS. Isso é
+limite conhecido da mecânica, não defeito da configuração, e é a razão de o
+redirecionamento continuar necessário.
+
+**Impacto.** `includeSubDomains` fica fora porque a política pertence ao host que a
+emite e a diretiva a estenderia apenas aos **descendentes** desse host — nunca a outros
+projetos vizinhos sob `onrender.com`, que emitem a sua própria. Como não existe
+subdomínio próprio abaixo do host atual, não há quem herde: a diretiva não compraria
+nada e só criaria compromisso a honrar se algum subdomínio nascer sem HTTPS. Reavaliar
+se a topologia de domínio mudar. `preload` não faz parte desta decisão: pede inclusão
+numa lista embutida nos navegadores, exige decisão própria e não deve entrar por cópia
+do exemplo genérico da documentação do Next.
+
+A regra do painel (`X-Robots-Tag`, DEC-011) fica intacta e convive com a nova na mesma
+resposta: as duas regras se aplicam juntas nas rotas do painel, com chaves distintas.
+
+**Fonte.** `next.config.ts`; `tests/cabecalhos-http.test.ts`. Verificado em produção no
+deploy `dep-da0fume7bikc73f2dc40`. **implementada**

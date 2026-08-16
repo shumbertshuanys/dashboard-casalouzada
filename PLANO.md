@@ -31,7 +31,7 @@ e a **E6 — go-live — está CONCLUÍDA**.
 
 ## A Entrega v1 está CONCLUÍDA e EM PRODUÇÃO
 
-O release **`5caecc3`** roda em `https://dashboard-casalouzada.onrender.com`, num Web
+O release **`5491fb2`** roda em `https://dashboard-casalouzada.onrender.com`, num Web
 Service do Render (região Virginia, plano Starter, Node 24.19.0, auto-deploy **OFF**).
 As **seis migrations estão aplicadas** no banco de produção e a **credencial exposta na
 P1 foi rotacionada e revogada** antes do go-live. **Nenhuma feature da v1 continua
@@ -60,10 +60,20 @@ verificados em produção**:
 As decisões duráveis estão nas **DEC-058 a DEC-062**; o estado detalhado, em
 `docs/HANDOFF_ATUAL.md`.
 
-Os **seis achados restantes são hardening** (SEC-005 a SEC-010: framing, HSTS, rate
-limiting, revogação de JWT, reativação por seed e validação de `fotoUrl`), classificados
-entre LOW e INFO. **Nenhum deles bloqueia a v1** e nenhum é regressão dos quatro
-encerrados. A priorização é ciclo próprio.
+Os outros seis achados (SEC-005 a SEC-010) foram classificados como hardening, entre LOW
+e INFO. **Nenhum deles bloqueia a v1** e nenhum é regressão dos quatro encerrados. Depois
+da priorização, **dois foram corrigidos**:
+
+- **SEC-009** — o seed deixou de reativar administrador desativado: ao encontrar usuário
+  já cadastrado, atualiza apenas o nome (DEC-019 reescrita);
+- **SEC-006** — a aplicação passou a enviar `Strict-Transport-Security: max-age=31536000`
+  em todas as respostas, sem `includeSubDomains` e sem `preload` (**DEC-063**),
+  verificado por HTTP real em produção.
+
+O restante foi repriorizado: **SEC-005** (framing) e **SEC-008** (revogação de JWT)
+seguem abertos; **SEC-007** (rate limiting) é risco aceito na v1; o **SSL Enforcement**
+do Supabase fica para depois porque exige reboot do banco; e **SEC-010** saiu do backlog
+de segurança por não ter sink — vira requisito da feature que vier a renderizar a foto.
 
 ### Estado final da faixa superior (E4, `c24a0c9`)
 

@@ -6,8 +6,8 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência | `5caecc38d346b8f72cfc6243826b5a112dbac09d` — `security: restringe redirect pós-login ao admin` |
-| **Release em produção** | **`5caecc38d346b8f72cfc6243826b5a112dbac09d`** — o mesmo commit; a v1 está no ar |
+| Commit de referência | `5491fb220346806e1b4c3af8f7c9baf18c2a90d8` — `docs: corrige justificativa do HSTS` |
+| **Release em produção** | **`5491fb220346806e1b4c3af8f7c9baf18c2a90d8`** — o mesmo commit; a v1 está no ar |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
 | Data do handoff | 2026-08-15 |
@@ -211,13 +211,14 @@ A **E6 — go-live no Render + smoke público — está CONCLUÍDA**.
 
 ## A ENTREGA V1 ESTÁ CONCLUÍDA E EM PRODUÇÃO
 
-O release **`5caecc3`** roda em `https://dashboard-casalouzada.onrender.com`. **Nenhuma
+O release **`5491fb2`** roda em `https://dashboard-casalouzada.onrender.com`. **Nenhuma
 feature da v1 continua pendente**, as **seis migrations estão aplicadas em produção** e
 a **credencial exposta na P1 foi rotacionada e revogada** antes do go-live. O painel da
 TV fica em `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>`.
 
 O go-live original foi o `adabe2d`, em 2026-08-14. O release atual é posterior porque a
-**auditoria de segurança S1** entregou correções em produção — ver a seção abaixo.
+**auditoria de segurança S1** entregou correções em produção — primeiro os quatro
+achados obrigatórios, depois dois itens do hardening residual — ver a seção abaixo.
 
 A próxima frente é a **F4.5 — operação em hardware real**, **liberada para retomada** e
 **não iniciada**, se o proprietário decidir retomá-la.
@@ -226,8 +227,9 @@ A próxima frente é a **F4.5 — operação em hardware real**, **liberada para
 
 A auditoria S1 varreu o repositório, o histórico Git, as dependências, os cabeçalhos
 HTTP, o banco e a configuração de deployment. Produziu dez achados. **Os quatro
-obrigatórios foram corrigidos e verificados em produção**; os seis restantes são
-hardening e estão listados mais adiante, sem bloquear a v1.
+obrigatórios foram corrigidos e verificados em produção**. Dos seis restantes,
+classificados como hardening, **dois já foram encerrados** — SEC-006 e SEC-009 — e o
+resto está listado mais adiante, sem bloquear a v1.
 
 | Achado | Título | Estado |
 |---|---|---|
@@ -367,7 +369,8 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 | E5 — Gate completo | **Concluída** | `RELEASE_CANDIDATE_READY_FOR_E6 = YES` — sem commit de código |
 | E6 — Go-live no Render + smoke público | **Concluída** | `adabe2d` implantado no go-live, 5 migrations aplicadas, sem commit de código |
 | **Entrega v1** | **Concluída e em produção** | `https://dashboard-casalouzada.onrender.com` |
-| Auditoria S1 — SEC-001 a SEC-004 | **Concluída** | corrigidos e verificados em produção; release atual `5caecc3`, 6 migrations |
+| Auditoria S1 — SEC-001 a SEC-004 | **Concluída** | corrigidos e verificados em produção; 6 migrations |
+| Hardening S1 — SEC-006 e SEC-009 | **Concluída** | encerrados; release atual `5491fb2` |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
@@ -2267,7 +2270,7 @@ propostas, saldo e reservas — sem cutover de VENDA; **concluída em `c6464b5`,
 `c24a0c9`**) → E5 (gate completo — **concluída**, `RELEASE_CANDIDATE_READY_FOR_E6 =
 YES`) → E6 (go-live no Render + smoke público — **concluída**, `adabe2d` implantado).
 **As seis etapas estão concluídas e a Entrega v1 está em produção**, hoje no release
-`5caecc3`, posterior ao go-live por conta das correções da auditoria S1. O go-live
+`5491fb2`, posterior ao go-live por conta das correções da auditoria S1. O go-live
 precedia a F4.5, que continua **liberada para retomada** e não iniciada. A infraestrutura de
 produção foi decidida no E6: **Render**, e não Vercel como a §7 do PLANO previa. F5
 continua futura e não está iniciada. O transporte de precisão e das listas
@@ -2281,8 +2284,11 @@ aplicação das quatro migrations em produção e a própria Entrega v1 (E1 a E6
 `adabe2d` implantado no go-live). Nenhuma das três é mais pendência.
 
 **Encerrados na auditoria S1:** SEC-001, SEC-002, SEC-003 e SEC-004, todos corrigidos e
-verificados em produção. O release passou a ser o `5caecc3` e as migrations aplicadas
-passaram a ser seis.
+verificados em produção. Ao final dessa faixa o release era o `5caecc3` e as migrations
+aplicadas passaram a ser seis.
+
+**Encerrados no hardening que veio depois:** SEC-009 e SEC-006, nessa ordem. O release
+passou a ser o `5491fb2`; o número de migrations não mudou.
 
 O que resta:
 
@@ -2302,29 +2308,56 @@ O que resta:
      suspensão de tela (DEC-050). É também nele que se confere a percepção das
      hairlines a 3–6 metros, registrada na F4.3.
 5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
-6. **Hardening de segurança residual** — ver a lista logo abaixo. **Nenhum item bloqueia
-   a v1** e nenhum deles é regressão dos quatro achados encerrados.
+6. **Hardening de segurança residual** — ver a lista logo abaixo. Dois dos seis já foram
+   encerrados. **Nenhum item bloqueia a v1** e nenhum deles é regressão dos quatro
+   achados obrigatórios.
 
-### Hardening residual da auditoria S1
+### Hardening da auditoria S1 — estado por item
 
-Estes seis achados foram medidos e classificados, e **não foram corrigidos**. Ficam
-registrados para priorização em ciclo próprio, separados dos SEC-001 a SEC-004:
+Os seis achados de hardening foram medidos, classificados e priorizados em ciclo
+próprio. Dois estão encerrados; os demais estão separados por decisão tomada, não por
+severidade.
+
+#### Encerrados
+
+| Item | Estado | O que foi feito |
+|---|---|---|
+| **SEC-006** | **corrigido e verificado em produção** | HSTS global: `Strict-Transport-Security: max-age=31536000` em todas as respostas, sem `includeSubDomains` e sem `preload` (DEC-063). Verificado por HTTP real no deploy `dep-da0fume7bikc73f2dc40` — presente em `/`, `/login`, `/preview`, `/admin`, `/painel/<TOKEN>` e `/painel/<TOKEN>/dados`, com o `X-Robots-Tag` do painel preservado |
+| **SEC-009** | **corrigido e encerrado** | O seed, ao encontrar usuário já cadastrado, atualiza **apenas o nome**: `senhaHash` e `ativo` não entram no update, então uma reexecução não reativa conta desativada nem devolve senha antiga (DEC-019). Commit funcional `9b59663` |
+
+O SEC-009 **não exigiu deploy dedicado**: o seed nunca fez parte do pipeline — o
+pre-deploy do Render é `npm run db:deploy` — e o serviço não possui as variáveis
+`SEED_ADMIN_*`, sem as quais o próprio código aborta antes de tocar o banco. As duas
+barreiras foram verificadas antes de fechar. A correção chegou ao artefato live depois,
+carregada naturalmente pelo deploy do SEC-006.
+
+#### Ainda abertos
 
 | Item | Classificação | Resumo |
 |---|---|---|
-| **SEC-005** | INFO / hardening | Sem proteção contra framing: as telas `/admin` podem ser embutidas em iframe (sem `X-Frame-Options` nem CSP `frame-ancestors`) |
-| **SEC-006** | LOW | Sem HSTS: `http://` redireciona para `https://`, mas a primeira visita de cada navegador percorre uma requisição em claro |
-| **SEC-007** | LOW | Login sem rate limiting nem bloqueio após falhas. Mitigado na prática pelo bcrypt de custo 12 e por haver uma única conta |
-| **SEC-008** | LOW | Logout apaga o cookie, mas o JWT emitido continua válido até expirar (7 dias). Não há revogação individual — trocar `AUTH_SECRET` é o botão global (DEC-018) |
-| **SEC-009** | LOW | `npm run db:seed` reativa (`ativo = true`) um administrador desativado. O pre-deploy do Render roda apenas `db:deploy`, então o gatilho é execução manual |
-| **SEC-010** | INFO / hardening | `fotoUrl` aceita qualquer esquema de URL. Hoje é inofensivo — o campo **não é renderizado em lugar nenhum**; o risco é diferido para quando passar a ser |
+| **SEC-005** | INFO / defense-in-depth | Sem proteção contra framing: as telas `/admin` podem ser embutidas em iframe (sem `X-Frame-Options` nem CSP `frame-ancestors`). O cookie de sessão é `SameSite=Lax`, então **não acompanha iframe cross-site** — o cenário autenticado cross-site fica mitigado por aí. Isso reduz o risco, **não o zera**: a mitigação depende do cookie e não impede o enquadramento em si |
+| **SEC-008** | LOW | Logout apaga o cookie, mas o JWT emitido continua válido até expirar (7 dias). Não há revogação individual — trocar `AUTH_SECRET` é o botão global (DEC-018). Fazer depois |
 
-Além destes, dois itens de plataforma, também opcionais:
+#### Risco aceito na v1
 
-- **desligar a Data API** do Supabase, reduzindo superfície — hoje ela está no ar, mas
-  sem alcance às tabelas (SEC-001);
-- **habilitar o SSL Enforcement** do Supabase, que impediria regressão para conexão sem
-  TLS. Exige ciclo próprio: **provoca reboot do banco**.
+| Item | Classificação | Por quê |
+|---|---|---|
+| **SEC-007** | LOW | Login sem rate limiting nem bloqueio após falhas. Mitigado na prática pelo bcrypt de custo 12 e por haver uma única conta. Se um dia for necessário, **preferir mitigação de borda a lockout persistente**: com uma conta só, bloqueio por tentativas entrega uma negação de serviço trivial contra o próprio administrador |
+| **P-01** | plataforma | **Desligar a Data API** do Supabase reduziria superfície. Ela está no ar, mas **sem alcance às tabelas** desde o SEC-001. Opcional |
+
+#### Fazer depois
+
+| Item | Classificação | Custo |
+|---|---|---|
+| **P-02** | plataforma | **Habilitar o SSL Enforcement** do Supabase, que impediria regressão para conexão sem TLS. Exige janela: **provoca reboot do banco** |
+
+#### Removido do backlog de segurança atual
+
+**SEC-010** — `fotoUrl` aceita qualquer esquema de URL. Sai do backlog porque **não
+existe sink**: o campo não é renderizado em lugar nenhum, e o único consumo é um
+`defaultValue` de `<input>` no formulário administrativo. Passa a ser **requisito da
+feature futura** que vier a exibir a foto — validar o esquema é obrigação de quem
+implementar a renderização, e é lá que a validação deve nascer.
 
 Pendências de informação herdadas do plano: número máximo de corretores por equipe
 (dimensiona a altura dos quadros) e valores iniciais do saldo histórico. A terceira —
