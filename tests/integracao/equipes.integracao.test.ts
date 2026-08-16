@@ -266,15 +266,46 @@ describe("equipe — desativar e reativar", () => {
   });
 });
 
+/**
+ * A decisão da guarda sobre uma conta **desta suíte**.
+ *
+ * Antes estes testes trabalhavam sobre "a primeira conta que existir": um deles
+ * desativava essa conta enquanto o outro procurava por uma conta ativa — e os
+ * `it` de um mesmo describe rodam concorrentes. Pior, `usuarios` é
+ * compartilhada com `seed-admin`, `trocar-senha-admin` e `reservas-locacao`,
+ * que criam e apagam contas em paralelo. A conta do seed também podia ficar
+ * desativada se o processo caísse entre o `update` e o `finally`.
+ *
+ * Com uma conta própria e prefixada, nada disso alcança esta suíte — e ela
+ * também deixa de mexer na conta do seed, que outras suítes esperam encontrar
+ * ativa.
+ */
 describe("guarda — decisão sobre conta real do banco", () => {
   const SESSAO = { usuarioId: "", nome: "do JWT", email: "admin@casalouzada.test" };
+  const EMAIL = `${PREFIXO_FIXTURE}guarda@local.test`;
+
+  let contaId = "";
+
+  before(async () => {
+    await prisma.usuario.deleteMany({ where: { email: EMAIL } });
+    contaId = (
+      await prisma.usuario.create({
+        data: { nome: nome("guarda"), email: EMAIL, senhaHash: "sem-login" },
+        select: { id: true },
+      })
+    ).id;
+  });
+
+  after(async () => {
+    await prisma.usuario.deleteMany({ where: { email: EMAIL } });
+  });
 
   it("autoriza administrador ativo que existe no banco", async () => {
-    const conta = await prisma.usuario.findFirst({
-      where: { ativo: true },
+    const conta = await prisma.usuario.findUniqueOrThrow({
+      where: { id: contaId },
       select: { id: true, nome: true, email: true, ativo: true },
     });
-    assert.ok(conta, "o seed local precisa ter criado o administrador de teste");
+    assert.equal(conta.ativo, true, "a conta desta suíte nasce ativa");
 
     const r = decidirAcesso({ ...SESSAO, usuarioId: conta.id }, conta);
     assert.equal(r.autorizado, true);
@@ -294,13 +325,19 @@ describe("guarda — decisão sobre conta real do banco", () => {
   });
 
   it("recusa conta desativada, lendo ativo=false do banco", async () => {
-    const conta = await prisma.usuario.findFirstOrThrow({
+    // Uma conta só desta verificação: desativar a conta compartilhada faria os
+    // outros testes — desta suíte e das vizinhas — procurarem um administrador
+    // ativo que naquele instante não existe.
+    const email = `${PREFIXO_FIXTURE}guarda-inativa@local.test`;
+    await prisma.usuario.deleteMany({ where: { email } });
+    const conta = await prisma.usuario.create({
+      data: { nome: nome("guardaInativa"), email, senhaHash: "sem-login" },
       select: { id: true, nome: true, email: true, ativo: true },
     });
 
-    // Desativa, lê de volta e devolve ao estado original.
-    await prisma.usuario.update({ where: { id: conta.id }, data: { ativo: false } });
     try {
+      await prisma.usuario.update({ where: { id: conta.id }, data: { ativo: false } });
+
       const relida = await prisma.usuario.findUniqueOrThrow({
         where: { id: conta.id },
         select: { id: true, nome: true, email: true, ativo: true },
@@ -310,7 +347,8 @@ describe("guarda — decisão sobre conta real do banco", () => {
       const r = decidirAcesso({ ...SESSAO, usuarioId: conta.id }, relida);
       assert.equal(r.autorizado === false && r.motivo, "conta-inativa");
     } finally {
-      await prisma.usuario.update({ where: { id: conta.id }, data: { ativo: conta.ativo } });
+      // Apagada, não restaurada: a conta nasceu aqui e não sobrevive ao teste.
+      await prisma.usuario.deleteMany({ where: { email } });
     }
   });
 });

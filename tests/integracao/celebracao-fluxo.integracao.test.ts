@@ -77,13 +77,47 @@ const REVERTER = new Error("__reverter__");
  */
 async function revertendo(corpo: (tx: PrismaClient) => Promise<void>): Promise<void> {
   try {
-    await prisma.$transaction(async (tx) => {
-      await corpo(tx as unknown as PrismaClient);
-      throw REVERTER;
-    });
+    await prisma.$transaction(
+      async (tx) => {
+        await corpo(tx as unknown as PrismaClient);
+        throw REVERTER;
+      },
+      // `REPEATABLE READ`, e não o `READ COMMITTED` padrão, por uma razão
+      // medida: o Prisma resolve `select` aninhado em **mais de uma consulta** —
+      // primeiro as celebrações, depois os lançamentos delas. Sob READ
+      // COMMITTED cada consulta pega um snapshot novo, então a suíte do C1,
+      // rodando em paralelo, podia apagar um lançamento entre as duas e fazer a
+      // relação voltar `null` para uma linha já lida. O sintoma era
+      // `Cannot read properties of null (reading 'valor')` dentro do núcleo,
+      // reproduzido 1 vez em 12 execuções.
+      //
+      // Com um snapshot só para a transação inteira, as duas consultas
+      // enxergam o mesmo banco e a corrida deixa de existir. Não é `sleep`,
+      // retry nem timeout maior: é a leitura passar a ser consistente, que é o
+      // que ela sempre precisou ser.
+      { isolationLevel: "RepeatableRead" },
+    );
   } catch (erro) {
     if (erro !== REVERTER) throw erro;
   }
+}
+
+/**
+ * Um instante de leitura adiantado, com carimbos logo antes dele.
+ *
+ * A leitura do núcleo é global e limitada às `MAXIMO_CELEBRACOES_RECENTES` mais
+ * recentes. As outras suítes criam celebrações com `now()` o tempo todo — a do
+ * C1 chega a criar doze de uma vez —, e as desta suíte podiam ser empurradas
+ * para fora do teto antes de serem verificadas.
+ *
+ * Adiantar o relógio da leitura em um minuto e carimbar as celebrações logo
+ * abaixo dele garante que elas sejam as mais recentes do banco, e portanto
+ * sempre estejam dentro do corte. Continuam folgadamente dentro da janela de
+ * cinco minutos, que é o que o teste quer exercitar.
+ */
+function relogioAdiantado() {
+  const agora = new Date(Date.now() + 60_000);
+  return { agora, em: (segundosAntes: number) => new Date(agora.getTime() - segundosAntes * 1_000) };
 }
 
 async function criarEquipe(tx: PrismaClient, sufixo: string) {
@@ -579,13 +613,13 @@ describe("celebração — fluxo do C2", () => {
           { corretorId: a.id, equipeId: equipeX.id },
         ]);
 
-        const agora = new Date();
+        const { agora, em } = relogioAdiantado();
         const primeira = await tx.celebracao.create({
-          data: { lancamentoId: vendaA.id, criadoEm: new Date(agora.getTime() - 40_000) },
+          data: { lancamentoId: vendaA.id, criadoEm: em(40) },
           select: { id: true },
         });
         const segunda = await tx.celebracao.create({
-          data: { lancamentoId: vendaB.id, criadoEm: new Date(agora.getTime() - 20_000) },
+          data: { lancamentoId: vendaB.id, criadoEm: em(20) },
           select: { id: true },
         });
 
@@ -698,10 +732,10 @@ describe("celebração — fluxo do C2", () => {
         // mais velho que ele e nada impede uma linha assim.
         const comBranco = await criarVenda(tx, "t9imC", participantes, { imovelRef: "   " });
 
-        const agora = new Date();
+        const { agora, em } = relogioAdiantado();
         for (const [indice, venda] of [comImovel, semImovel, comBranco].entries()) {
           await tx.celebracao.create({
-            data: { lancamentoId: venda.id, criadoEm: new Date(agora.getTime() - 30_000 + indice) },
+            data: { lancamentoId: venda.id, criadoEm: em(30 - indice) },
           });
         }
 

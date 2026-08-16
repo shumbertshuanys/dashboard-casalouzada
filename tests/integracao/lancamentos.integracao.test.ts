@@ -29,6 +29,8 @@ async function limpar(cliente: PrismaClient): Promise<void> {
   });
   await cliente.corretor.deleteMany({ where: { nomeCompleto: { startsWith: PREFIXO } } });
   await cliente.equipe.deleteMany({ where: { nome: { startsWith: PREFIXO } } });
+  // O autor desta suíte. `criadoPor` é `SetNull`, então a ordem aqui é livre.
+  await cliente.usuario.deleteMany({ where: { email: { startsWith: PREFIXO } } });
 }
 
 let equipeA = "";
@@ -51,8 +53,30 @@ before(async () => {
   equipeA = doSeed[0].id;
   equipeB = doSeed[1].id;
 
-  const admin = await prisma.usuario.findFirstOrThrow({ select: { id: true } });
-  adminId = admin.id;
+  // Autor **próprio**, e não `findFirstOrThrow()` sobre uma tabela compartilhada.
+  //
+  // `usuarios` era a única tabela em que as suítes não usavam fixture com
+  // prefixo: `trocar-senha-admin` e `seed-admin` criam e **apagam** contas, e
+  // `reservas-locacao` cria as suas. Pegar "o primeiro usuário que existir"
+  // podia capturar uma conta transitória de outra suíte; quando ela era apagada,
+  // todo `criadoPor: adminId` daqui passava a violar
+  // `lancamentos_criado_por_fkey` — e, por acontecer dentro de um `before`, o
+  // `node:test` cancelava os subtests do describe inteiro com "test did not
+  // finish before its parent and was cancelled".
+  //
+  // Uma conta com o prefixo desta suíte não é alcançável por nenhuma outra.
+  adminId = (
+    await prisma.usuario.create({
+      data: {
+        nome: nome("autor"),
+        email: `${PREFIXO}autor@local.test`,
+        // Nunca autentica: esta conta só existe para ser referenciada em
+        // `criadoPor`.
+        senhaHash: "sem-login",
+      },
+      select: { id: true },
+    })
+  ).id;
 
   equipeInativa = (
     await prisma.equipe.create({
@@ -461,11 +485,37 @@ describe("filtros combinados de corretor e equipe", () => {
     await lancar(solo, "PROPOSTA", "2026-09-11");
   });
 
+  /**
+   * O recorte deste describe, por identidade dos próprios corretores.
+   *
+   * Sem ele a contagem é **global**, e as chamadas sem corretor —
+   * `encontrados(undefined, equipeA)` — passam a contar lançamento de qualquer
+   * suíte que credite a mesma equipe na mesma janela. `equipeA` é do seed
+   * (`Equipe Suellen`), compartilhada, e os arquivos de integração rodam em
+   * paralelo: `lancamentos-edicao.integracao.test.ts` cria lançamento em
+   * `equipeA` e o edita para `2026-09-09`, dentro desta janela. Era daí que
+   * vinha o `3 !== 2` intermitente.
+   *
+   * O recorte é por corretor, e não por equipe ou data, justamente para não
+   * ajudar o predicado sob teste: quem decide se a venda compartilhada aparece
+   * pela equipe continua sendo `creditadoA`. Se ele parar de casar pela
+   * participação, a contagem cai e o teste falha do mesmo jeito.
+   *
+   * `AND` explícito porque os dois lados trazem o próprio `OR` — mesclá-los no
+   * mesmo nível faria uma chave sobrescrever a outra.
+   */
+  function destesCorretores() {
+    const ids = [ana, bruno, solo];
+    return {
+      OR: [{ corretorId: { in: ids } }, { participacoes: { some: { corretorId: { in: ids } } } }],
+    };
+  }
+
   /** Ids dos lançamentos desta suíte que casam com o filtro. */
   async function encontrados(corretorId?: string, equipeId?: string): Promise<number> {
     return prisma.lancamento.count({
       where: {
-        ...creditadoA(corretorId, equipeId),
+        AND: [creditadoA(corretorId, equipeId), destesCorretores()],
         dataReferencia: {
           gte: paraDataCivil("2026-09-01"),
           lte: paraDataCivil("2026-09-30"),

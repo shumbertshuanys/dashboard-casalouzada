@@ -26,6 +26,7 @@ async function limpar(cliente: PrismaClient): Promise<void> {
   });
   await cliente.corretor.deleteMany({ where: { nomeCompleto: { startsWith: PREFIXO } } });
   await cliente.equipe.deleteMany({ where: { nome: { startsWith: PREFIXO } } });
+  await cliente.usuario.deleteMany({ where: { email: { startsWith: PREFIXO } } });
 }
 
 let equipeA = "";
@@ -45,7 +46,20 @@ before(async () => {
   assert.equal(doSeed.length, 3);
   [equipeA, equipeB, equipeC] = doSeed.map((e) => e.id);
 
-  adminId = (await prisma.usuario.findFirstOrThrow({ select: { id: true } })).id;
+  // Autor próprio, pelo mesmo motivo da suíte de lançamentos: `usuarios` é
+  // compartilhada e outras suítes criam e apagam contas em paralelo. Capturar
+  // "o primeiro usuário que existir" fazia `criadoPor` violar a FK assim que
+  // aquela conta transitória sumia.
+  adminId = (
+    await prisma.usuario.create({
+      data: {
+        nome: nome("autor"),
+        email: `${PREFIXO}autor@local.test`,
+        senhaHash: "sem-login",
+      },
+      select: { id: true },
+    })
+  ).id;
 
   equipeInativa = (
     await prisma.equipe.create({
