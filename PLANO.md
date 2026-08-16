@@ -709,20 +709,22 @@ A **E5** certificou o release candidate sem publicar código. A **E6** fez o go-
 credencial exposta na P1 foi rotacionada e revogada, o Web Service foi criado no Render,
 os secrets foram cadastrados sem passar por linha de comando, e um único deploy manual
 do commit `adabe2d` aplicou as **quatro migrations pendentes na ordem** pelo
-`pre-deploy`, antes de o processo novo receber tráfego. Com o go-live feito, a **F4.5
-está liberada para retomada** — ainda não iniciada.
+`pre-deploy`, antes de o processo novo receber tráfego. Com o go-live feito, a F4.5 foi
+retomada — e hoje está **em andamento**, reestruturada pela DEC-065 (ver §9).
 
 **Fase 5 — Refinamentos** · *futura*
 Metas com barra de progresso, destaque do mês, comparativo com o mês anterior, fotos dos
 corretores, exportação.
 
-**Etapas operacionais** · *pendentes*
+**Etapas operacionais**
 Não são fases técnicas: correm ao lado do roadmap e dependem do proprietário.
 
 | Etapa | Escopo | Estado |
 |---|---|---|
-| O1 | reconciliação do dossiê secreto do proprietário contra o estado real de Render, Supabase e administração — **o dossiê fica fora do Git e nenhum valor secreto entra no repositório**; só a existência da tarefa está registrada | **pendente**, não iniciada |
-| O2 | carga operacional inicial — cadastrar o `saldo_historico` real pela administração, **sem inventar valor** | **pendente**, não iniciada |
+| O1 | reconciliação do dossiê secreto do proprietário contra o estado real de Render, Supabase e administração — **o dossiê fica fora do Git e nenhum valor secreto entra no repositório** | **concluída** — auditoria, rotação da senha exposta, contrato de conexões (DEC-066) e reconciliação do cofre e do `.env` local |
+| O2 | carga operacional inicial — cadastrar o `saldo_historico` real pela administração, **sem inventar valor** | **parcialmente concluída** — `AVALIACAO_GOOGLE` cadastrado; falta `VENDA` |
+
+O detalhamento das duas está em `docs/HANDOFF_ATUAL.md`, em "Etapas operacionais".
 
 ---
 
@@ -734,7 +736,13 @@ Nenhuma bloqueia o início do desenvolvimento.
    Se uma equipe passar de 8 ou 9 nomes, o quadro precisa de rolagem automática ou de
    mostrar só os primeiros colocados.
 2. Valores iniciais do saldo histórico (quantidades e VGV acumulado antes do sistema).
-   Formalizados como a etapa operacional **O2**, pendente — os números são do
+   Formalizados como a etapa operacional **O2**, **parcialmente concluída** — o saldo de
+   `AVALIACAO_GOOGLE` está cadastrado e o de `VENDA` ainda não. Os números são do
    proprietário e **nenhum valor é inventado**.
+
+   > Atenção operacional ao cadastrar: a `dataCorte` é **inclusiva** (DEC-036). O saldo
+   > responde por tudo até ela, e só lançamentos posteriores somam por cima. Uma
+   > `dataCorte` incompatível com o período que o saldo abrange faz o acumulado parecer
+   > errado sem que haja defeito nenhum.
 3. ~~Arquivos da marca em alta resolução para a TV 4K.~~ **Encerrada** — os PNGs
    oficiais foram fornecidos e integrados pela F4.2 (`7e0e35d`).

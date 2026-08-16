@@ -226,9 +226,10 @@ achados obrigatórios, depois dois itens do hardening residual — ver a seção
 
 A próxima frente é a **F4.5 — operação em hardware real**, **em andamento**: a
 **F4.5A está concluída** com o Phantom **rejeitado**, e o que segue é a **F4.5B —
-seleção da plataforma substituta**, pendente (DEC-065). Correm ao lado, como etapas
-operacionais, a **O1 — reconciliação do dossiê secreto** e a **O2 — carga operacional
-inicial**, ambas pendentes.
+seleção da plataforma substituta**, pendente (DEC-065). Das etapas operacionais, a
+**O1 — reconciliação do dossiê secreto — está CONCLUÍDA**, e a **O2 — carga operacional
+inicial — está PARCIALMENTE CONCLUÍDA**: o saldo de `AVALIACAO_GOOGLE` já está
+cadastrado e o de `VENDA` ainda não.
 
 ## AUDITORIA DE SEGURANÇA S1 — SEC-001 A SEC-004 ENCERRADOS
 
@@ -376,8 +377,8 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 | F4.5E — Gate físico final | **Pendente** | fecha a F4.5 e, com ela, a F4 |
 | **F4.5 — Operação em hardware real** | **Em andamento** | F4.5A concluída; F4.5B a F4.5E pendentes |
 | **F4 — Identidade e modo TV** | **Em andamento** | `8b9fce2` |
-| O1 — Reconciliação do dossiê secreto | **Pendente** | etapa operacional; **nenhum valor secreto no repositório** |
-| O2 — Carga operacional inicial | **Pendente** | etapa operacional; cadastrar `saldo_historico` real pela administração |
+| O1 — Reconciliação do dossiê secreto | **Concluída** | O1A + O1-S0 + O1-S1 + O1B; **nenhum valor secreto no repositório** |
+| O2 — Carga operacional inicial | **Parcialmente concluída** | `AVALIACAO_GOOGLE` cadastrado; **falta `VENDA`** — medido no banco |
 | E1 — Contratos e modelo de dados da v1 | **Concluída** | `078f360` — DEC-051 a DEC-057; sem código |
 | E2A — Schema e migration aditiva + backfills | **Concluída** | `c6464b5` — sem cutover de VENDA |
 | E2B — Admin de propostas + precisão do saldo | **Concluída** | `fe00fd2` — inclui o CHECK da proposta |
@@ -2264,11 +2265,14 @@ aberta. **`PUBLIC_AUTO_REFRESH = PASS`.**
 
 #### Estado honesto dos dados em produção
 
-**`saldo_historico` está vazio.** A consequência correta, e observada no smoke, é que os
-três acumulados aparecem como `—` (`SEM_SALDO_HISTORICO`). **Isso não é bug** — é a
-DEC-014 e a DEC-037 funcionando: ausência não vira zero. Para os big numbers passarem a
-afirmar valores, o **saldo histórico de abertura precisa ser informado pelo
-proprietário** na administração. Nenhum saldo fictício foi cadastrado.
+**`saldo_historico` estava vazio no momento do smoke.** A consequência correta, e
+observada ali, é que os três acumulados apareciam como `—` (`SEM_SALDO_HISTORICO`).
+**Isso não é bug** — é a DEC-014 e a DEC-037 funcionando: ausência não vira zero. Para os
+big numbers passarem a afirmar valores, o **saldo histórico de abertura precisa ser
+informado pelo proprietário** na administração. Nenhum saldo fictício foi cadastrado.
+
+> Isto é o registro daquele smoke, não o estado de hoje: a **O2** já cadastrou o saldo de
+> `AVALIACAO_GOOGLE`, e só o de `VENDA` continua ausente. Ver "Etapas operacionais".
 
 No mesmo smoke, "Reservas de locação" mostrou lista vazia legítima e "Propostas em
 andamento" mostrou **1 item real**. **Nenhum dado foi criado para o teste.**
@@ -2434,7 +2438,7 @@ propostas, saldo e reservas — sem cutover de VENDA; **concluída em `c6464b5`,
 YES`) → E6 (go-live no Render + smoke público — **concluída**, `adabe2d` implantado).
 **As seis etapas estão concluídas e a Entrega v1 está em produção**, hoje no release
 `25e62b5`, posterior ao go-live por conta das correções da auditoria S1. O go-live
-precedia a F4.5, que continua **liberada para retomada** e não iniciada. A infraestrutura de
+precedia a F4.5, que desde então foi retomada e hoje está **em andamento** (DEC-065). A infraestrutura de
 produção foi decidida no E6: **Render**, e não Vercel como a §7 do PLANO previa. F5
 continua futura e não está iniciada. O transporte de precisão e das listas
 operacionais para o painel não exigiu preparação na E3: o contrato de leitura ficou
@@ -2459,22 +2463,25 @@ executada em 2026-08-16, e o resultado foi o **descarte do aparelho** como plata
 painel (DEC-065). O que a substitui como pendência é a **seleção da plataforma
 substituta**, abaixo.
 
+**Encerrada na O1:** a reconciliação do dossiê secreto, em quatro ciclos — auditoria
+(O1A), rotação emergencial da senha exposta (O1-S0), contrato de conexões (O1-S1,
+DEC-066) e reconciliação efetiva do cofre e do `.env` local (O1B). Ver "Etapas
+operacionais".
+
 O que resta:
 
-1. **O2 — carga operacional inicial**: cadastrar o saldo histórico real pela
-   administração. Hoje `saldo_historico` está vazio em produção, e por isso os três
-   acumulados aparecem como `—`. **Não é defeito técnico** — é ausência de dado, que o
-   sistema afirma corretamente em vez de inventar zero (DEC-014, DEC-037). Só o
-   proprietário tem os números de abertura, e **nenhum valor é inventado**. Pendente.
+1. **O2 — carga operacional inicial**: **parcialmente concluída**. `AVALIACAO_GOOGLE` já
+   está cadastrado; **falta a linha de `VENDA`**, e enquanto ela não existir os
+   acumulados de imóveis vendidos e VGV continuam em `—`. **Não é defeito técnico** — é
+   ausência de dado, que o sistema afirma corretamente em vez de inventar zero (DEC-014,
+   DEC-037). Só o proprietário tem os números de abertura, e **nenhum valor é inventado**.
 2. **F4.5 — operação em hardware real**: **em andamento**. A **F4.5A está concluída**
    com o Phantom rejeitado; **F4.5B a F4.5E estão pendentes** (DEC-065).
-3. **O1 — reconciliação do dossiê secreto**: pendente, não iniciada. O dossiê continua
-   **fora do Git** e nenhum valor secreto entra no repositório.
-4. **Decidir a política de auto-deploy.** Hoje está **OFF**: toda versão futura exige
+3. **Decidir a política de auto-deploy.** Hoje está **OFF**: toda versão futura exige
    deploy manual. **Isso é política operacional vigente, não pendência técnica
    obrigatória** — pode permanecer como está indefinidamente, e mudá-lo é decisão do
    proprietário.
-5. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas e a **F4.5
+4. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas e a **F4.5
    em andamento** (DEC-065). O que falta nela, objetivamente:
    - **não há plataforma de operação escolhida** — o Phantom foi avaliado e rejeitado, e
      a substituta é a **F4.5B**, com os critérios registrados na DEC-065. **Nenhuma
@@ -2485,8 +2492,8 @@ O que resta:
    - **o ensaio operacional real é a F4.5D**, e é ele que fecha quiosque, autostart e
      suspensão de tela (DEC-050). É também na F4.5C que se confere a percepção das
      hairlines a 3–6 metros, registrada na F4.3.
-6. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
-7. **Hardening de segurança residual** — ver a lista logo abaixo. Três dos seis já foram
+5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
+6. **Hardening de segurança residual** — ver a lista logo abaixo. Três dos seis já foram
    encerrados. **Nenhum item bloqueia a v1** e nenhum deles é regressão dos quatro
    achados obrigatórios. **Nenhum deles foi iniciado neste ciclo.**
 
@@ -2621,39 +2628,106 @@ conferência no ensaio físico da **F4.5C**, conforme registrado na F4.3.
 
 ## Etapas operacionais
 
-Duas etapas que não são fatia de código nem fase técnica, registradas para não se
-perderem. **Ambas pendentes, nenhuma iniciada.**
+Duas etapas que não são fatia de código nem fase técnica. A **O1 está concluída**; a
+**O2 está parcialmente concluída**.
 
-### O1 — Reconciliação do dossiê secreto · pendente
+### O1 — Reconciliação do dossiê secreto · CONCLUÍDA
 
-**Objetivo:** conferir o dossiê privado do proprietário contra o estado real de Render,
-Supabase e administração do painel.
+**Objetivo cumprido:** o dossiê privado do proprietário — que vive no **Bitwarden, fora
+do Git** — foi conferido contra o estado real de Render, Supabase, banco e administração,
+e depois reconciliado. Correu em quatro ciclos, e **nenhum valor secreto entrou no
+repositório** em nenhum deles: nem aqui, nem em outro arquivo, nem em log ou mensagem de
+commit.
 
-**O dossiê continua FORA DO GIT**, e **nenhum valor secreto é registrado no
-repositório** — nem aqui, nem em nenhum outro arquivo, nem em log, transcript ou
-mensagem de commit. O que segue é a lista dos **itens conceituais** a conferir, **por
-nome**:
+**O1A — auditoria read-only.** Varreu o cofre item a item contra o real. Três achados
+principais: o dossiê estava **desatualizado quanto às conexões de banco**, registrava
+ainda a **credencial de banco revogada** como se fosse vigente, e — durante a própria
+auditoria — a **senha do administrador foi exposta na saída de um terminal**, por um
+filtro de supressão que deixou passar valor curto.
 
-- credencial administrativa do painel;
-- `PAINEL_TOKEN`;
-- `AUTH_SECRET`;
-- role `casalouzada_runtime`;
-- credencial `postgres` administrativa;
-- `DATABASE_URL`;
-- `DIRECT_URL`;
-- configuração TLS;
-- credenciais antigas/revogadas.
+**O1-S0 — rotação emergencial.** A senha exposta foi rotacionada pelo comando oficial
+`db:trocar-senha-admin`. A anterior ficou **invalidada**, a nova ficou **sincronizada
+com o cofre**, e a prova foi feita em memória, sem nada em stdout. Vale reter o limite:
+trocar a senha **não derruba sessão já aberta** — o JWT vive 7 dias e só o `AUTH_SECRET`
+é botão global (SEC-008).
 
-Só a **existência da tarefa** está registrada. **Não iniciada.**
+**O1-S1 — contrato de conexões.** A rotação expôs uma inconsistência real: o script
+administrativo recebia a `DIRECT_URL`, que é do Prisma CLI, e só rodou depois de a URL
+ser traduzida à mão. Daí nasceu a **DEC-066** e a terceira variável — ver "Conexões de
+banco" acima.
 
-### O2 — Carga operacional inicial · pendente
+**O1B — reconciliação efetiva.** O item do cofre foi **reconstruído**, não remendado.
+Estado final, sem nenhum valor aqui:
 
-Cadastrar o **`saldo_historico` real pela administração**. Hoje a tabela está vazia em
-produção, e por isso os três acumulados aparecem como `—` — ausência de dado afirmada
-corretamente, não defeito (DEC-014, DEC-037).
+| Item | Estado |
+|---|---|
+| E-mail do administrador | reconciliado |
+| Senha do administrador | reconciliada (a rotacionada no O1-S0) |
+| `PAINEL_TOKEN` | reconciliado |
+| `AUTH_SECRET` | reconciliado |
+| Credencial de runtime (`casalouzada_runtime`) | reconciliada |
+| Credencial administrativa (`postgres`) | reconciliada |
+| Project Ref do Supabase | **corrigido** — o dossiê trazia o nome do projeto no lugar do ref |
+| Credencial revogada da P1 | **removida** do estado atual |
+| Histórico de rotações | saneado até onde há evidência |
+| Bitwarden | é a fonte privada atual, e continua fora do Git |
 
-**Nenhum valor foi inventado** e nenhum será: só o proprietário tem os números de
-abertura. **Não iniciada.**
+**Ambiente local.** O `.env` **permanece fora do Git** (`.gitignore`, `.env*`), passou a
+carregar o contrato das três conexões da DEC-066 e foi validado operacionalmente. Existe
+também um **CA local estável, fora do repositório**, para a verificação de certificado
+funcionar nesta máquina — o CA é público e não é segredo.
+
+**TLS local, validado por consumidor real:**
+
+| Conexão | Validada por | Resultado |
+|---|---|---|
+| `DATABASE_URL` | node-postgres | conecta como `casalouzada_runtime`, TLS negociado e certificado autorizado |
+| `DIRECT_URL` | **Prisma CLI** (`migrate status`, read-only) | conecta, reconhece as 6 migrations, nenhuma aplicada |
+| `ADMIN_DATABASE_URL` | node-postgres | conecta como `postgres`, TLS negociado e certificado autorizado |
+
+#### Resíduos da O1 — nenhum deles bloqueia
+
+- **Artifact "Diagnóstico do Phantom"** — continua publicado. Não contém segredo
+  conhecido, e a ferramenta usada nos ciclos **não oferece remoção**; a exclusão é manual
+  pela interface, quando o proprietário quiser. Não impede encerrar a O1.
+- **Datas do histórico de rotações** — as que não têm evidência ficaram registradas como
+  **"DATA NÃO COMPROVADA"**. Preferiu-se isso a adivinhar dia.
+- **Procedência do CA local** — a cópia veio do **Secret File operacional do Render**, e
+  os metadados do certificado foram conferidos. O download novo da fonte oficial não foi
+  obtido naquele ciclo. Isso **não** impediu a validação de TLS das três conexões.
+
+### O2 — Carga operacional inicial · PARCIALMENTE CONCLUÍDA
+
+Cadastrar o **`saldo_historico` real pela administração**. Medido no banco de produção,
+por leitura direta e não pela documentação anterior:
+
+- **`AVALIACAO_GOOGLE` — cadastrado**, uma linha, precisão `EXATO`;
+- **`VENDA` — ainda não cadastrado**.
+
+Enquanto a linha de `VENDA` não existir, os acumulados que dependem dela — imóveis
+vendidos e VGV acumulado — continuam afirmando `—`, que é a ausência dita corretamente,
+não defeito (DEC-014, DEC-037).
+
+**Isto é carga operacional, não auditoria contábil.** A existência da linha prova que o
+cadastro foi feito; **não** prova que o número informado é o correto para a empresa. Os
+valores são do proprietário, e nenhum foi inventado ou conferido aqui.
+
+#### Reconciliação do `dataCorte` — não era bug
+
+Durante o uso da administração observou-se que os acumulados pareciam não somar o saldo
+histórico com os lançamentos correntes. Revisado: **não era defeito**. A causa era a
+`dataCorte` preenchida de forma incompatível com o período que o saldo informado
+realmente abrangia.
+
+A regra segue exatamente como a **DEC-036** define, e não foi alterada: o saldo é
+autoritativo **até o `dataCorte`, inclusive**, e somente lançamentos com
+`dataReferencia > dataCorte` somam por cima. Nenhum cálculo mudou, nenhuma regressão
+existiu e nenhum incidente fica aberto.
+
+**Observação de UX, não bloqueante e não atribuída a fase:** o formulário de saldo sugere
+o dia atual como `dataCorte`, o que exige atenção de quem cadastra. Um texto mais
+explícito sobre a semântica do corte seria uma melhoria futura — não é obrigação de
+ninguém agora e nenhum código foi alterado por causa disso.
 
 ## Bloqueios
 
