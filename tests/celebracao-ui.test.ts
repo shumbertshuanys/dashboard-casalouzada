@@ -197,6 +197,53 @@ describe("overlay da celebração", () => {
     assert.equal(codigo.includes("parseFloat"), false);
   });
 
+  it("mostra o imóvel entre o valor e o elenco, e some quando não há", () => {
+    // Ausente é bloco inexistente — nada de traço, "—" ou espaço reservado.
+    assert.match(
+      fonte,
+      /celebracao\.imovelRef === null \? null : \(\n\s*<p className=\{estilos\.imovel\}>\{celebracao\.imovelRef\}<\/p>\n\s*\)/,
+    );
+
+    const valor = fonte.indexOf("estilos.valor");
+    const imovel = fonte.indexOf("estilos.imovel}");
+    const participantes = fonte.indexOf("estilos.participantes");
+
+    assert.ok(valor < imovel, "o imóvel vem depois do valor");
+    assert.ok(imovel < participantes, "e antes dos participantes");
+
+    // Sem rótulo colado na frente: o campo é texto livre do operador, e um
+    // "Imóvel" acrescentado aqui viraria "Imóvel Imóvel 142".
+    assert.equal(codigo.includes(">Imóvel "), false);
+  });
+
+  it("a marca assina embaixo de tudo, sem competir com o conteúdo", () => {
+    assert.match(fonte, /src="\/marca\/casa-louzada-horizontal-claro\.png"/);
+    assert.match(fonte, /alt="Casa Louzada"/);
+    // `unoptimized`: o lockup oficial é servido como está, sem reprocessamento.
+    assert.match(fonte, /unoptimized/);
+    // As dimensões intrínsecas reservam a proporção; o tamanho real vem do CSS.
+    assert.match(fonte, /width=\{2511\}\n\s*height=\{297\}/);
+
+    const participantes = fonte.indexOf("estilos.participantes");
+    const assinatura = fonte.indexOf("estilos.assinatura");
+    assert.ok(assinatura > participantes, "a marca vem abaixo do conteúdo principal");
+
+    // Proporção preservada e escala relativa, como o resto do overlay.
+    assert.match(css, /\.marcaImagem \{\n\s*height: [\d.]+cqw;\n\s*width: auto;/);
+    assert.match(css, /\.assinatura \{[\s\S]*?opacity: 0\.\d+;/);
+  });
+
+  it("o imóvel e a marca escalam com a viewport, não em px", () => {
+    for (const seletor of [".imovel", ".assinatura", ".marcaImagem"]) {
+      const bloco = cssCodigo.slice(
+        cssCodigo.indexOf(`${seletor} {`),
+        cssCodigo.indexOf("}", cssCodigo.indexOf(`${seletor} {`)),
+      );
+      assert.ok(bloco.length > 0, `${seletor} existe`);
+      assert.equal(/\d+px/.test(bloco), false, `${seletor} não usa px fixo`);
+    }
+  });
+
   it("desenha todos os participantes, sem supor um por venda", () => {
     assert.match(fonte, /celebracao\.participantes\.map\(\(participante\) =>/);
     assert.match(fonte, /participante\.corretorNome/);

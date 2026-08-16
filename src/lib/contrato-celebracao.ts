@@ -35,6 +35,13 @@ export type CelebracaoTV = {
   criadoEm: string;
   /** String decimal canônica (`"900000.00"`), nunca `number`. */
   valor: string | null;
+  /**
+   * A referência do imóvel, ou `null` quando o lançamento não tem uma.
+   *
+   * Chave sempre presente, como `valor`: o cliente distingue "não há imóvel" de
+   * "o campo sumiu do contrato" testando o conteúdo, não a existência.
+   */
+  imovelRef: string | null;
   participantes: ParticipanteCelebracaoTV[];
 };
 
@@ -58,6 +65,10 @@ export function paraRespostaCelebracoes(
       id: celebracao.id,
       criadoEm: celebracao.criadoEm.toISOString(),
       valor: celebracao.valor,
+      // Passa direto: quem já normalizou branco para `null` foi o núcleo, na
+      // fronteira com o banco. Normalizar de novo aqui criaria dois donos da
+      // mesma regra.
+      imovelRef: celebracao.imovelRef,
       participantes: celebracao.participantes.map((participante) => ({
         ordem: participante.ordem,
         corretorNome: participante.corretorNome,
@@ -122,6 +133,18 @@ function ehValorDaVenda(valor: unknown): valor is string | null {
   return typeof valor === "string" && DECIMAL_CANONICO.test(valor);
 }
 
+/**
+ * `null` é ausência legítima; string tem de ter conteúdo.
+ *
+ * A exigência é estrita porque o servidor já converte branco em `null`: uma
+ * string vazia chegando aqui significa que alguma outra coisa produziu o
+ * payload, e não é ela que vai desenhar um bloco vazio na TV.
+ */
+function ehImovelRef(valor: unknown): valor is string | null {
+  if (valor === null) return true;
+  return typeof valor === "string" && valor.trim().length > 0;
+}
+
 function ehParticipante(valor: unknown): valor is ParticipanteCelebracaoTV {
   if (!ehObjeto(valor)) return false;
   // `ordem` começa em 1 e é inteira: é a posição na venda, não um índice.
@@ -136,6 +159,7 @@ function ehCelebracao(valor: unknown): valor is CelebracaoTV {
   if (!ehTextoNaoVazio(valor.id)) return false;
   if (!ehInstanteIso(valor.criadoEm)) return false;
   if (!ehValorDaVenda(valor.valor)) return false;
+  if (!ehImovelRef(valor.imovelRef)) return false;
 
   // Elenco vazio não é celebração exibível: o servidor só publica celebração
   // cujo lançamento tem participação, e uma tela com "É VENDA!" e ninguém

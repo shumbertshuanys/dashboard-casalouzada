@@ -92,6 +92,21 @@
   color: var(--color-texto);
 }
 
+/* O imóvel vendido, entre o valor e o elenco. Escala bem abaixo de `.valor` e
+   acima de `.equipe`: é contexto do que foi vendido, não a cifra nem quem
+   vendeu. 2.2cqw dá 84px numa TV de 3840px — legível da sala inteira sem
+   disputar com o número. */
+.imovel {
+  font-size: 2.2cqw;
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: 0.06em;
+  color: var(--color-texto-secundario);
+  max-width: 80%;
+  /* Referência longa quebra em linha em vez de esticar a composição. */
+  overflow-wrap: anywhere;
+}
+
 .participantes {
   display: flex;
   flex-wrap: wrap;
@@ -141,6 +156,25 @@
 }
 .participantes[data-quantidade="muitos"] .equipe {
   font-size: 1.15cqw;
+}
+
+/* A marca assinando a celebração, embaixo de tudo.
+
+   `margin-top` generoso e opacidade reduzida para ela ler como assinatura, e
+   não como mais uma linha de conteúdo: quem comemora é o corretor. A altura em
+   `cqw` acompanha a viewport como o resto, e `width: auto` preserva a proporção
+   original do arquivo — a marca nunca é distorcida. 1.8cqw dá 69px a 3840px,
+   pouco mais que o lockup do cabeçalho do painel (1.15cqw) e bem abaixo do nome
+   do corretor (3.4cqw). */
+.assinatura {
+  display: flex;
+  margin-top: 2.6cqw;
+  opacity: 0.78;
+}
+
+.marcaImagem {
+  height: 1.8cqw;
+  width: auto;
 }
 
 /* Confete ------------------------------------------------------------

@@ -26,6 +26,7 @@ function celebracao(id: string, valor: string | null = "900000.00"): CelebracaoT
     id,
     criadoEm: new Date(Date.UTC(2026, 7, 16, 14, 0, contador)).toISOString(),
     valor,
+    imovelRef: `AP-${id}`,
     participantes: [{ ordem: 1, corretorNome: `Corretor ${id}`, equipeNome: "Equipe Suellen" }],
   };
 }

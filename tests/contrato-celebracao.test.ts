@@ -18,6 +18,7 @@ function celebracao(sobrescritas: Partial<CelebracaoApresentavel> = {}): Celebra
     criadoEm: new Date("2026-08-16T14:05:09.123Z"),
     lancamentoId: "la1",
     valor: "900000.00",
+    imovelRef: "AP-1203",
     participantes: [{ ordem: 1, corretorNome: "Maria", equipeNome: "Equipe Suellen" }],
     ...sobrescritas,
   };
@@ -38,9 +39,20 @@ describe("payload da celebração", () => {
     assert.deepEqual(Object.keys(celebracoes[0]).sort(), [
       "criadoEm",
       "id",
+      "imovelRef",
       "participantes",
       "valor",
     ]);
+  });
+
+  it("o imóvel atravessa, e a ausência dele atravessa como `null`", () => {
+    const com = paraRespostaCelebracoes([celebracao({ imovelRef: "Cobertura Ipiranga 900" })]);
+    assert.equal(com.celebracoes[0].imovelRef, "Cobertura Ipiranga 900");
+
+    const sem = paraRespostaCelebracoes([celebracao({ imovelRef: null })]);
+    assert.equal(sem.celebracoes[0].imovelRef, null);
+    // A chave continua existindo: quem desenha testa o conteúdo, não a presença.
+    assert.equal("imovelRef" in sem.celebracoes[0], true);
   });
 
   it("dinheiro continua string canônica, e `null` continua `null`", () => {
@@ -123,6 +135,7 @@ function payload(sobrescritas: Record<string, unknown> = {}): unknown {
         id: "ce-1",
         criadoEm: "2026-08-16T14:05:09.123Z",
         valor: "900000.00",
+        imovelRef: "AP-1203",
         participantes: [{ ordem: 1, corretorNome: "Maria", equipeNome: "Equipe Suellen" }],
         ...sobrescritas,
       },
@@ -284,6 +297,44 @@ describe("validação do payload de celebrações", () => {
 
     it("aceita zero explícito — que é diferente de ausência", () => {
       assert.equal(ehRespostaCelebracoes(payload({ valor: "0.00" })), true);
+    });
+  });
+
+  describe("imovelRef", () => {
+    it("aceita texto e aceita null", () => {
+      assert.equal(ehRespostaCelebracoes(payload({ imovelRef: "AP-1203" })), true);
+      assert.equal(ehRespostaCelebracoes(payload({ imovelRef: "Casa 7, Jardim Europa" })), true);
+      assert.equal(ehRespostaCelebracoes(payload({ imovelRef: null })), true);
+    });
+
+    it("recusa tipo indevido", () => {
+      for (const invalido of [7, true, {}, [], ["AP-1"]]) {
+        assert.equal(ehRespostaCelebracoes(payload({ imovelRef: invalido })), false, String(invalido));
+      }
+    });
+
+    it("recusa branco — o servidor converte ausência em null antes de enviar", () => {
+      // Um branco chegando aqui significa que o payload não veio deste servidor,
+      // e ele desenharia um bloco de imóvel vazio no meio da celebração.
+      assert.equal(ehRespostaCelebracoes(payload({ imovelRef: "" })), false);
+      assert.equal(ehRespostaCelebracoes(payload({ imovelRef: "   " })), false);
+    });
+
+    it("recusa a chave ausente", () => {
+      // O contrato é `string | null` com a chave sempre presente: `undefined`
+      // seria uma terceira possibilidade que o cliente não espera distinguir.
+      const semChave = {
+        celebracoes: [
+          {
+            id: "ce-1",
+            criadoEm: "2026-08-16T14:05:09.123Z",
+            valor: "900000.00",
+            participantes: [{ ordem: 1, corretorNome: "Maria", equipeNome: "Equipe Suellen" }],
+          },
+        ],
+      };
+
+      assert.equal(ehRespostaCelebracoes(semChave), false);
     });
   });
 

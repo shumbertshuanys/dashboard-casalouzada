@@ -1,4 +1,5 @@
 import { Jost } from "next/font/google";
+import Image from "next/image";
 import { DURACAO_CELEBRACAO_MS } from "@/lib/celebracao-cliente";
 import type { CelebracaoTV } from "@/lib/contrato-celebracao";
 import { formatarBRL } from "@/lib/dinheiro";
@@ -94,6 +95,15 @@ export function CelebracaoOverlay({ celebracao }: { celebracao: CelebracaoTV }) 
             <p className={estilos.valor}>{formatarBRL(celebracao.valor)}</p>
           )}
 
+          {/* O imóvel entre o valor e o elenco: é o que foi vendido, e vem
+              logo depois de por quanto. Sem rótulo fixo na frente — o campo é
+              texto livre do operador, e um "Imóvel" acrescentado aqui viraria
+              "Imóvel Imóvel 142" na maioria dos lançamentos. Ausente, o bloco
+              inteiro não existe: nada de traço, nada de espaço reservado. */}
+          {celebracao.imovelRef === null ? null : (
+            <p className={estilos.imovel}>{celebracao.imovelRef}</p>
+          )}
+
           <ul
             className={estilos.participantes}
             data-quantidade={quantidadeDe(celebracao.participantes.length)}
@@ -107,6 +117,25 @@ export function CelebracaoOverlay({ celebracao }: { celebracao: CelebracaoTV }) 
               </li>
             ))}
           </ul>
+
+          {/* A marca assina a celebração, embaixo de tudo e discreta: quem
+              comemora é o corretor, não a imobiliária. Mesmo lockup oficial do
+              cabeçalho do painel e mesmo tratamento — `next/image` com
+              `unoptimized`, que serve o PNG como ele é, porque a marca não pode
+              ser reprocessada (DEC-047). `width`/`height` aqui são só as
+              dimensões intrínsecas, que reservam a proporção e impedem o
+              deslocamento do layout; o tamanho real sai do CSS, em `cqw`. */}
+          <div className={estilos.assinatura}>
+            <Image
+              src="/marca/casa-louzada-horizontal-claro.png"
+              alt="Casa Louzada"
+              width={2511}
+              height={297}
+              className={estilos.marcaImagem}
+              unoptimized
+              priority
+            />
+          </div>
         </div>
       </div>
     </div>

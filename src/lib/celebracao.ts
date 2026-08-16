@@ -79,6 +79,15 @@ export type CelebracaoApresentavel = {
   criadoEm: Date;
   lancamentoId: string;
   valor: string | null;
+  /**
+   * A referência do imóvel, como o operador a digitou no lançamento.
+   *
+   * `null` quando não há: o campo é opcional em VENDA — só PROPOSTA o exige —,
+   * e um branco no banco vira `null` aqui em vez de atravessar como string
+   * vazia. Quem desenha decide o que fazer com a ausência; o que não pode é ela
+   * chegar disfarçada de texto.
+   */
+  imovelRef: string | null;
   participantes: ParticipanteCelebracao[];
 };
 
@@ -100,6 +109,10 @@ const SELECT_APRESENTAVEL = {
   lancamento: {
     select: {
       valor: true,
+      // Já existe no lançamento: a celebração o lê pela relação, não guarda
+      // cópia. Nada de snapshot novo — editar o imóvel corrige a celebração
+      // junto, que é o comportamento certo para um dado que não é do evento.
+      imovelRef: true,
       participacoes: {
         select: {
           ordem: true,
@@ -118,6 +131,7 @@ type LinhaApresentavel = {
   lancamentoId: string;
   lancamento: {
     valor: DecimalPrisma | null;
+    imovelRef: string | null;
     participacoes: {
       ordem: number;
       corretor: { nomeExibicao: string };
@@ -126,12 +140,27 @@ type LinhaApresentavel = {
   };
 };
 
+/**
+ * Texto que vale a pena mostrar, ou `null`.
+ *
+ * O validador de lançamento já normaliza branco para `null`, mas o banco é mais
+ * velho que ele e nada impede uma linha com espaços. Sem esta rede, a TV
+ * desenharia um bloco de imóvel vazio no meio da celebração — e recusar o
+ * payload inteiro por causa disso seria pior ainda: perderia a comemoração de
+ * uma venda que está perfeitamente correta.
+ */
+function textoOuNulo(valor: string | null): string | null {
+  const limpo = valor?.trim() ?? "";
+  return limpo === "" ? null : limpo;
+}
+
 function paraApresentavel(linha: LinhaApresentavel): CelebracaoApresentavel {
   return {
     id: linha.id,
     criadoEm: linha.criadoEm,
     lancamentoId: linha.lancamentoId,
     valor: linha.lancamento.valor === null ? null : linha.lancamento.valor.toFixed(2),
+    imovelRef: textoOuNulo(linha.lancamento.imovelRef),
     // A ordem vem do banco (`ordem` crescente) e não é rederivada aqui: ela é o
     // que decide quem aparece primeiro na TV, e é a mesma do formulário.
     participantes: linha.lancamento.participacoes.map((participacao) => ({

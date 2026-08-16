@@ -109,7 +109,7 @@ async function criarVenda(
   tx: PrismaClient,
   sufixo: string,
   participantes: readonly Participante[],
-  extras: { valor?: string; criadoEm?: Date } = {},
+  extras: { valor?: string; criadoEm?: Date; imovelRef?: string | null } = {},
 ) {
   return tx.lancamento.create({
     data: {
@@ -118,7 +118,7 @@ async function criarVenda(
       equipeId: null,
       dataReferencia: paraDataCivil("2026-08-10"),
       valor: extras.valor ?? "900000.00",
-      imovelRef: nome(sufixo),
+      imovelRef: extras.imovelRef === undefined ? nome(sufixo) : extras.imovelRef,
       ...(extras.criadoEm === undefined ? {} : { criadoEm: extras.criadoEm }),
       participacoes: {
         create: participantes.map((participante, indice) => ({
@@ -652,6 +652,7 @@ describe("celebração — fluxo do C2", () => {
           id: string;
           criadoEm: string;
           valor: string | null;
+          imovelRef: string | null;
           participantes: { ordem: number; corretorNome: string; equipeNome: string }[];
         }[];
       };
@@ -663,6 +664,7 @@ describe("celebração — fluxo do C2", () => {
         assert.deepEqual(Object.keys(celebracao).sort(), [
           "criadoEm",
           "id",
+          "imovelRef",
           "participantes",
           "valor",
         ]);
@@ -674,6 +676,48 @@ describe("celebração — fluxo do C2", () => {
           assert.equal(typeof participante.equipeNome, "string");
         }
       }
+    });
+
+    /**
+     * O imóvel vem do lançamento pela relação — não há cópia, snapshot nem
+     * coluna nova. O que se prova aqui é o caminho inteiro contra o banco: o
+     * que está gravado em `lancamentos.imovel_ref` chega ao payload da TV, e a
+     * ausência chega como `null` em vez de string vazia.
+     */
+    it("o imóvel do lançamento atravessa; ausência e branco viram null", async () => {
+      await revertendo(async (tx) => {
+        const equipe = await criarEquipe(tx, "t9im");
+        const corretor = await criarCorretor(tx, "t9im", equipe.id);
+        const participantes = [{ corretorId: corretor.id, equipeId: equipe.id }];
+
+        const comImovel = await criarVenda(tx, "t9imA", participantes, {
+          imovelRef: "Cobertura Ipiranga 900",
+        });
+        const semImovel = await criarVenda(tx, "t9imB", participantes, { imovelRef: null });
+        // Branco no banco: o validador de lançamento já normaliza, mas o banco é
+        // mais velho que ele e nada impede uma linha assim.
+        const comBranco = await criarVenda(tx, "t9imC", participantes, { imovelRef: "   " });
+
+        const agora = new Date();
+        for (const [indice, venda] of [comImovel, semImovel, comBranco].entries()) {
+          await tx.celebracao.create({
+            data: { lancamentoId: venda.id, criadoEm: new Date(agora.getTime() - 30_000 + indice) },
+          });
+        }
+
+        const { celebracoes } = paraRespostaCelebracoes(
+          await listarCelebracoesRecentes(tx, agora),
+        );
+        const porLancamento = new Map(
+          (await listarCelebracoesRecentes(tx, agora)).map((c) => [c.lancamentoId, c.id]),
+        );
+        const imovelDe = (lancamentoId: string) =>
+          celebracoes.find((c) => c.id === porLancamento.get(lancamentoId))?.imovelRef;
+
+        assert.equal(imovelDe(comImovel.id), "Cobertura Ipiranga 900", "o que foi gravado chega");
+        assert.equal(imovelDe(semImovel.id), null, "ausência chega como null");
+        assert.equal(imovelDe(comBranco.id), null, "branco não atravessa como texto vazio");
+      });
     });
 
     it("token inválido: 404 e corpo vazio", async () => {
