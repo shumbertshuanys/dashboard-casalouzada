@@ -1647,9 +1647,17 @@ token **não** é publicado. A infraestrutura escolhida foi **Render** (Web Serv
 Virginia, Starter, Node 24.19.0), com **auto-deploy OFF** — toda versão futura exige
 deploy manual até nova decisão.
 
-Com o go-live feito, a **F4.5 está liberada para retomada** e **não iniciada**. A F4
-continua **em andamento** e só se encerra com ela. **F5 segue futura e não iniciada.**
-**cumprida — go-live concluído; F4.5 liberada para retomada, ainda não iniciada**
+**No momento do go-live**, a F4.5 ficou **liberada para retomada** e ainda **não havia
+sido iniciada** — é o estado que esta decisão registrava, e ele vale como fotografia
+daquela data.
+
+**Depois disso ela foi retomada**, e o estado atual não mora mais aqui: a **DEC-065**
+reestruturou a fase, a **F4.5A foi concluída** com o `Phantom Alien 4K IPTV`
+**rejeitado**, e **F4.5B a F4.5E seguem pendentes**. Ver DEC-065.
+
+A F4 continua **em andamento** e só se encerra com a F4.5. **F5 segue futura e não
+iniciada.**
+**cumprida — go-live concluído; o estado posterior da F4.5 é o da DEC-065**
 
 ## Segurança — decisões da auditoria S1
 
