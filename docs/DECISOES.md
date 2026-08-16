@@ -1167,6 +1167,13 @@ comunica indisponibilidade sem inventar desempenho.
 
 ### DEC-049 — Phantom Alien 4K é o hardware alvo, mas sua plataforma precisa ser comprovada
 
+> **SUPERADA QUANTO À ESCOLHA DO HARDWARE pela [DEC-065](#dec-065--o-phantom-alien-4k-foi-avaliado-e-rejeitado-como-plataforma-do-painel).**
+> O texto abaixo fica **preservado como registro histórico** do que valia entre
+> 2026-08-13 e 2026-08-16. O `Phantom Alien 4K IPTV` **deixou de ser o hardware alvo**
+> depois da avaliação física da F4.5A. O **princípio continua valendo integralmente**:
+> nenhuma característica de plataforma é inferida sem evidência direta do aparelho — e
+> ele passa a valer para a plataforma substituta, ainda não escolhida.
+
 **Decisão.** O equipamento pretendido para conduzir a TV é o `Phantom Alien 4K IPTV`.
 
 Seu sistema operacional, firmware, navegador disponível e capacidade de modo
@@ -1196,7 +1203,9 @@ A incerteza **não bloqueia** F4.2, F4.3 nem F4.4; bloqueia apenas o encerrament
 operacional da F4.5.
 
 **Fonte.** Hardware informado pelo proprietário em 2026-08-13.
-**invariante futura / verificação operacional pendente — F4.5**
+**cumprida na parte da inspeção e SUPERADA na parte da escolha do hardware (DEC-065) —
+a inspeção da F4.5A foi executada; o princípio de não inferir plataforma sem evidência
+permanece invariante e transfere-se para a plataforma substituta**
 
 ### DEC-050 — O equipamento é desligado fora do expediente
 
@@ -1215,7 +1224,10 @@ F4.5, com o resultado do ensaio: ou a configuração operacional basta e nada é
 adicionado, ou a insuficiência fica registrada e a API é justificada por ela.
 
 **Fonte.** Decisão do proprietário em 2026-08-13.
-**invariante futura — fechamento operacional em F4.5**
+**invariante futura — fechamento operacional em F4.5**, agora na **F4.5C**, sobre a
+plataforma substituta (DEC-065): o ensaio que julgaria a suficiência da configuração
+operacional deixou de ser no `Phantom Alien 4K IPTV`, e nada foi decidido sobre Wake
+Lock por conta disso.
 
 ### DEC-051 — Venda é um evento único, com participações
 
@@ -1906,3 +1918,91 @@ intactas: a primeira na mesma regra global, a segunda na regra específica do pa
 
 **Fonte.** `next.config.ts`; `tests/cabecalhos-http.test.ts`. Verificado em produção no
 deploy `dep-da0ggsk9v7es739aj24g`. **implementada**
+
+## Plataforma de operação da TV
+
+### DEC-065 — O Phantom Alien 4K foi avaliado e rejeitado como plataforma do painel
+
+**Decisão.** O `Phantom Alien 4K IPTV` **não será a plataforma definitiva de operação do
+painel**. A F4.5 continua aberta e passa a ter outro objetivo: **selecionar e validar uma
+plataforma substituta**, que **não está escolhida** e sobre a qual **nada se presume**.
+
+Esta decisão **supera a DEC-049 apenas na escolha do hardware**. O princípio central da
+DEC-049 — não registrar sistema, navegador, resolução ou capacidade de quiosque sem
+evidência direta do aparelho — **continua valendo integralmente** e passa a reger a
+plataforma substituta.
+
+**Motivo.** A avaliação física foi executada (F4.5A) e caracterizou o aparelho o
+suficiente para a decisão. Os fatos observados no equipamento:
+
+| Item | Observado no aparelho |
+|---|---|
+| Sistema | Android 7.0 |
+| Patch de segurança | 1 de dezembro de 2018 |
+| Kernel | `3.18.24_hi3798mv2x` |
+| Build | `NRD90M release-keys` |
+| Arquitetura | ARM 32 bits — `Linux armv7l` |
+| Navegador | Chrome 112.0.0.0 |
+| UI de resolução do aparelho | somente **720P** e **1080P** — não existe opção 4K na UI |
+| Saída HDMI no momento da medição | **1080P 60Hz** selecionada; as opções 2160P disponíveis são **30/25/24Hz** |
+
+Os motivos do descarte são estes, e são **observacionais**: plataforma antiga, Android 7,
+patch de segurança de 2018, Chrome 112, UI limitada a 1080p, 2160p disponível apenas até
+30 Hz, e operação por navegador que não atende de forma limpa ao objetivo atual.
+
+**Isto não é alegação de defeito.** O aparelho não foi declarado quebrado nem
+defeituoso; ele é **inadequado ao objetivo definido** — um painel permanente em
+3840×2160, com navegador mantido e operação autônoma.
+
+**O que a avaliação provou no aparelho.** `/preview` abre; `/painel/<TOKEN>` abre e
+exibe os dados reais. O token **não é publicado**. APIs comprovadas: `fetch`,
+`localStorage`, `Promise`/`async`, optional chaining, container queries e Fullscreen API.
+
+**O que a avaliação NÃO provou.** Service Worker, Cache Storage e Wake Lock ficaram
+**inconclusivos**: a sonda foi aberta em contexto HTTP inseguro, onde esses recursos não
+são oferecidos pelo navegador por regra de contexto seguro. **Não se declara ausência de
+suporte** — a medição não permite essa conclusão. Também **não se afirma** qual sinal a
+TV efetivamente recebeu: o que foi observado é a seleção na UI do aparelho, não o modo
+negociado no display.
+
+**Achado de viewport — do Phantom / Chrome Android observado.** Na configuração medida,
+`screen` = 1280 × 720, `viewport` = 1280 × 624, `devicePixelRatio` = 1: a barra do Chrome
+ocupava parte da área vertical. O painel usa `100vh`, e naquele navegador o layout foi
+montado para uma altura maior que a área efetivamente visível, cortando a faixa inferior.
+
+Isto fica registrado como **achado daquele aparelho e daquele navegador**, e **não** como
+defeito universal do painel. **Nenhuma correção de código foi feita**: o hardware foi
+descartado e o substituto ainda não foi testado — corrigir agora seria otimizar para uma
+plataforma que não vai operar o painel, com risco de nem sequer ser o comportamento da
+que vier. O achado é insumo da F4.5C, onde a plataforma escolhida for medida.
+
+**Critérios para a seleção (F4.5B).** São **critérios de escolha**, não a especificação
+de um produto — nenhuma marca ou modelo é escolhida neste ciclo:
+
+- navegador moderno e mantido;
+- atualização suportada;
+- saída **3840×2160 a 60 Hz**;
+- capacidade de fullscreen/quiosque;
+- autostart ou restauração automática;
+- Service Worker;
+- Cache Storage;
+- comportamento previsível após reboot;
+- controle de suspensão/tela;
+- rede estável;
+- possibilidade de operar o painel sem intervenção diária além de ligar e desligar.
+
+**Impacto.** A F4.5 é reestruturada em cinco fatias: **F4.5A** (avaliação do Phantom) —
+**concluída, resultado HARDWARE REJEITADO**; **F4.5B** (seleção da plataforma
+substituta) — pendente; **F4.5C** (validação física da substituta) — pendente;
+**F4.5D** (operação autônoma) — pendente; **F4.5E** (gate físico final) — pendente. A
+F4 continua **em andamento** e só se encerra com a F4.5.
+
+**Preserva.** DEC-050 integralmente — o equipamento continua desligado fora do
+expediente e o Wake Lock continua sem justificativa, agora a ser julgado na F4.5C sobre
+a plataforma substituta. DEC-048 integralmente — o offline segue sem persistir número, e
+o mecanismo continua a ser reprovado no navegador real da plataforma que vier. A
+recomendação genérica de mini PC com Chrome em quiosque do `PLANO.md` §5.1 continua
+sendo **uma alternativa entre outras**, e não a escolha da F4.5B.
+
+**Fonte.** Inspeção física do aparelho em 2026-08-16 (F4.5A) e decisão do proprietário na
+mesma data. **decisão registrada — F4.5B a F4.5E pendentes**

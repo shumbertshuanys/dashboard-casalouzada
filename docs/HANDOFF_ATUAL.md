@@ -10,7 +10,7 @@
 | **Release em produção** | **`25e62b5984543e9754e0bc370958c0fb6bcd8a8b`** — o mesmo commit; a v1 está no ar |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
-| Data do handoff | 2026-08-15 |
+| Data do handoff | 2026-08-16 |
 | Go-live original da v1 | `adabe2dfe8f442826fa9006aa12c10ab248c83b6`, em 2026-08-14 (histórico) |
 
 ## Estado executivo
@@ -114,10 +114,14 @@ A **F4 — Identidade e modo TV está em andamento**, e isto é o que está prov
 - a **F4.4 — offline de navegação** está **concluída e publicada** em `8b9fce2`. Uma
   navegação que falhe por rede ou por 5xx passa a mostrar a tela institucional, que
   se recupera sozinha — **sem guardar número nenhum** (DEC-048);
-- a **F4.5 — operação em hardware real — está LIBERADA PARA RETOMADA e não iniciada**
-  (DEC-057): ela foi adiada em 2026-08-14 em favor da entrega da v1 por URL, e **o
-  go-live dessa entrega já aconteceu**, então o ensaio no aparelho deixou de estar
-  bloqueado. Nada foi verificado no aparelho até agora.
+- a **F4.5 — operação em hardware real — está EM ANDAMENTO e foi REESTRUTURADA**
+  (DEC-065). Ela foi adiada em 2026-08-14 em favor da entrega da v1 por URL (DEC-057);
+  com o go-live feito, a **F4.5A — avaliação do `Phantom Alien 4K IPTV` — foi executada
+  em 2026-08-16 e está concluída**, com resultado **HARDWARE REJEITADO**: o aparelho
+  **não será a plataforma definitiva do painel**. A fatia deixou de ser "validar o
+  Phantom" e passou a ser "selecionar e validar a plataforma substituta", em
+  **F4.5B a F4.5E, todas pendentes**. A plataforma substituta **não está escolhida** e
+  nada se presume sobre ela.
 
 A **F4 como um todo continua em andamento**: ela só se encerra com a F4.5.
 
@@ -220,8 +224,11 @@ O go-live original foi o `adabe2d`, em 2026-08-14. O release atual é posterior 
 **auditoria de segurança S1** entregou correções em produção — primeiro os quatro
 achados obrigatórios, depois dois itens do hardening residual — ver a seção abaixo.
 
-A próxima frente é a **F4.5 — operação em hardware real**, **liberada para retomada** e
-**não iniciada**, se o proprietário decidir retomá-la.
+A próxima frente é a **F4.5 — operação em hardware real**, **em andamento**: a
+**F4.5A está concluída** com o Phantom **rejeitado**, e o que segue é a **F4.5B —
+seleção da plataforma substituta**, pendente (DEC-065). Correm ao lado, como etapas
+operacionais, a **O1 — reconciliação do dossiê secreto** e a **O2 — carga operacional
+inicial**, ambas pendentes.
 
 ## AUDITORIA DE SEGURANÇA S1 — SEC-001 A SEC-004 ENCERRADOS
 
@@ -357,8 +364,15 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 | F4.2 — Marca oficial e assets | **Concluída** | `7e0e35d` |
 | F4.3 — Verificação 4K e microajustes | **Concluída** | `16490f0` + evidência visual 4K sem commit |
 | F4.4 — Offline de navegação | **Concluída** | `8b9fce2` |
-| F4.5 — Operação em hardware real | **Liberada para retomada** | o go-live da v1 aconteceu (DEC-057); **não iniciada** |
+| F4.5A — Avaliação do `Phantom Alien 4K IPTV` | **Concluída** | inspeção física em 2026-08-16; resultado **HARDWARE REJEITADO** (DEC-065); sem commit de código |
+| F4.5B — Seleção da plataforma substituta | **Pendente** | critérios registrados na DEC-065; **nenhuma marca ou modelo escolhida** |
+| F4.5C — Validação física da plataforma substituta | **Pendente** | depende da F4.5B |
+| F4.5D — Operação autônoma | **Pendente** | depende da F4.5C |
+| F4.5E — Gate físico final | **Pendente** | fecha a F4.5 e, com ela, a F4 |
+| **F4.5 — Operação em hardware real** | **Em andamento** | F4.5A concluída; F4.5B a F4.5E pendentes |
 | **F4 — Identidade e modo TV** | **Em andamento** | `8b9fce2` |
+| O1 — Reconciliação do dossiê secreto | **Pendente** | etapa operacional; **nenhum valor secreto no repositório** |
+| O2 — Carga operacional inicial | **Pendente** | etapa operacional; cadastrar `saldo_historico` real pela administração |
 | E1 — Contratos e modelo de dados da v1 | **Concluída** | `078f360` — DEC-051 a DEC-057; sem código |
 | E2A — Schema e migration aditiva + backfills | **Concluída** | `c6464b5` — sem cutover de VENDA |
 | E2B — Admin de propostas + precisão do saldo | **Concluída** | `fe00fd2` — inclui o CHECK da proposta |
@@ -942,8 +956,9 @@ sozinha. O que continua não existindo:
 - **persistência de números** — a retenção da F3.6 continua vivendo só na memória da
   aba, e o offline da F4.4 **não** a estende: por decisão, nenhuma métrica é
   guardada em disco (DEC-048);
-- operação em hardware real — nada foi verificado no `Phantom Alien 4K IPTV`
-  (DEC-049).
+- operação em hardware real — o `Phantom Alien 4K IPTV` **foi inspecionado na F4.5A e
+  rejeitado** como plataforma do painel (DEC-065). Não existe plataforma de operação
+  escolhida hoje, e portanto **não existe operação em hardware real**.
 
 | Item | Estado | Fase |
 |---|---|---|
@@ -985,8 +1000,12 @@ sozinha. O que continua não existindo:
 | Faixa superior alternando A/B | **existe** — 20 s por tela, sem terceira (DEC-056) | E4 feita |
 | Transporte das listas operacionais pelo contrato e pela retenção | **existe** — cinco blocos | E4 feita |
 | Deploy no Render | ausente — decisão de infraestrutura é do E6 (DEC-057) | E6 |
-| Inventário e operação do `Phantom Alien 4K IPTV` | não realizados (DEC-049) — **fatia adiada** (DEC-057) | F4.5 |
-| Screen Wake Lock | ausente **por decisão** (DEC-050) | F4.5, só se o ensaio provar necessidade |
+| Inventário do `Phantom Alien 4K IPTV` | **realizado** — F4.5A, 2026-08-16 | F4.5A feita |
+| Operação no `Phantom Alien 4K IPTV` | **descartada** — aparelho rejeitado como plataforma (DEC-065) | — |
+| Plataforma substituta de operação da TV | **não escolhida** — critérios na DEC-065 | F4.5B |
+| Validação física da plataforma substituta | ausente — depende da escolha | F4.5C |
+| Operação autônoma da TV (quiosque, autostart, suspensão) | ausente | F4.5D |
+| Screen Wake Lock | ausente **por decisão** (DEC-050) | F4.5C, só se o ensaio provar necessidade |
 | `public/marca/` | **existe** — duas imagens oficiais | F4.2 feita |
 | `src/app/api/`, `src/components/ui/`, `src/styles/` | ausentes | sem fatia atribuída |
 | Tela de troca de senha | ausente — o mecanismo é `npm run db:trocar-senha-admin` | futura |
@@ -1366,8 +1385,9 @@ não bloqueia a F3 e não reabre a F2 agora.
 ## F4 — Identidade e modo TV
 
 Fase **em andamento**, com **F4.0 a F4.4 concluídas**. Resta a F4.5 — operação em
-hardware real —, que está **adiada** pela DEC-057: a entrega da v1 (E1 a E6) vem
-antes dela.
+hardware real —, que foi adiada pela DEC-057 até o go-live da v1 e hoje está **em
+andamento e reestruturada** pela DEC-065: a **F4.5A** foi executada e o `Phantom Alien
+4K IPTV` foi **rejeitado** como plataforma; **F4.5B a F4.5E seguem pendentes**.
 
 ### F4.0 — decisões de identidade e modo TV · concluída
 
@@ -1388,10 +1408,14 @@ F4.1 já ter sido publicada — e estão registradas nas **DEC-047 a DEC-050**. 
   implementação é F4.4, **já entregue em `8b9fce2`**.
 - **DEC-049** — o hardware alvo é o `Phantom Alien 4K IPTV`. Sistema, firmware,
   navegador e capacidade de quiosque/autostart **não estão comprovados** e não serão
-  inferidos. A F4.5 começa por inspeção do aparelho real.
+  inferidos. A F4.5 começa por inspeção do aparelho real. **A escolha do hardware foi
+  superada pela DEC-065** depois da inspeção da F4.5A: o Phantom **não é mais o alvo**.
+  O **princípio permanece** — nenhuma plataforma é descrita sem evidência direta —, e
+  agora rege a substituta;
 - **DEC-050** — o equipamento **é desligado fora do expediente**. Nada de Screen Wake
   Lock preventivo: a primeira solução para suspensão de tela é configuração
-  operacional, e a API só entra se o ensaio da F4.5 provar que ela não basta.
+  operacional, e a API só entra se o ensaio da F4.5 provar que ela não basta. Esse
+  ensaio passou a ser a **F4.5C**, sobre a plataforma substituta.
 
 ### F4.1 — refinamento de modo TV · concluída
 
@@ -1683,12 +1707,102 @@ teste algum: a lógica do Service Worker só existe dentro do runtime do navegad
 aceites acima a exercitam melhor do que uma simulação faria. **Estes resultados
 pertencem à execução da implementação da F4.4, não a esta execução documental.**
 
-### F4.5 — operação em hardware real · liberada para retomada, não iniciada
+### F4.5 — operação em hardware real · em andamento, reestruturada
 
-**Nada foi verificado no aparelho.** A fatia foi adiada em 2026-08-14 (DEC-057) porque a
-entrega da v1 por URL vinha antes; **esse go-live já aconteceu**, então a F4.5 deixou de
-estar bloqueada e está **liberada para retomada** — ainda **não iniciada**. Ver as
-Pendências e a seção Entrega v1 abaixo.
+A fatia foi adiada em 2026-08-14 (DEC-057) porque a entrega da v1 por URL vinha antes;
+com o go-live feito, ela foi retomada. A **F4.5A foi executada em 2026-08-16** e o seu
+resultado **mudou a estrutura da fatia** (DEC-065): ela deixou de ser "validar o
+Phantom" e passou a ser "selecionar e validar a plataforma substituta".
+
+| Fatia | Escopo | Estado |
+|---|---|---|
+| **F4.5A** | avaliação do `Phantom Alien 4K IPTV` | **concluída — HARDWARE REJEITADO** |
+| **F4.5B** | seleção da plataforma substituta | **pendente** |
+| **F4.5C** | validação física da plataforma substituta | **pendente** |
+| **F4.5D** | operação autônoma | **pendente** |
+| **F4.5E** | gate físico final | **pendente** |
+
+#### F4.5A — avaliação do Phantom · concluída
+
+Inspeção física do aparelho real, sem commit de código. **Só o que foi observado no
+equipamento está registrado abaixo** — nada é inferido, e nada aqui descreve outra
+plataforma.
+
+**Sistema e navegador:**
+
+| Item | Observado |
+|---|---|
+| Sistema | Android 7.0 |
+| Patch de segurança | 1 de dezembro de 2018 |
+| Kernel | `3.18.24_hi3798mv2x` |
+| Build | `NRD90M release-keys` |
+| Arquitetura | ARM 32 bits — `Linux armv7l` |
+| Navegador | Chrome 112.0.0.0 |
+
+**Display.** A UI do aparelho oferece **apenas 720P e 1080P** — **não existe opção 4K**
+nela. A saída HDMI estava em **1080P 60Hz**, e as opções 2160P disponíveis são
+**30/25/24Hz**. **Não se afirma qual sinal a TV efetivamente recebeu**: isso não foi
+comprovado; o que se observou foi a seleção na UI do aparelho.
+
+**Painel.** `/preview` abre no aparelho. `/painel/<TOKEN>` abre no aparelho e **exibe os
+dados reais**. O token **não é publicado** aqui nem em lugar algum do repositório.
+
+**APIs comprovadas no aparelho:** `fetch`, `localStorage`, `Promise`/`async`, optional
+chaining, container queries e Fullscreen API.
+
+**APIs inconclusivas:** **Service Worker, Cache Storage e Wake Lock**. A sonda foi aberta
+em **contexto HTTP inseguro**, e nesse contexto o navegador não oferece esses recursos
+por regra de contexto seguro — a medição, portanto, **não distingue ausência de suporte
+de indisponibilidade por contexto**. **Não se declara ausência de suporte.** A F4.4
+continua precisando ser reprovada num navegador real, agora o da plataforma substituta.
+
+#### Achado de viewport — do Phantom / Chrome Android observado
+
+Na configuração medida:
+
+| Item | Valor |
+|---|---|
+| `screen` | 1280 × 720 |
+| `viewport` | 1280 × 624 |
+| `devicePixelRatio` | 1 |
+
+A barra do Chrome ocupava parte da área vertical. O painel usa `100vh`, e **naquele
+navegador** o layout foi montado para uma altura maior que a área efetivamente visível,
+**cortando a faixa inferior**.
+
+Isto fica registrado como **achado do Phantom e daquele Chrome Android**, e **não** como
+defeito universal do painel: o gate 4K da F4.3, em Chrome desktop com viewport de
+3840×2160, não apresentou overflow nem corte. **Nenhuma correção de código foi feita** —
+nem `100dvh`, nem nada. O hardware foi descartado e o substituto não foi testado; ajustar
+agora seria otimizar para uma plataforma que não vai operar o painel. O achado é insumo
+da **F4.5C**.
+
+#### Decisão de descarte
+
+O `Phantom Alien 4K IPTV` **não será usado como plataforma definitiva do painel**
+(DEC-065). Os motivos são **observacionais**: plataforma antiga, Android 7, patch de
+segurança de 2018, Chrome 112, UI limitada a 1080p, 2160p disponível apenas até 30 Hz, e
+operação por navegador que não atende de forma limpa ao objetivo atual.
+
+**O aparelho não foi declarado defeituoso.** Ele é **inadequado ao objetivo definido**.
+
+#### F4.5B — seleção da plataforma substituta · pendente
+
+**Nenhuma marca ou modelo foi escolhida neste ciclo**, e nada se presume sobre a
+substituta. Os **critérios de escolha** registrados são: navegador moderno e mantido;
+atualização suportada; saída 3840×2160 a 60 Hz; capacidade de fullscreen/quiosque;
+autostart ou restauração automática; Service Worker; Cache Storage; comportamento
+previsível após reboot; controle de suspensão/tela; rede estável; e possibilidade de
+operar o painel sem intervenção diária além de ligar e desligar.
+
+#### F4.5C, F4.5D e F4.5E · pendentes
+
+A **F4.5C** valida fisicamente a plataforma escolhida — e é onde os mesmos critérios de
+evidência da DEC-049 continuam valendo: nada de sistema, navegador, resolução ou API
+registrado sem medição no aparelho. É lá que voltam o mecanismo offline da F4.4, o
+achado de viewport acima, a percepção das hairlines a 3–6 metros (F4.3) e o julgamento
+do Wake Lock (DEC-050). A **F4.5D** trata da operação autônoma e a **F4.5E** é o gate
+físico final, que fecha a F4.5 e, com ela, a F4.
 
 ## Entrega v1 — decisões de produto e modelo (E1)
 
@@ -2291,27 +2405,41 @@ aplicadas passaram a ser seis.
 release era o `5491fb2` ao fim do SEC-006 e passou a ser o `25e62b5` com o SEC-005; o
 número de migrations não mudou em nenhum dos três.
 
+**Encerrada na F4.5A:** a inspeção do `Phantom Alien 4K IPTV` (DEC-049) — ela foi
+executada em 2026-08-16, e o resultado foi o **descarte do aparelho** como plataforma do
+painel (DEC-065). O que a substitui como pendência é a **seleção da plataforma
+substituta**, abaixo.
+
 O que resta:
 
-1. **Cadastrar o saldo histórico real pela administração.** Hoje `saldo_historico` está
-   vazio em produção, e por isso os três acumulados aparecem como `—`. **Não é defeito
-   técnico** — é ausência de dado, que o sistema afirma corretamente em vez de inventar
-   zero (DEC-014, DEC-037). Só o proprietário tem os números de abertura.
-2. **F4.5 — operação em hardware real**: **liberada para retomada**, não iniciada.
-3. **Decidir a política de auto-deploy.** Hoje está **OFF**: toda versão futura exige
-   deploy manual. É o padrão seguro, e mudá-lo é decisão do proprietário.
-4. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas e a
-   **F4.5 liberada para retomada** (DEC-057). O que falta nela, objetivamente:
-   - o **hardware alvo é o `Phantom Alien 4K IPTV`**;
-   - o **SO e o navegador do aparelho ainda não foram comprovados** — a F4.5 começa
-     por inspecioná-lo (DEC-049). **O aparelho não foi validado**;
-   - **o ensaio operacional real é F4.5**, e é ele que fecha quiosque, autostart e
-     suspensão de tela (DEC-050). É também nele que se confere a percepção das
+1. **O2 — carga operacional inicial**: cadastrar o saldo histórico real pela
+   administração. Hoje `saldo_historico` está vazio em produção, e por isso os três
+   acumulados aparecem como `—`. **Não é defeito técnico** — é ausência de dado, que o
+   sistema afirma corretamente em vez de inventar zero (DEC-014, DEC-037). Só o
+   proprietário tem os números de abertura, e **nenhum valor é inventado**. Pendente.
+2. **F4.5 — operação em hardware real**: **em andamento**. A **F4.5A está concluída**
+   com o Phantom rejeitado; **F4.5B a F4.5E estão pendentes** (DEC-065).
+3. **O1 — reconciliação do dossiê secreto**: pendente, não iniciada. O dossiê continua
+   **fora do Git** e nenhum valor secreto entra no repositório.
+4. **Decidir a política de auto-deploy.** Hoje está **OFF**: toda versão futura exige
+   deploy manual. **Isso é política operacional vigente, não pendência técnica
+   obrigatória** — pode permanecer como está indefinidamente, e mudá-lo é decisão do
+   proprietário.
+5. **F4 — Identidade e modo TV**: em andamento, com F4.0 a F4.4 concluídas e a **F4.5
+   em andamento** (DEC-065). O que falta nela, objetivamente:
+   - **não há plataforma de operação escolhida** — o Phantom foi avaliado e rejeitado, e
+     a substituta é a **F4.5B**, com os critérios registrados na DEC-065. **Nenhuma
+     marca ou modelo foi escolhida**;
+   - o **SO, o navegador e a saída de vídeo da plataforma substituta não são
+     conhecidos** e **não serão inferidos** — o princípio da DEC-049 continua valendo, e
+     a **F4.5C** é a validação física dela;
+   - **o ensaio operacional real é a F4.5D**, e é ele que fecha quiosque, autostart e
+     suspensão de tela (DEC-050). É também na F4.5C que se confere a percepção das
      hairlines a 3–6 metros, registrada na F4.3.
-5. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
-6. **Hardening de segurança residual** — ver a lista logo abaixo. Três dos seis já foram
+6. **F2.6 — aviso de lançamento anterior ao corte**: opcional, não bloqueia nada.
+7. **Hardening de segurança residual** — ver a lista logo abaixo. Três dos seis já foram
    encerrados. **Nenhum item bloqueia a v1** e nenhum deles é regressão dos quatro
-   achados obrigatórios.
+   achados obrigatórios. **Nenhum deles foi iniciado neste ciclo.**
 
 ### Hardening da auditoria S1 — estado por item
 
@@ -2410,13 +2538,16 @@ Comandos já existentes e relevantes ao E6: `build` (`next build`), `start`
 (`next start`), `postinstall` (`prisma generate`), `db:deploy`
 (`prisma migrate deploy`) e `db:seed` (`prisma db seed`).
 
-### Observações para a validação da F4.5
+### Observações para a validação da F4.5C
 
-Nada aqui é afirmação sobre o `Phantom Alien 4K IPTV`: são pontos a **provar** no
-aparelho, e o que se sabe da plataforma dele continua sendo nada (DEC-049).
+Nada aqui é afirmação sobre a **plataforma substituta**, que não está escolhida: são
+pontos a **provar** nela quando existir, e o que se sabe dela continua sendo nada — o
+princípio da DEC-049 sobrevive ao descarte do Phantom (DEC-065). O que **foi** medido no
+Phantom está na seção da F4.5A e vale só para ele.
 
-**O mecanismo offline precisa ser reprovado no navegador real do aparelho.** A F4.4
-foi validada em Chrome desktop; no aparelho é preciso demonstrar, na ordem:
+**O mecanismo offline precisa ser reprovado no navegador real da plataforma.** A F4.4
+foi validada em Chrome desktop, e no Phantom a medição ficou **inconclusiva** por
+contexto HTTP inseguro. Na plataforma substituta é preciso demonstrar, na ordem:
 
 - suporte a Service Worker;
 - instalação;
@@ -2432,10 +2563,48 @@ um perfil de Chrome em caminho temporário muito profundo fez `caches.open` falh
 silêncio, embora `register()` chegasse a resolver antes disso. Um perfil em caminho
 curto funcionou. Registrado aqui porque **uma falha de Cache Storage é silenciosa** e
 vale conhecer o sintoma ao validar qualquer outra plataforma — **não** porque se saiba
-que o Phantom usa Windows, Chrome ou sofre dessa limitação.
+que a plataforma substituta use Windows ou sofra dessa limitação. (O Phantom, medido na
+F4.5A, roda Android 7.0 com Chrome 112; ele não é a plataforma substituta e não é
+descrito por este achado.)
 
 **Hairlines.** A percepção física das duas hairlines a 3–6 metros continua pendente de
-conferência no ensaio da F4.5, conforme registrado na F4.3.
+conferência no ensaio físico da **F4.5C**, conforme registrado na F4.3.
+
+## Etapas operacionais
+
+Duas etapas que não são fatia de código nem fase técnica, registradas para não se
+perderem. **Ambas pendentes, nenhuma iniciada.**
+
+### O1 — Reconciliação do dossiê secreto · pendente
+
+**Objetivo:** conferir o dossiê privado do proprietário contra o estado real de Render,
+Supabase e administração do painel.
+
+**O dossiê continua FORA DO GIT**, e **nenhum valor secreto é registrado no
+repositório** — nem aqui, nem em nenhum outro arquivo, nem em log, transcript ou
+mensagem de commit. O que segue é a lista dos **itens conceituais** a conferir, **por
+nome**:
+
+- credencial administrativa do painel;
+- `PAINEL_TOKEN`;
+- `AUTH_SECRET`;
+- role `casalouzada_runtime`;
+- credencial `postgres` administrativa;
+- `DATABASE_URL`;
+- `DIRECT_URL`;
+- configuração TLS;
+- credenciais antigas/revogadas.
+
+Só a **existência da tarefa** está registrada. **Não iniciada.**
+
+### O2 — Carga operacional inicial · pendente
+
+Cadastrar o **`saldo_historico` real pela administração**. Hoje a tabela está vazia em
+produção, e por isso os três acumulados aparecem como `—` — ausência de dado afirmada
+corretamente, não defeito (DEC-014, DEC-037).
+
+**Nenhum valor foi inventado** e nenhum será: só o proprietário tem os números de
+abertura. **Não iniciada.**
 
 ## Bloqueios
 

@@ -4,7 +4,7 @@ Documento de planejamento e referência arquitetural. O texto abaixo descreve o
 desenho pretendido; o estado real do que está construído fica em
 `docs/HANDOFF_ATUAL.md`, e as decisões em `docs/DECISOES.md`.
 
-**Situação em 2026-08-14:** Fase 1, protótipo visual, Fase 2 — Administração e
+**Situação em 2026-08-16:** Fase 1, protótipo visual, Fase 2 — Administração e
 **Fase 3 — Painel** concluídos e publicados. As três camadas do painel existem:
 `src/lib/metricas.ts` calcula (núcleo **puro**), `src/lib/metricas-prisma.ts` lê o
 banco e alimenta esse núcleo, e `src/lib/apresentacao-painel.ts` traduz o resultado
@@ -17,8 +17,11 @@ Por decisão do proprietário em 2026-08-14, a **F4.5 — operação em hardware
 adiada em favor da **entrega da v1 por URL**, em seis etapas (E1 a E6, ver §9): ajustes
 funcionais aprovados — venda compartilhada, propostas com status, saldo mínimo
 conhecido, reservas de locação e a faixa superior alternada —, gate completo e go-live
-no Render. **Essa entrega está concluída e no ar**, e a F4.5 está agora **liberada para
-retomada**, ainda não iniciada.
+no Render. **Essa entrega está concluída e no ar**, e a F4.5 foi retomada: a **F4.5A —
+avaliação do `Phantom Alien 4K IPTV` — está concluída**, com resultado **HARDWARE
+REJEITADO**. O aparelho **não será a plataforma do painel** (DEC-065), e a F4.5 passou a
+ser "selecionar e validar a plataforma substituta", em **F4.5B a F4.5E, pendentes**.
+Nenhuma marca ou modelo substituto foi escolhida.
 
 A **E1 — contratos, documental — está concluída** (`078f360`); a **E2 está concluída**
 em três commits — **`c6464b5`** (E2A — schema e migration aditiva com backfills),
@@ -452,6 +455,14 @@ travam ou desligam a tela após um tempo ocioso. A recomendação é um mini PC 
 rodando Chrome em modo quiosque, com a URL secreta na inicialização automática. Custa pouco
 e resolve de uma vez o autostart, a suspensão de tela e a compatibilidade.
 
+> **Estado em 2026-08-16.** O `Phantom Alien 4K IPTV`, que a DEC-049 tinha registrado
+> como hardware alvo, foi **inspecionado fisicamente na F4.5A e rejeitado** como
+> plataforma do painel (DEC-065) — plataforma antiga, Android 7, patch de 2018, Chrome
+> 112, UI limitada a 1080p e 2160p só até 30 Hz. Ele não foi declarado defeituoso: é
+> **inadequado ao objetivo**. A plataforma substituta é a **F4.5B** e **não está
+> escolhida**; o mini PC descrito acima continua sendo **uma alternativa entre outras**,
+> não a escolha feita. Os critérios de seleção estão na DEC-065.
+
 ### 5.2 Rotação dos quadros de equipe
 
 Ciclo de 7 métricas × 20 segundos = 2min20s por volta completa. Ordem sugerida:
@@ -606,7 +617,8 @@ e operação da TV. Os tokens de cor existem desde a F1, e **a composição visu
 compartilhada desde a F3.5**: a Jost está configurada dentro de `PainelVisual`, que
 serve `/preview` e `/painel/[token]`, então a tipografia da seção 6 **já chega ao painel
 real**. A **marca oficial e seus assets**, a **verificação em 4K** e o **offline de
-navegação** já foram entregues; o que resta da fase é a **operação na TV**.
+navegação** já foram entregues; o que resta da fase é a **operação na TV** — hoje **sem
+plataforma escolhida**, depois do descarte do Phantom (DEC-065).
 
 A fase foi fatiada assim:
 
@@ -617,7 +629,12 @@ A fase foi fatiada assim:
 | F4.2 | marca oficial e assets | **concluída** — commit `7e0e35d` |
 | F4.3 | verificação 4K e microajustes | **concluída** — commit `16490f0`, mais evidência visual sem commit |
 | F4.4 | offline de navegação | **concluída** — commit `8b9fce2` |
-| F4.5 | operação em hardware real | **liberada para retomada** — o go-live da v1 aconteceu (DEC-057); **não iniciada**; inventário do aparelho primeiro (DEC-049) |
+| F4.5 | operação em hardware real | **em andamento** — reestruturada pela DEC-065, ver as cinco fatias abaixo |
+| F4.5A | avaliação do `Phantom Alien 4K IPTV` | **concluída** — 2026-08-16, resultado **HARDWARE REJEITADO** (DEC-065); sem commit de código |
+| F4.5B | seleção da plataforma substituta | **pendente** — critérios na DEC-065; nenhuma marca ou modelo escolhida |
+| F4.5C | validação física da plataforma substituta | **pendente** |
+| F4.5D | operação autônoma | **pendente** |
+| F4.5E | gate físico final | **pendente** — fecha a F4.5 e, com ela, a F4 |
 
 A **F4.1** trouxe o token `--color-moldura`, o cursor oculto no painel, as hairlines
 em `cqw` e a remoção dos SVGs de scaffold.
@@ -640,11 +657,21 @@ a própria tela e a marca. Qualquer resposta abaixo de 500 passa normalmente, en
 recupera sozinha assim que a aplicação volta. Exige **provisionamento online prévio**:
 um navegador que nunca instalou o mecanismo ainda depende de rede no primeiro boot.
 
-A **operação no `Phantom Alien 4K IPTV` continua não realizada**, mas deixou de estar
-adiada: com o go-live da v1 concluído, a F4.5 está **liberada para retomada** (DEC-057)
-— **não iniciada**. A plataforma do aparelho ainda precisa ser comprovada (DEC-049), e o
-mini PC com Chrome em quiosque descrito na §5.1 continua sendo alternativa, não o que
-está em mãos. A F4 segue **em andamento** e só se encerra com a F4.5.
+A **F4.5 foi retomada depois do go-live da v1** (DEC-057) e **mudou de estrutura**
+(DEC-065). A **F4.5A** inspecionou o `Phantom Alien 4K IPTV` em 2026-08-16 e o
+**rejeitou** como plataforma do painel: Android 7.0, patch de segurança de 1 de dezembro
+de 2018, kernel `3.18.24_hi3798mv2x`, build `NRD90M release-keys`, ARM 32 bits, Chrome
+112.0.0.0, UI de resolução limitada a 720P/1080P e 2160P disponível apenas a
+30/25/24 Hz. O painel **abre e mostra dados reais** no aparelho, e `fetch`,
+`localStorage`, `Promise`/`async`, optional chaining, container queries e Fullscreen API
+foram comprovados; **Service Worker, Cache Storage e Wake Lock ficaram inconclusivos**
+porque a sonda rodou em contexto HTTP inseguro — **não se declara ausência de suporte**.
+
+O aparelho **não é defeituoso**: é **inadequado ao objetivo definido**. A F4.5 passou a
+ser **selecionar e validar a plataforma substituta**, que **não está escolhida** —
+F4.5B a F4.5E, todas pendentes. O mini PC com Chrome em quiosque descrito na §5.1
+continua sendo alternativa, não o que está em mãos. A F4 segue **em andamento** e só se
+encerra com a F4.5.
 
 **Entrega v1** · *concluída e em produção (DEC-057)*
 Aprovada pelo proprietário em 2026-08-14, entrou **antes** da F4.5 e não abre a F5. As
@@ -689,6 +716,14 @@ está liberada para retomada** — ainda não iniciada.
 Metas com barra de progresso, destaque do mês, comparativo com o mês anterior, fotos dos
 corretores, exportação.
 
+**Etapas operacionais** · *pendentes*
+Não são fases técnicas: correm ao lado do roadmap e dependem do proprietário.
+
+| Etapa | Escopo | Estado |
+|---|---|---|
+| O1 | reconciliação do dossiê secreto do proprietário contra o estado real de Render, Supabase e administração — **o dossiê fica fora do Git e nenhum valor secreto entra no repositório**; só a existência da tarefa está registrada | **pendente**, não iniciada |
+| O2 | carga operacional inicial — cadastrar o `saldo_historico` real pela administração, **sem inventar valor** | **pendente**, não iniciada |
+
 ---
 
 ## 10. Pendências
@@ -699,5 +734,7 @@ Nenhuma bloqueia o início do desenvolvimento.
    Se uma equipe passar de 8 ou 9 nomes, o quadro precisa de rolagem automática ou de
    mostrar só os primeiros colocados.
 2. Valores iniciais do saldo histórico (quantidades e VGV acumulado antes do sistema).
+   Formalizados como a etapa operacional **O2**, pendente — os números são do
+   proprietário e **nenhum valor é inventado**.
 3. ~~Arquivos da marca em alta resolução para a TV 4K.~~ **Encerrada** — os PNGs
    oficiais foram fornecidos e integrados pela F4.2 (`7e0e35d`).
