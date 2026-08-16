@@ -459,13 +459,17 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 
 ## Conexões de banco
 
-São **três**, uma por consumidor, e **nenhuma serve no lugar da outra** (DEC-066):
+São **três**, cada uma com um papel principal próprio (DEC-066):
 
-| Variável | Consumidor | Driver | Conexão | Role |
-|---|---|---|---|---|
-| `DATABASE_URL` | runtime (`src/lib/db.ts`) | node-postgres | pooler, 6543 | `casalouzada_runtime` |
-| `DIRECT_URL` | Prisma CLI — migrations e introspecção (`prisma.config.ts`) | engine Rust | direta, 5432 | administrativo |
-| `ADMIN_DATABASE_URL` | `db:seed` e `db:trocar-senha-admin` | node-postgres | direta, 5432 | administrativo |
+| Variável | Consumidor | Driver | Conexão | Role | Fallback |
+|---|---|---|---|---|---|
+| `DATABASE_URL` | runtime (`src/lib/db.ts`) | node-postgres | pooler, 6543 | `casalouzada_runtime` | **nenhum** |
+| `DIRECT_URL` | Prisma CLI — migrations e introspecção (`prisma.config.ts`) | engine Rust | direta, 5432 | administrativo | **`DIRECT_URL ?? DATABASE_URL`**, histórico e preservado |
+| `ADMIN_DATABASE_URL` | `db:seed` e `db:trocar-senha-admin` | node-postgres | direta, 5432 | administrativo | **nenhum** |
+
+O fallback do Prisma CLI **continua valendo** e não foi tocado: num ambiente sem
+pooler — o banco local de teste — as duas apontam para o mesmo lugar. Quem passou a
+não ter fallback foram **os scripts administrativos**, e só eles.
 
 Dois motivos independentes, e cada um bastaria. **Privilégio**: o role de runtime tem
 `usuarios` somente leitura desde o SEC-004, então um script administrativo que caísse na

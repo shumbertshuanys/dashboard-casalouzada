@@ -2009,20 +2009,33 @@ mesma data. **decisão registrada — F4.5B a F4.5E pendentes**
 
 ## Conexões de banco
 
-### DEC-066 — Três conexões de banco, uma por consumidor, sem fallback
+### DEC-066 — Conexões separadas por consumidor; scripts administrativos sem fallback
 
-**Decisão.** O projeto tem **três** variáveis de conexão, cada uma com **um**
-consumidor, e nenhuma delas substitui outra:
+**Decisão.** O projeto tem **três** variáveis de conexão, cada uma com um **papel
+principal** próprio:
 
-| Variável | Consumidor | Driver | Conexão | Role |
-|---|---|---|---|---|
-| `DATABASE_URL` | runtime da aplicação (`src/lib/db.ts`) | node-postgres via `@prisma/adapter-pg` | pooler | `casalouzada_runtime` |
-| `DIRECT_URL` | Prisma CLI — migrations e introspecção (`prisma.config.ts`) | engine Rust | direta | administrativo |
-| `ADMIN_DATABASE_URL` | scripts administrativos em Node — `db:seed` e `db:trocar-senha-admin` | node-postgres via `@prisma/adapter-pg` | direta | administrativo |
+| Variável | Consumidor | Driver | Conexão | Role | Fallback |
+|---|---|---|---|---|---|
+| `DATABASE_URL` | runtime da aplicação (`src/lib/db.ts`) | node-postgres via `@prisma/adapter-pg` | pooler | `casalouzada_runtime` | **nenhum** — exclusiva do runtime |
+| `DIRECT_URL` | Prisma CLI — migrations e introspecção (`prisma.config.ts`) | engine Rust | direta | administrativo | **conserva o histórico `DIRECT_URL ?? DATABASE_URL`** |
+| `ADMIN_DATABASE_URL` | scripts administrativos em Node — `db:seed` e `db:trocar-senha-admin` | node-postgres via `@prisma/adapter-pg` | direta | administrativo | **nenhum** — exigida, sem cair para as outras duas |
 
-Os dois scripts administrativos **falham fechado**: sem `ADMIN_DATABASE_URL` eles
-abortam **antes de abrir conexão**, e **não** caem para `DIRECT_URL` nem para
-`DATABASE_URL`.
+Lendo linha a linha, para não haver dúvida:
+
+- **`DATABASE_URL` é exclusiva do runtime.** `src/lib/db.ts` lança se ela faltar e não
+  procura substituta;
+- **`DIRECT_URL` é a conexão *preferida* do Prisma CLI**, não a única que ele aceita: o
+  `prisma.config.ts` mantém `DIRECT_URL ?? DATABASE_URL`, fallback **histórico e
+  deliberadamente preservado**. Ele existe porque, num ambiente sem pooler — o banco
+  local de teste, por exemplo —, as duas apontam para o mesmo lugar e exigir as duas
+  seria cerimônia inútil. Esta decisão **não** o remove;
+- **`ADMIN_DATABASE_URL` é exclusiva dos scripts administrativos e não tem fallback.**
+
+A inovação de segurança desta decisão é **essa última linha**, e só ela: os dois
+scripts administrativos **falham fechado** — sem `ADMIN_DATABASE_URL` abortam **antes
+de abrir conexão** e **não** caem para `DIRECT_URL` nem para `DATABASE_URL`. Não se
+afirma aqui que o projeto inteiro deixou de ter fallback; o do Prisma CLI continua de
+pé, documentado logo acima e no Impacto.
 
 **Motivo.** Dois problemas independentes, e cada um sozinho já justifica a separação.
 
