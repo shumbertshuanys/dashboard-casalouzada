@@ -32,18 +32,18 @@ publicada** em **`c24a0c9`**, que entregou o painel operacional; e a **E5 — ga
 completo — está concluída**, com resultado **`RELEASE_CANDIDATE_READY_FOR_E6 = YES`**;
 e a **E6 — go-live — está CONCLUÍDA**.
 
-Depois da v1, a **Celebração de Venda** foi implementada na `main` e **aprovada em gate
-visual local em 2026-08-16**. Ela **não está em produção**: o release publicado continua
-sendo o anterior, e a próxima ação do projeto é o **deploy controlado** dessa feature —
-ver a seção logo abaixo do bloco da v1.
+Depois da v1, a **Celebração de Venda** foi implementada, publicada e **aprovada pelo
+proprietário em produção** em 2026-08-16, no release **`ed1c29f`** — ver a seção logo
+abaixo do bloco da v1.
 
 ## A Entrega v1 está CONCLUÍDA e EM PRODUÇÃO
 
-O release **`25e62b5`** roda em `https://dashboard-casalouzada.onrender.com`, num Web
-Service do Render (região Virginia, plano Starter, Node 24.19.0, auto-deploy **OFF**).
-As **seis migrations estão aplicadas** no banco de produção e a **credencial exposta na
-P1 foi rotacionada e revogada** antes do go-live. **Nenhuma feature da v1 continua
-pendente.** O painel da TV fica em
+O release em produção é hoje o **`ed1c29f`**, em
+`https://dashboard-casalouzada.onrender.com`, num Web Service do Render (região Virginia,
+plano Starter, Node 24.19.0, auto-deploy **OFF**). As **oito migrations estão aplicadas**
+no banco de produção — as seis da v1 mais as duas da Celebração de Venda — e a
+**credencial exposta na P1 foi rotacionada e revogada** antes do go-live. **Nenhuma
+feature da v1 continua pendente.** O painel da TV fica em
 `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>`.
 
 O go-live original foi o `adabe2d`; o release atual é posterior porque a **auditoria de
@@ -342,7 +342,7 @@ estado de uma reserva que deixou de valer; e finalizar **não cria `LOCACAO`
 automaticamente**. A **lista de reservas `ATIVA` na TV foi entregue na E4**
 (`c24a0c9`): só `ATIVA`, no máximo três, imóvel e corretor.
 
-## Celebração de Venda — implementada na `main`, deploy PENDENTE
+## Celebração de Venda — CONCLUÍDA E EM PRODUÇÃO
 
 Feature de **integração da equipe**, aprovada pelo proprietário depois da v1. A
 finalidade é comemorar: quando uma venda é fechada, a TV do escritório para o que está
@@ -381,12 +381,17 @@ Como funciona, em uma passada:
 - **zero impacto em métricas** — `metricas.ts`, `metricas-prisma.ts`,
   `leitura-painel.ts` e a rota `/dados` não foram tocados por nenhuma das fatias.
 
-**Estado.** Implementada e provada na `main` (C1, C1-R1, C2, C3, C3-R1, mais o
-saneamento T1 e o hardening T1-R1). Gate visual executado pelo proprietário **no
-navegador local** em 2026-08-16 — **não** há verificação na TV física de 80" nesta
-feature. **Nada disso está publicado:** o release em produção continua sendo o anterior
-e as **duas migrations da celebração ainda não foram aplicadas no Supabase**. A próxima
-ação é o **deploy controlado**. O detalhamento e os commits estão em
+**Estado. CONCLUÍDA E EM PRODUÇÃO.** Implementada e provada na `main` (C1, C1-R1, C2,
+C3, C3-R1, mais o saneamento T1, o hardening T1-R1 e a correção P1-R1) e publicada no
+release **`ed1c29f`**, com as **duas migrations aplicadas no banco de produção** —
+`prisma migrate status` responde 8/8 e schema em dia, sem falha ativa.
+
+Houve **dois gates humanos, distintos**: o proprietário aprovou a feature **no navegador
+local** e, depois do deploy, abriu o painel real e **confirmou que a animação foi
+executada corretamente**. O hardware usado nesse segundo gate **não está identificado**,
+e nada se afirma sobre ele. Nenhum dos dois foi automatizado.
+
+O detalhamento, os commits, as provas de produção e o incidente da migration 8 estão em
 `docs/HANDOFF_ATUAL.md`.
 
 Esta feature **não** encerra a F4: a **F4.5 — operação em hardware real** continua

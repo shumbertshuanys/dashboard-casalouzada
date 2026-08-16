@@ -2107,8 +2107,8 @@ não pode ser o caminho dos scripts administrativos.
 **Fonte.** `prisma/seed.ts`; `scripts/trocar-senha-admin.ts`; `.env.example`;
 `scripts/banco-teste.ts`; `tests/contrato-conexao-admin.test.ts`;
 `tests/integracao/trocar-senha-admin.integracao.test.ts`. Evidência de campo na
-execução O1-S0 de 2026-08-16. **implementada — ainda não publicada em produção; o
-release em produção continua sendo `25e62b5`**
+execução O1-S0 de 2026-08-16. **implementada e publicada em produção no release
+`ed1c29f`; `ADMIN_DATABASE_URL` continua fora do Web Service, como a decisão exige**
 
 ## Celebração de venda
 
@@ -2199,7 +2199,11 @@ comercial desaparecer entre elas.
 `src/components/painel/vigia-celebracao.tsx`;
 `src/components/painel/celebracao-overlay.tsx`;
 `src/app/admin/lancamentos/botao-celebracao.tsx`. Commits `c06fe38`, `7ddf8c0`,
-`1d32543`, `ae565e6`, `4f61803`, `292cf43` e `07b109c`. Gate visual local aprovado pelo
-proprietário em 2026-08-16, **no navegador** — não na TV física.
-**implementada — ainda não publicada em produção; o release em produção continua sendo
-`25e62b5`, e as duas migrations da celebração ainda não foram aplicadas no Supabase**
+`1d32543`, `ae565e6`, `4f61803`, `292cf43`, `07b109c` e `ed1c29f`.
+
+**Prova de campo.** Publicada no release **`ed1c29f`**, com as **8 migrations aplicadas**
+em produção e zero falha ativa. Dois gates humanos, ambos aprovados e nenhum
+automatizado: o visual **no navegador local**, e o de produção, em que o proprietário
+abriu o painel real e **confirmou que a animação foi executada corretamente** — o
+hardware desse segundo gate não está identificado.
+**implementada e publicada em produção**

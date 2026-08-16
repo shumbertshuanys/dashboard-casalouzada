@@ -6,9 +6,9 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência (`main`) | `07b109c7dfe5ee6a34cc77ee4418bbfa36db7566` — `fix: descarta celebracao cuja venda some durante a leitura` |
-| **Release em produção** | **`25e62b5984543e9754e0bc370958c0fb6bcd8a8b`** — `docs: corrige justificativa da CSP` |
-| ⚠️ **`main` ≠ produção** | **A `main` está À FRENTE do que está no ar.** Tudo que veio depois do `25e62b5` — a Celebração de Venda inteira e a DEC-066 — está implementado e provado, e **não publicado**. Auto-deploy está **OFF**; push para `main` **não** é deploy. |
+| Commit de referência (`main`) | `ed1c29f42045bb2097570347882b9618e232902d` — `fix: corrige prova de MAINTAIN no PostgreSQL 17` |
+| **Release em produção** | **`ed1c29f42045bb2097570347882b9618e232902d`** — deploy `dep-da13bts9v7es73ag89pg`, live desde **2026-08-16T22:14:57Z** |
+| ✅ **`main` = produção** | Os dois estão no **mesmo commit**. A Celebração de Venda e a DEC-066 foram publicadas neste release. Auto-deploy continua **OFF**: push para `main` **não** é deploy, e toda versão futura exige disparo manual. |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
 | Data do handoff | 2026-08-16 |
@@ -16,17 +16,23 @@
 
 ## Estado executivo
 
-> ### ▶ PRÓXIMA AÇÃO: DEPLOY CONTROLADO DA CELEBRAÇÃO DE VENDA
+> ### ▶ PRÓXIMA AÇÃO: A ARBITRAR
 >
-> Não há desenvolvimento funcional pendente antes disso. A feature está completa,
-> provada e aprovada em gate visual local; o que falta é publicá-la — o que inclui
-> aplicar em produção as **duas migrations** que hoje só rodaram no PostgreSQL local:
-> `20260816120000_celebracao_venda` e `20260816160000_celebracao_runtime_grants`.
+> **Nenhuma frente de desenvolvimento está aberta.** A Celebração de Venda foi
+> publicada e aprovada em produção, e com ela encerrou-se a última entrega em curso.
 >
-> A F4.5 (plataforma de hardware) e a O2 (carga do saldo de `VENDA`) continuam
-> pendentes, mas **vêm depois** deste deploy.
+> Restam duas pendências, e **os documentos não estabelecem prioridade entre elas** —
+> por isso não se elege uma aqui. As duas dependem de decisão ou de dado do
+> proprietário, não de engenharia:
+>
+> - **F4.5B — seleção da plataforma substituta** para operar a TV. O Phantom Alien 4K
+>   foi rejeitado (DEC-065) e **nenhuma marca ou modelo foi escolhida**;
+> - **O2 — carga do saldo histórico de `VENDA`.** Enquanto a linha não existir, imóveis
+>   vendidos e VGV acumulado continuam em `—`. Não é defeito: é ausência de dado, que o
+>   sistema afirma corretamente em vez de inventar zero (DEC-014, DEC-037). Só o
+>   proprietário tem os números de abertura.
 
-## Celebração de Venda — implementada na `main`, DEPLOY PENDENTE
+## Celebração de Venda — IMPLEMENTADA E EM PRODUÇÃO
 
 Feature de integração da equipe, entregue depois da v1: ao fechar uma venda, a TV do
 escritório anuncia quem vendeu por cerca de dez segundos e volta ao dashboard. A
@@ -93,18 +99,79 @@ marca oficial assinando embaixo. Escala em unidades relativas à viewport, como 
 | **C3-R1** | `4f61803` | `imovelRef` no payload e no overlay; marca oficial como assinatura (asset já existente em `public/marca/`) |
 | **T1** | `292cf43` | saneamento do harness: corridas entre suítes de integração eliminadas — 10/10 e 3/3 estáveis |
 | **T1-R1** | `07b109c` | venda excluída durante a leitura faz a celebração ser descartada, em vez de estourar |
+| **P1-R1** | `ed1c29f` | corrige a prova de `MAINTAIN` que derrubou o primeiro deploy (ver "Incidente" abaixo) |
 
-**Gate visual.** Executado pelo proprietário em **2026-08-16, no navegador local**, e
-aprovado. **Não** houve verificação na TV física de 80" para esta feature — o que existe
-é aprovação em desktop.
+**Publicação.** Release **`ed1c29f`**, deploy **`dep-da13bts9v7es73ag89pg`**, live desde
+**2026-08-16T22:14:57Z**. Auto-deploy continua **OFF** e a configuração do serviço foi
+restaurada ao original (`npm run db:deploy`) ao final do ciclo.
 
-**Gate de testes no `07b109c`:** `npm test` **762/762**, `npm run test:integracao`
-**191/191**, `npm run test:integracao:painel` **49/49** — zero fail, zero cancelled,
-zero skipped. `npm run lint` limpo e `npx tsc --noEmit` limpo (após `next typegen`).
+**Os dois gates humanos, que são coisas diferentes:**
 
-**O que falta, e é só isto:** publicar. As **duas migrations da celebração** —
-`20260816120000_celebracao_venda` e `20260816160000_celebracao_runtime_grants` — foram
-aplicadas **somente no PostgreSQL local**. Em produção continuam as **seis** de sempre.
+- **gate visual local** — 2026-08-16, o proprietário abriu a feature **no navegador
+  local** e aprovou. **Não** houve verificação em TV física nesta etapa;
+- **gate em produção** — depois do deploy, o proprietário abriu o painel real e
+  **confirmou que a animação foi executada corretamente**. A evidência é a confirmação
+  dele; **o hardware usado não está identificado**, e nada se afirma sobre ele.
+
+Nenhum dos dois foi automatizado.
+
+**Estado provado em produção, pelo job read-only pós-deploy:**
+
+```
+8 migrations found · Database schema is up to date! · ACTIVE_FAILED_MIGRATIONS=0
+celebracoes: PK (id) · índice (criado_em, id) · FK → lancamentos(id) ON DELETE CASCADE
+RLS_ENABLED=true · POLICY_COUNT=0 · owner=postgres · runtime não é owner
+runtime: SELECT=true INSERT=true
+         UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER/MAINTAIN = false
+anon e authenticated: sem privilégio algum
+count_celebracoes=0 no momento da prova
+```
+
+Contagens comerciais **idênticas** antes e depois do deploy — `3 / 19 / 62 / 7 / 0 / 1 / 1`
+em equipes, corretores, lançamentos, participações, reservas, saldo e usuários. **As
+migrations não alteraram uma linha comercial.**
+
+**Gate de testes no `07b109c`, revalidado em `ed1c29f`:** `npm test` **762/762**,
+`npm run test:integracao` **191/191**, `npm run test:integracao:painel` **49/49** — zero
+fail, zero cancelled, zero skipped. `npm run lint` limpo e `npx tsc --noEmit` limpo
+(após `next typegen`).
+
+### Incidente da migration 8, e como foi recuperado
+
+Registro curto, porque o desfecho importa mais que a narrativa.
+
+O primeiro deploy (P1-C) aplicou a **migration 7** com sucesso e **falhou na 8**, em
+PostgreSQL **17.6**: `negados || 'MAINTAIN'` é ambíguo — sem tipo declarado, o `||`
+resolve para `anyarray || anyarray` e o PostgreSQL tenta ler o literal como array
+(`22P02`). O ramo só executa a partir do 17, e o ambiente local é 16.15, então **nenhum
+gate local tinha como alcançá-lo**.
+
+O release novo **não chegou a ficar live** e o anterior seguiu servindo normalmente — o
+pre-deploy falha fechado. O recovery foi **ensaiado antes** num PostgreSQL 17.11
+descartável, reproduzindo o incidente e o conserto de ponta a ponta. A correção é
+`array_append(negados, 'MAINTAIN')`, no commit `ed1c29f`.
+
+Em produção, a tentativa falhada foi marcada **rolled back** e a migration reaplicada
+corrigida, pelo próprio pre-deploy. `_prisma_migrations` guarda **as duas linhas** — a
+tentativa falhada marcada como revertida e a aplicação concluída —, e isso é histórico
+operacional correto: **não deve ser apagado**.
+
+Nenhuma linha comercial foi alterada em nenhum momento do incidente.
+
+### Duas pendências técnicas, nenhuma bloqueante
+
+**Major do PostgreSQL divergente entre local e produção.** O ambiente canônico de teste
+é **16.15**; a produção é **17.6**. Foi exatamente essa diferença que escondeu o ramo de
+`MAINTAIN` de todos os gates locais — ele era inalcançável aqui. A lição prática:
+**migration cujo comportamento é condicionado à major do PostgreSQL precisa de gate na
+major de produção antes do deploy**, como se fez no PG17.11 descartável do P1-R1. O
+container canônico **não** foi migrado, e migrar é decisão de ciclo próprio.
+
+**One-off job do Render usa o artefato do release live.** Não o último build
+bem-sucedido. Foi isso que travou a primeira tentativa de recovery: o job herdava o
+artefato de `25e62b5`, que tem seis migrations, e a oitava sequer existia lá para ser
+resolvida. A saída foi rodar o `resolve` dentro do **pre-deploy do artefato novo**. É
+nota operacional do Render, não decisão de arquitetura do produto.
 
 ## Estado executivo
 
@@ -308,17 +375,24 @@ A **E6 — go-live no Render + smoke público — está CONCLUÍDA**.
 
 ## A ENTREGA V1 ESTÁ CONCLUÍDA E EM PRODUÇÃO
 
-O release **`25e62b5`** roda em `https://dashboard-casalouzada.onrender.com`. **Nenhuma
-feature da v1 continua pendente**, as **seis migrations estão aplicadas em produção** e
-a **credencial exposta na P1 foi rotacionada e revogada** antes do go-live. O painel da
-TV fica em `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>`.
+O release em produção é hoje o **`ed1c29f`** (ver Identificação), em
+`https://dashboard-casalouzada.onrender.com`. **Nenhuma feature da v1 continua
+pendente**, as **oito migrations estão aplicadas em produção** — as seis da v1 mais as
+duas da Celebração de Venda — e a **credencial exposta na P1 foi rotacionada e revogada**
+antes do go-live. O painel da TV fica em
+`https://dashboard-casalouzada.onrender.com/painel/<TOKEN>`.
+
+A v1 foi ao ar no `adabe2d` e chegou ao `25e62b5` pelas correções da auditoria S1; o
+release atual é posterior aos dois, pela publicação da celebração.
 
 O go-live original foi o `adabe2d`, em 2026-08-14. O release atual é posterior porque a
 **auditoria de segurança S1** entregou correções em produção — primeiro os quatro
 achados obrigatórios, depois dois itens do hardening residual — ver a seção abaixo.
 
-A próxima ação do projeto é o **deploy controlado da Celebração de Venda** — ver o bloco
-no topo deste documento. As frentes abaixo continuam abertas e **vêm depois dele**:
+Depois dele veio a **Celebração de Venda**, publicada no release `ed1c29f` e aprovada em
+produção pelo proprietário. Com ela **não resta nenhuma frente de desenvolvimento
+aberta**; as duas pendências do projeto são as de sempre, e a escolha entre elas está a
+arbitrar (ver o bloco no topo deste documento):
 
 - a **F4.5 — operação em hardware real**, **em andamento**: a **F4.5A está concluída**
   com o Phantom **rejeitado**, e o que segue é a **F4.5B — seleção da plataforma
@@ -486,7 +560,8 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 | E6 — Go-live no Render + smoke público | **Concluída** | `adabe2d` implantado no go-live, 5 migrations aplicadas, sem commit de código |
 | **Entrega v1** | **Concluída e em produção** | `https://dashboard-casalouzada.onrender.com` |
 | Auditoria S1 — SEC-001 a SEC-004 | **Concluída** | corrigidos e verificados em produção; 6 migrations |
-| Hardening S1 — SEC-005, SEC-006 e SEC-009 | **Concluída** | encerrados; release atual `25e62b5` |
+| Hardening S1 — SEC-005, SEC-006 e SEC-009 | **Concluída** | encerrados no release de então, `25e62b5` |
+| **Celebração de Venda** | **Concluída e em produção** | release `ed1c29f`; gate humano aprovado |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
@@ -593,8 +668,9 @@ Cadastrá-la lá reporia uma credencial administrativa no ambiente do processo w
 o SEC-004 tirou de propósito. `scripts/banco-teste.ts` injeta as três apontando para o
 banco local, onde a distinção não tem efeito.
 
-> **Estado.** Implementado e testado, **ainda não publicado**: o release em produção
-> continua sendo `25e62b5`, e nenhuma variável do Render foi alterada.
+> **Estado.** Implementado, testado e **publicado em produção** no release `ed1c29f`.
+> `ADMIN_DATABASE_URL` **continua fora do Web Service**, como a decisão exige, e nenhuma
+> variável do Render foi alterada em nenhum momento.
 
 ## Administração implementada
 
@@ -804,7 +880,7 @@ Cinco migrations versionadas:
    não estiverem como prometido. Tudo dentro de **um único statement `DO`**, o que
    garante o "tudo ou nada" sem depender de o Prisma abrir transação.
 
-7. `20260816120000_celebracao_venda` (C1, `c06fe38`) — **NÃO aplicada em produção**.
+7. `20260816120000_celebracao_venda` (C1, `c06fe38`) — **aplicada em produção**.
    Aditiva pura: cria a tabela `celebracoes`, o índice `(criado_em, id)` e a FK para
    `lancamentos` com `ON DELETE CASCADE`. Não toca coluna, constraint nem dado de
    nenhuma tabela comercial, e não faz backfill, trigger ou seed. Estende ao objeto novo
@@ -812,18 +888,22 @@ Cinco migrations versionadas:
    `anon`/`authenticated` revogados —, porque `ENABLE ROW LEVEL SECURITY` é estado de
    tabela e não default de schema: sem isso a tabela nasceria com uma barreira só.
 
-8. `20260816160000_celebracao_runtime_grants` (C1-R1, `7ddf8c0`) — **NÃO aplicada em
-   produção**. Concede a `casalouzada_runtime` **`SELECT` e `INSERT`** em `celebracoes`,
-   e nada além — sem `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER` ou
-   `MAINTAIN`, em continuidade à DEC-060/061. O `ON DELETE CASCADE` da FK **não** exige
-   `DELETE` na tabela filha: a ação referencial é executada pelo sistema. Nasceu como
-   migration própria, e não como correção da anterior, porque a `20260816120000` já
-   estava publicada e editá-la mudaria o checksum registrado em `_prisma_migrations`.
-   Prova pelo catálogo o que concedeu, e é condicionada a `pg_roles` para continuar
-   portátil onde o role não existe.
+8. `20260816160000_celebracao_runtime_grants` (C1-R1 `7ddf8c0`, corrigida em `ed1c29f`)
+   — **aplicada em produção**. Concede a `casalouzada_runtime` **`SELECT` e `INSERT`** em
+   `celebracoes`, e nada além — sem `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`,
+   `TRIGGER` ou `MAINTAIN`, em continuidade à DEC-060/061. O `ON DELETE CASCADE` da FK
+   **não** exige `DELETE` na tabela filha: a ação referencial é executada pelo sistema.
+   Nasceu como migration própria, e não como correção da anterior, porque a
+   `20260816120000` já estava publicada e editá-la mudaria o checksum registrado em
+   `_prisma_migrations`. Prova pelo catálogo o que concedeu, e é condicionada a
+   `pg_roles` para continuar portátil onde o role não existe.
 
-> **Estado de produção — as seis primeiras estão aplicadas; as duas da celebração,
-> não.** Até o E5, só
+   Esta é a **única migration já publicada que foi editada depois** — porque falhou em
+   produção sem deixar efeito parcial, e o Prisma prevê exatamente esse caminho
+   (`resolve --rolled-back` e nova aplicação). Ver "Incidente da migration 8". Nenhuma
+   migration **concluída** foi editada em momento algum.
+
+> **Estado de produção — as oito estão aplicadas.** Até o E5, só
 > `20260811014943_inicial` existia em produção; nenhuma das cinco publicações de código
 > aplicou migration remota, porque publicar no Git **não é** aplicar em produção. O
 > **E6 fechou esse gate**: num único deploy do commit `adabe2d`, o `pre-deploy`
@@ -834,11 +914,14 @@ Cinco migrations versionadas:
 > `20260815190000_seguranca_data_api`, foi aplicada depois, pela auditoria S1, também
 > por `pre-deploy` em deploy próprio.
 >
-> **Isso deixou de significar "nada pendente".** A `main` tem hoje **oito** migrations
-> versionadas, e as duas da Celebração de Venda — `20260816120000_celebracao_venda` e
-> `20260816160000_celebracao_runtime_grants` — rodaram **somente no PostgreSQL local de
-> teste**. Elas entram em produção no `pre-deploy` do **deploy controlado da celebração**,
-> que é a próxima ação do projeto.
+> As **duas da Celebração de Venda** — `20260816120000_celebracao_venda` e
+> `20260816160000_celebracao_runtime_grants` — entraram em produção pelo `pre-deploy` do
+> release `ed1c29f`, a sétima e a oitava. `prisma migrate status` responde **"8 migrations
+> found"** e **"Database schema is up to date!"**, com **zero falha ativa**.
+>
+> O registro da tentativa falhada da oitava permanece em `_prisma_migrations`, marcado
+> como revertido, ao lado da aplicação concluída. É histórico operacional correto e
+> **não deve ser apagado**.
 >
 > O risco que a quinta carregava foi tratado por construção, não por sorte: ela zera
 > colunas e o runtime que a acompanha exige o estado novo, então rodou no `pre-deploy`
