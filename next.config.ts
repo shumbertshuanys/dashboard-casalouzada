@@ -24,8 +24,29 @@ const nextConfig: NextConfig = {
         //
         // Sem `preload`: não faz parte desta decisão. Entra por decisão
         // própria, não por cópia do exemplo genérico da documentação do Next.
+        //
+        // Framing. `frame-ancestors 'none'` é a política; nenhum site pode
+        // embutir a aplicação em frame, iframe, object ou embed. Vale mesmo
+        // sem sessão: o cookie é `SameSite=Lax` e já não acompanha iframe
+        // cross-site, mas isso depende do cookie e não impede o enquadramento
+        // em si — a política impede.
+        //
+        // `X-Frame-Options: DENY` é só o encosto legado, para navegador que
+        // não leia `frame-ancestors`; quem lê os dois ignora este. `DENY` e
+        // não `SAMEORIGIN` porque não há caso legítimo de embutir a aplicação
+        // nem pela própria origem: não existe iframe em lugar nenhum do
+        // produto, e o painel da TV abre como página inteira.
+        //
+        // A CSP para em `frame-ancestors` de propósito. Restringir script e
+        // estilo é outro problema: exige nonce por requisição e renderização
+        // dinâmica, conforme o guia do Next, e teria de nascer em `proxy.ts`,
+        // não aqui.
         source: "/:caminho*",
-        headers: [{ key: "Strict-Transport-Security", value: "max-age=31536000" }],
+        headers: [
+          { key: "Strict-Transport-Security", value: "max-age=31536000" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "X-Frame-Options", value: "DENY" },
+        ],
       },
       {
         // A URL do painel é secreta; o cabeçalho evita que ela apareça em
