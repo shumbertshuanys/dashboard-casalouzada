@@ -6,9 +6,9 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| Commit de referência (`main`) | `0ab8707e8a43dd49e6e64dbdefbb32a12a6e268c` — `docs: encerra celebracao em producao` |
-| **Release executável em produção** | **`ed1c29f42045bb2097570347882b9618e232902d`** — deploy `dep-da13bts9v7es73ag89pg`, live desde **2026-08-16T22:14:57Z** |
-| ℹ️ **`main` está à frente, e a diferença é só documental** | Entre `ed1c29f` e `0ab8707` há **apenas commits de documentação** — nenhuma linha de `src/`, `prisma/`, `tests/` ou configuração. O que roda em produção é **exatamente** o código de `ed1c29f`, e **nenhum deploy é necessário** para alinhar os SHAs. Auto-deploy continua **OFF**: push para `main` **não** é deploy. |
+| **Release executável em produção** | **`ed1c29f42045bb2097570347882b9618e232902d`** — deploy `dep-da13bts9v7es73ag89pg`, live desde **2026-08-16T22:14:57Z**. **Este é o único SHA fixo desta tabela**, e ele só muda quando houver um deploy novo. |
+| Estado do Git | A `main` contém **commits documentais posteriores** ao release executável. O SHA corrente dela **não é registrado aqui de propósito** — consulte `git rev-parse main` ou o GitHub. Um SHA de `main` escrito neste documento se autoinvalida no próximo commit de documentação, que foi exatamente o defeito que esta linha existe para não repetir. |
+| ℹ️ **A divergência é só documental** | Tudo que veio depois de `ed1c29f` na `main` é **documentação** — nenhuma linha de `src/`, `prisma/`, `tests/` ou configuração. O **código executável de `main` e de produção é equivalente** enquanto isso continuar sendo verdade, então **nenhum deploy é necessário só para alinhar SHA**. Auto-deploy continua **OFF**: push para `main` **não** é deploy. |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
 | Data do handoff | 2026-08-16 |
