@@ -41,7 +41,8 @@ abaixo do bloco da v1.
 
 ## A Entrega v1 está CONCLUÍDA e EM PRODUÇÃO
 
-O release em produção é hoje o **`ed1c29f`**, em
+O release em produção é hoje o **`630e336`** — que sucedeu o `ed1c29f` em 2026-08-17, ao
+publicar o microajuste de precisão monetária do painel (DEC-069) —, em
 `https://dashboard-casalouzada.onrender.com`, num Web Service do Render (região Virginia,
 plano Starter, Node 24.19.0, auto-deploy **OFF**). As **oito migrations estão aplicadas**
 no banco de produção — as seis da v1 mais as duas da Celebração de Venda — e a

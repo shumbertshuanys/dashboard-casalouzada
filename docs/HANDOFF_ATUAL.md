@@ -6,12 +6,13 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| **Release executável em produção** | **`ed1c29f42045bb2097570347882b9618e232902d`** — deploy `dep-da13bts9v7es73ag89pg`, live desde **2026-08-16T22:14:57Z**. **Este é o único SHA fixo desta tabela**, e ele só muda quando houver um deploy novo. |
-| Estado do Git | A `main` contém **commits documentais posteriores** ao release executável. O SHA corrente dela **não é registrado aqui de propósito** — consulte `git rev-parse main` ou o GitHub. Um SHA de `main` escrito neste documento se autoinvalida no próximo commit de documentação, que foi exatamente o defeito que esta linha existe para não repetir. |
-| ℹ️ **A divergência é só documental** | Tudo que veio depois de `ed1c29f` na `main` é **documentação** — nenhuma linha de `src/`, `prisma/`, `tests/` ou configuração. O **código executável de `main` e de produção é equivalente** enquanto isso continuar sendo verdade, então **nenhum deploy é necessário só para alinhar SHA**. Auto-deploy continua **OFF**: push para `main` **não** é deploy. |
+| **Release executável em produção** | **`630e336d56e15f5a2986b9212588a17aec8476c5`** — deploy `dep-da1j42m417fc73ajgu00`, **LIVE** desde **2026-08-17T16:10:30Z**. **Este é o único SHA fixo desta tabela**, e ele só muda quando houver um deploy novo. |
+| Release anterior | `ed1c29f42045bb2097570347882b9618e232902d`, deploy `dep-da13bts9v7es73ag89pg` — **`deactivated`**, substituído em 2026-08-17. Continua citado adiante como **histórico**: foi ele que publicou a Celebração de Venda e recebeu os gates humanos daquele ciclo. **Não é mais o que roda.** |
+| Estado do Git | A `main` contém **commits documentais posteriores** ao release executável — inclusive esta própria reconciliação. O SHA corrente dela **não é registrado aqui de propósito** — consulte `git rev-parse main` ou o GitHub. Um SHA de `main` escrito neste documento se autoinvalida no próximo commit de documentação, que foi exatamente o defeito que esta linha existe para não repetir. |
+| ℹ️ **A divergência é só documental** | Tudo que vier depois de `630e336` na `main` é **documentação** — nenhuma linha de `src/`, `prisma/`, `tests/` ou configuração. O **código executável de `main` e de produção é equivalente** enquanto isso continuar sendo verdade, então **nenhum deploy é necessário só para alinhar SHA**. Auto-deploy continua **OFF**: push para `main` **não** é deploy. |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
-| Data do handoff | 2026-08-16 |
+| Data do handoff | 2026-08-17 |
 | Go-live original da v1 | `adabe2dfe8f442826fa9006aa12c10ab248c83b6`, em 2026-08-14 (histórico) |
 
 ## Estado executivo
@@ -33,6 +34,61 @@
 > números de abertura.
 >
 > A **F5 — Refinamentos** continua **futura** e **não foi iniciada**.
+
+## Microajuste de precisão do VGV — PUBLICADO (release `630e336`)
+
+Último ciclo publicado, e o mais recente do projeto. A decisão durável é a **DEC-069**.
+
+**O defeito.** A partir de `R$ 100 milhões` a compactação monetária largava a casa
+decimal, e a resolução da parede virava **um milhão inteiro**: `100.000.000,00` e
+`100.450.000,00` saíam os dois como `R$ 100 mi`. Como o **VGV acumulado** é o único número
+da tela que cresce por soma lenta — saldo histórico mais as vendas posteriores ao corte
+(DEC-036) —, uma venda real de algumas centenas de milhares somava certo no núcleo e
+**sumia na exibição**, e o painel parecia travado no saldo histórico.
+
+**O ajuste.** A unidade `mi` passa a conservar **uma casa decimal em qualquer magnitude**
+(`R$ 100,0 mi`, `R$ 100,1 mi`, `R$ 431,0 mi`). A unidade `bi` **preserva a política
+anterior** — uma casa abaixo de 100 na unidade, nenhuma de 100 para cima. A promoção
+`mi → bi` passa a ocorrer quando o arredondamento alcançaria `1000,0 mi`, e não mais em
+999,5 mi, que agora é exibível como tal; o invariante "a tela nunca mostra `1000 mi`"
+continua valendo.
+
+**O que NÃO mudou.** A mudança é **exclusivamente de apresentação**. A aritmética
+monetária segue em `bigint` exato, sem `Number` nem ponto flutuante; `src/lib/metricas.ts`
+e `src/lib/metricas-prisma.ts` **não foram tocados** — nenhuma fórmula, filtro, janela ou
+regra de `dataCorte`. **Sem migration, sem schema, sem alteração de dado.** O pre-deploy
+confirmou: `8 migrations found` · `No pending migrations to apply.`
+
+**Diagnóstico que originou o ciclo.** A cadeia
+`saldo histórico → metricas → metricas-prisma → apresentação → componente` foi reproduzida
+ponta a ponta e mostrou o valor **correto no núcleo** (`100000000.00 + 5000000.00 =
+105000000.00`), com a perda ocorrendo **só na compactação visual**. Nenhum defeito de
+cálculo foi encontrado, e nenhum foi corrigido.
+
+**Publicação.** Release **`630e336d56e15f5a2986b9212588a17aec8476c5`**, deploy
+**`dep-da1j42m417fc73ajgu00`**, **LIVE** desde **2026-08-17T16:10:30Z**. Auto-deploy
+continua **OFF**; nenhuma configuração do serviço foi alterada.
+
+**Gates registrados antes da publicação:** `npm test` **773/773**, `npx tsc --noEmit`
+exit 0, `npm run lint` exit 0, `git diff --check` exit 0. Os testes da nova política foram
+escritos **antes** da implementação e observados falhando pela razão esperada.
+
+**Verificações pós-deploy (HTTP real, read-only):** `/` → 307 `/admin`; `/login` → 200;
+`/admin` → 307 `/login?proximo=%2Fadmin`; `/painel/<token-inválido>` → 404;
+`/painel/<token-inválido>/celebracao` → 404; `/preview` → 200. O HTML de `/preview`
+servido contém `431,0` e `128,0`, o que comprova que **a build nova é a que está no ar**.
+Logs de startup sem erro (`✓ Ready in 395ms`).
+
+**Limitações deste ciclo — o que NÃO foi provado:**
+
+- **integração local NÃO aprovada**: o PostgreSQL de teste em `127.0.0.1:5433` esteve
+  indisponível durante todo o ciclo, e `npm run test:integracao:painel` **não pôde ser
+  executado**. Isso **não** é PASS, e não deve ser convertido em um;
+- **a Samsung física NÃO foi revalidada** depois deste microajuste. O gate visual da
+  DEC-068 é anterior e não retroage a esta mudança. Ninguém observou a nova precisão na
+  parede do escritório;
+- o que está comprovado é que a **build nova está sendo servida** — não que alguém a viu
+  na TV.
 
 ## Celebração de Venda — IMPLEMENTADA E EM PRODUÇÃO
 
@@ -103,9 +159,13 @@ marca oficial assinando embaixo. Escala em unidades relativas à viewport, como 
 | **T1-R1** | `07b109c` | venda excluída durante a leitura faz a celebração ser descartada, em vez de estourar |
 | **P1-R1** | `ed1c29f` | corrige a prova de `MAINTAIN` que derrubou o primeiro deploy (ver "Incidente" abaixo) |
 
-**Publicação.** Release **`ed1c29f`**, deploy **`dep-da13bts9v7es73ag89pg`**, live desde
-**2026-08-16T22:14:57Z**. Auto-deploy continua **OFF** e a configuração do serviço foi
-restaurada ao original (`npm run db:deploy`) ao final do ciclo.
+**Publicação.** Release **`ed1c29f`**, deploy **`dep-da13bts9v7es73ag89pg`**, live de
+**2026-08-16T22:14:57Z** até **2026-08-17T16:10:30Z**, quando o release `630e336` o
+substituiu. Auto-deploy continua **OFF** e a configuração do serviço foi restaurada ao
+original (`npm run db:deploy`) ao final do ciclo.
+
+*(A Celebração de Venda continua em produção: o release novo não a alterou em nada — ele
+mexe só na compactação monetária do painel. O que mudou é qual deploy a serve.)*
 
 **Os dois gates humanos, que são coisas diferentes:**
 
@@ -494,15 +554,16 @@ A **E6 — go-live no Render + smoke público — está CONCLUÍDA**.
 
 ## A ENTREGA V1 ESTÁ CONCLUÍDA E EM PRODUÇÃO
 
-O release em produção é hoje o **`ed1c29f`** (ver Identificação), em
+O release em produção é hoje o **`630e336`** (ver Identificação), em
 `https://dashboard-casalouzada.onrender.com`. **Nenhuma feature da v1 continua
 pendente**, as **oito migrations estão aplicadas em produção** — as seis da v1 mais as
 duas da Celebração de Venda — e a **credencial exposta na P1 foi rotacionada e revogada**
 antes do go-live. O painel da TV fica em
 `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>`.
 
-A v1 foi ao ar no `adabe2d` e chegou ao `25e62b5` pelas correções da auditoria S1; o
-release atual é posterior aos dois, pela publicação da celebração.
+A v1 foi ao ar no `adabe2d` e chegou ao `25e62b5` pelas correções da auditoria S1, depois
+ao `ed1c29f` pela publicação da celebração; o release atual é posterior aos três, pelo
+microajuste de precisão monetária do painel (DEC-069) — ver a seção logo abaixo.
 
 O go-live original foi o `adabe2d`, em 2026-08-14. O release atual é posterior porque a
 **auditoria de segurança S1** entregou correções em produção — primeiro os quatro
@@ -682,6 +743,7 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 | Auditoria S1 — SEC-001 a SEC-004 | **Concluída** | corrigidos e verificados em produção; 6 migrations |
 | Hardening S1 — SEC-005, SEC-006 e SEC-009 | **Concluída** | encerrados no release de então, `25e62b5` |
 | **Celebração de Venda** | **Concluída e em produção** | release `ed1c29f`; gate humano aprovado |
+| **Microajuste de precisão do VGV** | **Concluído e em produção** | release `630e336` (DEC-069); sem gate visual na Samsung |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
