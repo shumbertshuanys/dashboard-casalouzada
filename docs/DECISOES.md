@@ -2289,3 +2289,90 @@ Isso **não** torna a decisão irreversível: os itens não medidos acima contin
 medidos, e se uma incompatibilidade real aparecer no uso, a cláusula de reabertura desta
 decisão vale como sempre valeu.
 **decisão registrada — F4.5A a F4.5E concluídas; F4.5 e F4 encerradas**
+
+---
+
+## Painel — precisão monetária revisada
+
+### DEC-069 — A unidade `mi` conserva a casa decimal em qualquer magnitude
+
+**Decisão.** A política de dinheiro compacto da **DEC-043** continua valendo integralmente,
+**exceto** nos seus itens **4** (precisão por magnitude) e **6** (reavaliação da magnitude
+depois do arredondamento), que esta decisão substitui. A DEC-043 **não é reescrita**: ela
+permanece no arquivo como registro do que se decidiu na F3.4 e do porquê.
+
+O que passa a valer no lugar dos dois itens:
+
+4. **precisão**: enquanto a unidade exibida for `mi`, há **sempre uma casa decimal**,
+   qualquer que seja a magnitude. Em `bi`, a política da DEC-043 continua **intacta** —
+   abaixo de 100 na unidade, uma casa decimal; de 100 para cima, nenhuma;
+6. depois de arredondar, a magnitude continua sendo **reavaliada**, e a promoção de `mi`
+   para `bi` acontece quando o arredondamento em `mi` **alcançaria `1000,0 mi`**. A
+   promoção interna do bilhão — perder a casa decimal ao chegar a `100,0 bi` — segue como
+   estava.
+
+Exemplos que fixam a regra:
+
+| Valor | Saída |
+|---|---|
+| `42500000.00` | `R$ 42,5 mi` |
+| `100000000.00` | `R$ 100,0 mi` |
+| `100100000.00` | `R$ 100,1 mi` |
+| `431000000.00` | `R$ 431,0 mi` |
+| `999500000.00` | `R$ 999,5 mi` |
+| `999950000.00` | `R$ 1,0 bi` |
+| `128000000000.00` | `R$ 128 bi` |
+
+Os itens **1, 2, 3, 5, 7 e 8** da DEC-043 continuam **vigentes e inalterados**: entrada em
+string decimal canônica, nada de `Number` ou ponto flutuante, `mi` abaixo de 1 bilhão e
+`bi` a partir dele, arredondamento meio-para-cima exato em `bigint`, `R$ 0,0 mi` para o
+zero exato e `R$ < 0,1 mi` para o positivo que a escala levaria a zero.
+
+**Motivo.** O motivo é operacional e concreto. O **VGV acumulado** é o único número da
+tela que cresce por **soma lenta**: saldo histórico mais as vendas cadastradas depois do
+corte (DEC-036). O escritório passou a operar com esse acumulado na casa das **centenas de
+milhão**, e ali a regra antiga zerava a casa decimal — a resolução da parede virava **um
+milhão inteiro**. Uma venda real de algumas centenas de milhares somava corretamente no
+núcleo e **sumia na exibição**: `100.000.000,00` e `100.450.000,00` saíam os dois como
+`R$ 100 mi`, e o painel parecia travado no saldo histórico.
+
+É exatamente o defeito que o item 8 da DEC-043 já impede na ponta de baixo — um valor
+positivo não pode sair da tela idêntico a "não vendeu nada" —, repetido na ponta de cima.
+A mesma disciplina da DEC-014 aplicada à outra extremidade da escala.
+
+Em `bi` o problema **não existe**, e por isso a política de lá não foi tocada: nenhum
+número do painel chega ao bilhão por incremento de venda, e a assimetria entre as duas
+unidades é deliberada em vez de esquecida.
+
+A mudança do corte `mi → bi` é **consequência necessária**, não escolha independente. Com
+zero casas decimais, `999,5 mi` só podia ser desenhado como `1000 mi`, e era isso que
+forçava a promoção antecipada para `1,0 bi`. Com a casa decimal preservada, `999,5 mi` é um
+número exibível e correto, e o corte se desloca para onde sempre pertenceu: o
+arredondamento que alcançaria `1000,0 mi`. O invariante da DEC-043 — **a tela nunca mostra
+`1000 mi`** — continua valendo.
+
+**Impacto.** Isto é **exclusivamente apresentação**. A aritmética monetária **não mudou em
+nenhum ponto**: `paraCentavos`, `escalar`, `texto` e `compor` seguem em `bigint` exato, sem
+`Number`, `parseFloat` nem ponto flutuante. `src/lib/metricas.ts` e
+`src/lib/metricas-prisma.ts` **não foram tocados** — nenhuma fórmula, nenhum filtro,
+nenhuma janela, nenhuma regra de `dataCorte`. Não houve migration, alteração de schema nem
+de dado. O que mudou é quantos dígitos a parede mostra.
+
+`formatarDinheiroComposto` e `formatarDinheiroTexto` continuam derivando do mesmo algoritmo
+privado, então não há dois caminhos que possam divergir. Ausência segue sendo `—` sem
+moeda, e não se confunde com `< 0,1`.
+
+**Prova.** `tests/apresentacao-painel.test.ts` — o bloco
+`` dinheiro — `mi` mantém a casa decimal em qualquer magnitude `` cobre os alvos e afirma
+que um incremento de R$ 100 mil é visível na faixa dos 100 milhões; o bloco
+`dinheiro — a precisão é da unidade, não da magnitude` contrasta `mi` com `bi`; e
+`dinheiro — promoção de milhão para bilhão` fixa a fronteira nova em `999,95 mi`, com
+`999.949.999,99` ainda em `mi`. Os testes foram escritos **antes** da implementação e
+observados falhando por esta razão.
+
+**Fonte.** `src/lib/apresentacao-painel.ts` (`magnitudeDe` e `promocao`);
+`tests/apresentacao-painel.test.ts`; `src/lib/mock-painel.ts`, reconciliado com a política
+nova. Diagnóstico que originou a decisão: reprodução da cadeia
+`saldo histórico → metricas → metricas-prisma → apresentação → componente`, que mostrou o
+valor correto no núcleo e a perda apenas na compactação visual.
+**implementada localmente — não publicada neste ciclo**

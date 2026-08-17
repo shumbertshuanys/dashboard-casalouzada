@@ -1341,7 +1341,7 @@ sozinha. O que continua não existindo:
 | `EstadoLeitura` / `INDISPONIVEL` | **existe** no contrato de leitura (DEC-042) | F3.3 feita |
 | `src/lib/apresentacao-painel.ts` | **existe** — shape de apresentação | F3.4 feita |
 | `criarApresentacaoPainel(resultado, agora)` | **existe** | F3.4 feita |
-| Formatação de moeda `mi`/`bi` e contagens | **existe** no shape (DEC-043) | F3.4 feita |
+| Formatação de moeda `mi`/`bi` e contagens | **existe** no shape (DEC-043, precisão revista pela DEC-069) | F3.4 feita |
 | Tradução dos estados para `—` | **existe** no shape | F3.4 feita |
 | `/painel/[token]` ligado aos dados reais | **existe** | F3.5 feita |
 | `PainelVisual` compartilhado com `/preview` | **existe** | F3.5 feita |
@@ -1576,7 +1576,7 @@ alterando o mock e os três componentes do painel. **Nenhuma linha de
 - rótulo do período: mês civil corrente em São Paulo, por `mesCorrente` — "agosto de
   2026";
 - contagens em pt-BR, com ponto de milhar e sem `Intl`;
-- dinheiro compacto e exato (DEC-043);
+- dinheiro compacto e exato (DEC-043, precisão revista pela DEC-069);
 - **nada disso chega à tela ainda**: a rota real não consome esta camada.
 
 #### Estados no shape
@@ -1601,14 +1601,23 @@ faria a tela anunciar "mês sem dados" para um problema que é de cadastro.
 
 #### Dinheiro compacto
 
-Política registrada na DEC-043: string decimal canônica na entrada, centavos em
-`bigint` e texto na saída — nunca `Number` nem ponto flutuante. A magnitude inicial usa
-`mi` abaixo de 1 bilhão e `bi` a partir de 1 bilhão; abaixo de 100 na unidade, uma casa
-decimal, e de 100 para cima, nenhuma. Depois do half-up a magnitude é **reavaliada**, e
-pode haver promoção para a faixa seguinte (99,95 mi → `R$ 100 mi`; 999,5 mi →
-`R$ 1,0 bi`). Zero exato é `R$ 0,0 mi`; um valor **positivo** que o arredondamento
-levaria a zero sai como `R$ < 0,1 mi`, para não ficar visualmente idêntico a quem não
-vendeu nada.
+Política registrada na DEC-043 e **revista pela DEC-069** na parte da precisão: string
+decimal canônica na entrada, centavos em `bigint` e texto na saída — nunca `Number` nem
+ponto flutuante. A magnitude inicial usa `mi` abaixo de 1 bilhão e `bi` a partir de 1
+bilhão. Zero exato é `R$ 0,0 mi`; um valor **positivo** que o arredondamento levaria a
+zero sai como `R$ < 0,1 mi`, para não ficar visualmente idêntico a quem não vendeu nada.
+
+**Precisão, na forma vigente (DEC-069).** Enquanto a unidade exibida for `mi`, há
+**sempre uma casa decimal**, qualquer que seja a magnitude — `R$ 42,5 mi`, `R$ 100,0 mi`,
+`R$ 100,1 mi`, `R$ 431,0 mi`, `R$ 999,5 mi`. Em `bi` a regra original continua: abaixo de
+100 na unidade, uma casa decimal; de 100 para cima, nenhuma (`R$ 4,2 bi`, `R$ 128 bi`).
+Depois do half-up a magnitude segue sendo **reavaliada**, e a promoção `mi → bi` acontece
+quando o arredondamento alcançaria `1000,0 mi` (999,95 mi → `R$ 1,0 bi`).
+
+*(Histórico: até a DEC-069 a casa decimal caía de 100 para cima em **qualquer** unidade —
+`R$ 431 mi` —, e a promoção para `bi` disparava já em 999,5 mi. Isso tornava invisível,
+no VGV acumulado, um incremento real de cerca de R$ 100 mil sobre um saldo de centenas de
+milhão. A DEC-043 permanece no arquivo como registro daquela decisão.)*
 
 ### F3.5 — painel real ligado aos dados · concluída
 

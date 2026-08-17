@@ -80,8 +80,8 @@ describe("contagens", () => {
 describe("dinheiro — valores do protótipo", () => {
   const casos: [string, string][] = [
     ["4200000000.00", "R$ 4,2 bi"],
-    ["431000000.00", "R$ 431 mi"],
-    ["128000000.00", "R$ 128 mi"],
+    ["431000000.00", "R$ 431,0 mi"],
+    ["128000000.00", "R$ 128,0 mi"],
     ["42500000.00", "R$ 42,5 mi"],
     ["4200000.00", "R$ 4,2 mi"],
     ["900000.00", "R$ 0,9 mi"],
@@ -131,27 +131,72 @@ describe("dinheiro — arredondamento meio-para-cima", () => {
   });
 });
 
-describe("dinheiro — a precisão muda com a magnitude", () => {
-  it("abaixo de 100 na unidade, uma casa decimal", () => {
+describe("dinheiro — a precisão é da unidade, não da magnitude", () => {
+  it("em mi, uma casa decimal abaixo de 100", () => {
     assert.equal(formatarDinheiroTexto("99940000.00"), "R$ 99,9 mi");
   });
 
-  it("o arredondamento que alcança 100 perde a casa decimal", () => {
-    assert.equal(formatarDinheiroTexto("99950000.00"), "R$ 100 mi");
+  it("em mi, a casa decimal continua de 100 para cima", () => {
+    assert.equal(formatarDinheiroTexto("128000000.00"), "R$ 128,0 mi");
   });
 
-  it("de 100 para cima, nenhuma casa decimal", () => {
-    assert.equal(formatarDinheiroTexto("128000000.00"), "R$ 128 mi");
+  it("em bi, de 100 para cima não há casa decimal", () => {
+    assert.equal(formatarDinheiroTexto("128000000000.00"), "R$ 128 bi");
+  });
+});
+
+describe("dinheiro — `mi` mantém a casa decimal em qualquer magnitude", () => {
+  /**
+   * O acumulado do escritório vive na casa das centenas de milhão, e é o único
+   * número da tela que cresce por soma lenta: saldo histórico mais as vendas que
+   * vieram depois do corte. Sem casa decimal a resolução da faixa `mi` seria de
+   * um milhão inteiro, e uma venda real de algumas centenas de milhares sairia da
+   * tela idêntica a "não vendeu nada" — o mesmo defeito que `< 0,1` já resolve na
+   * ponta de baixo, repetido na ponta de cima.
+   */
+  const casos: [string, string][] = [
+    ["100000000.00", "R$ 100,0 mi"],
+    ["100100000.00", "R$ 100,1 mi"],
+    ["100450000.00", "R$ 100,5 mi"],
+    ["100500000.00", "R$ 100,5 mi"],
+    ["105000000.00", "R$ 105,0 mi"],
+    ["128000000.00", "R$ 128,0 mi"],
+    ["431000000.00", "R$ 431,0 mi"],
+  ];
+
+  for (const [canonico, esperado] of casos) {
+    it(`${canonico} → ${esperado}`, () => {
+      assert.equal(formatarDinheiroTexto(canonico), esperado);
+    });
+  }
+
+  it("um incremento de R$ 100 mil é visível na faixa dos 100 milhões", () => {
+    // O caso que originou o ajuste: saldo de 100 mi mais uma venda posterior.
+    assert.notEqual(formatarDinheiroTexto("100000000.00"), formatarDinheiroTexto("100100000.00"));
+  });
+
+  it("o arredondamento que alcança 100 mi não perde mais a casa decimal", () => {
+    assert.equal(formatarDinheiroTexto("99950000.00"), "R$ 100,0 mi");
   });
 });
 
 describe("dinheiro — promoção de milhão para bilhão", () => {
   it("logo abaixo do corte continua em mi", () => {
-    assert.equal(formatarDinheiroTexto("999499999.99"), "R$ 999 mi");
+    assert.equal(formatarDinheiroTexto("999499999.99"), "R$ 999,5 mi");
   });
 
-  it("no corte vira 1,0 bi, e não 1000 mi", () => {
-    assert.equal(formatarDinheiroTexto("999500000.00"), "R$ 1,0 bi");
+  it("999,9 mi ainda cabe em mi, com a casa decimal", () => {
+    assert.equal(formatarDinheiroTexto("999900000.00"), "R$ 999,9 mi");
+  });
+
+  it("no corte vira 1,0 bi, e não 1000,0 mi", () => {
+    // Com uma casa decimal em `mi`, o corte é o arredondamento que alcançaria
+    // `1000,0 mi` — e não mais `999,5`, que agora é exibível como tal.
+    assert.equal(formatarDinheiroTexto("999950000.00"), "R$ 1,0 bi");
+  });
+
+  it("logo abaixo desse corte, ainda é mi", () => {
+    assert.equal(formatarDinheiroTexto("999949999.99"), "R$ 999,9 mi");
   });
 
   it("um bilhão exato é 1,0 bi", () => {
@@ -444,8 +489,8 @@ describe("caminho completo — tudo OK", () => {
 
   it("as três faixas de VGV saem formatadas", () => {
     assert.deepEqual(apresentar().vgvPeriodos, [
-      { rotulo: "Anual", valor: { prefixo: "R$", valor: "431", sufixo: "mi" }, estado: "OK" },
-      { rotulo: "Trimestral", valor: { prefixo: "R$", valor: "128", sufixo: "mi" }, estado: "OK" },
+      { rotulo: "Anual", valor: { prefixo: "R$", valor: "431,0", sufixo: "mi" }, estado: "OK" },
+      { rotulo: "Trimestral", valor: { prefixo: "R$", valor: "128,0", sufixo: "mi" }, estado: "OK" },
       { rotulo: "Mensal", valor: { prefixo: "R$", valor: "42,5", sufixo: "mi" }, estado: "OK" },
     ]);
   });
@@ -698,8 +743,8 @@ describe("mês sem dados", () => {
 
   it("anual e trimestral seguem reais; só o mensal vira traço", () => {
     assert.deepEqual(apresentar(semDados()).vgvPeriodos, [
-      { rotulo: "Anual", valor: { prefixo: "R$", valor: "431", sufixo: "mi" }, estado: "OK" },
-      { rotulo: "Trimestral", valor: { prefixo: "R$", valor: "128", sufixo: "mi" }, estado: "OK" },
+      { rotulo: "Anual", valor: { prefixo: "R$", valor: "431,0", sufixo: "mi" }, estado: "OK" },
+      { rotulo: "Trimestral", valor: { prefixo: "R$", valor: "128,0", sufixo: "mi" }, estado: "OK" },
       { rotulo: "Mensal", valor: { valor: TRACO }, estado: "SEM_DADOS" },
     ]);
   });
@@ -954,7 +999,7 @@ describe("precisão do saldo vira qualificador (DEC-054)", () => {
     const big = painel.bigNumbers[1];
     assert.equal(big.qualificador, "+ de");
     // O prefixo continua sendo só a moeda: os dois papéis não se misturam.
-    assert.deepEqual(big.numero, { prefixo: "R$", valor: "800", sufixo: "mi" });
+    assert.deepEqual(big.numero, { prefixo: "R$", valor: "800,0", sufixo: "mi" });
   });
 
   it("saldo MINIMO_CONHECIDO qualifica as avaliações", () => {

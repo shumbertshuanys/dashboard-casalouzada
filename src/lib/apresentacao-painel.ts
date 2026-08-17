@@ -242,6 +242,8 @@ const DOIS = BigInt(2);
 const DEZ = BigInt(10);
 const CEM = BigInt(100);
 const MIL = BigInt(1000);
+/** `1000,0` na escala de uma casa — o ponto em que `mi` vira `bi`. */
+const DEZ_MIL = BigInt(10000);
 const CENTAVOS_POR_MILHAO = BigInt("100000000");
 const CENTAVOS_POR_BILHAO = BigInt("100000000000");
 
@@ -268,8 +270,17 @@ type Magnitude = { unidade: bigint; sufixo: Sufixo; casas: number };
  *
  * - a partir de 1 bilhão o número sai em `bi`; abaixo disso sempre em `mi`,
  *   inclusive quando é menor que um milhão (`R$ 0,9 mi`);
- * - abaixo de 100 na unidade escolhida, uma casa decimal; de 100 para cima,
- *   nenhuma — `R$ 42,5 mi` e `R$ 431 mi`.
+ * - em `mi` a casa decimal **nunca** cai — `R$ 42,5 mi` e `R$ 431,0 mi`;
+ * - em `bi`, abaixo de 100 na unidade há uma casa decimal; de 100 para cima,
+ *   nenhuma — `R$ 4,2 bi` e `R$ 128 bi`.
+ *
+ * A assimetria entre as duas unidades é deliberada. O VGV acumulado mora na
+ * faixa `mi` e é o único número da tela que cresce por soma lenta — saldo
+ * histórico mais as vendas posteriores ao corte. Sem a casa decimal a resolução
+ * ali seria de um milhão inteiro, e uma venda real de algumas centenas de
+ * milhares sairia da parede idêntica a "não vendeu nada": o mesmo defeito que
+ * `< 0,1` já impede na ponta de baixo, repetido na ponta de cima. Em `bi` o
+ * problema não existe — nenhum número do painel chega lá por incremento.
  */
 function magnitudeDe(centavos: bigint): Magnitude {
   const bilhao = centavos >= CENTAVOS_POR_BILHAO;
@@ -277,7 +288,7 @@ function magnitudeDe(centavos: bigint): Magnitude {
   return {
     unidade,
     sufixo: bilhao ? "bi" : "mi",
-    casas: centavos >= CEM * unidade ? 0 : 1,
+    casas: bilhao && centavos >= CEM * unidade ? 0 : 1,
   };
 }
 
@@ -298,18 +309,22 @@ function escalar(centavos: bigint, { unidade, casas }: Magnitude): bigint {
  * A magnitude que o valor **já arredondado** pede, ou `null` se a atual serve.
  *
  * Arredondar pode empurrar o número para a faixa seguinte, e aí a regra escolhida
- * antes deixa de valer: `99,95 mi` vira `100,0 mi`, que pela regra de precisão é
- * `100 mi`; e `999,5 mi` vira `1000 mi`, que é `1,0 bi`. Sem esta segunda
- * passada a tela mostraria `100,0 mi` e `1000 mi`.
+ * antes deixa de valer: `999,95 mi` vira `1000,0 mi`, que é `1,0 bi`; e
+ * `99,95 bi` vira `100,0 bi`, que pela regra de precisão do bilhão é `100 bi`.
+ * Sem esta segunda passada a tela mostraria `1000,0 mi` e `100,0 bi`.
  */
 function promocao(atual: Magnitude, escalado: bigint): Magnitude | null {
-  if (atual.casas === 1 && escalado >= MIL) {
-    // Chegou a 100 na unidade: daqui para cima não há casa decimal.
-    return { unidade: atual.unidade, sufixo: atual.sufixo, casas: 0 };
+  if (atual.sufixo === "mi") {
+    // Mil milhões são um bilhão. Como `mi` conserva a casa decimal, o corte é o
+    // arredondamento que alcançaria `1000,0 mi` — e não `999,5`, que agora é um
+    // número exibível em vez de um empurrão para a unidade de cima.
+    return escalado >= DEZ_MIL
+      ? { unidade: CENTAVOS_POR_BILHAO, sufixo: "bi", casas: 1 }
+      : null;
   }
-  if (atual.casas === 0 && atual.sufixo === "mi" && escalado >= MIL) {
-    // Mil milhões são um bilhão, e um bilhão volta a ter casa decimal.
-    return { unidade: CENTAVOS_POR_BILHAO, sufixo: "bi", casas: 1 };
+  if (atual.casas === 1 && escalado >= MIL) {
+    // Chegou a 100 na unidade `bi`: daqui para cima não há casa decimal.
+    return { unidade: atual.unidade, sufixo: atual.sufixo, casas: 0 };
   }
   return null;
 }

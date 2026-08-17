@@ -80,9 +80,12 @@ export const operacionais: AreaOperacional = {
   },
 };
 
+// A casa decimal acompanha a unidade `mi` em qualquer magnitude (DEC-069): o
+// preview desenha o mesmo texto que o formatador real produziria para estes
+// valores, senão o protótipo mostraria uma precisão que a tela de verdade não tem.
 export const vgvPeriodos: VgvPeriodo[] = [
-  { rotulo: "Anual", valor: { prefixo: "R$", valor: "431", sufixo: "mi" }, estado: "OK" },
-  { rotulo: "Trimestral", valor: { prefixo: "R$", valor: "128", sufixo: "mi" }, estado: "OK" },
+  { rotulo: "Anual", valor: { prefixo: "R$", valor: "431,0", sufixo: "mi" }, estado: "OK" },
+  { rotulo: "Trimestral", valor: { prefixo: "R$", valor: "128,0", sufixo: "mi" }, estado: "OK" },
   { rotulo: "Mensal", valor: { prefixo: "R$", valor: "42,5", sufixo: "mi" }, estado: "OK" },
 ];
 
