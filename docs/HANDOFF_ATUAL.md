@@ -8,10 +8,10 @@
 | Branch | `main` |
 | **Release executável em produção** | **`46432543f322076d2c9b4b69eb658a92fd796e82`** — deploy `dep-da1l5pu417fc73ek9llg`, **LIVE** desde **2026-08-17T18:31:11Z**. **Este é o único SHA fixo desta tabela**, e ele só muda quando houver um deploy novo. |
 | Release anterior | `630e336d56e15f5a2986b9212588a17aec8476c5`, deploy `dep-da1j42m417fc73ajgu00` — **`deactivated`**, substituído em 2026-08-17T18:31Z. Foi ele que publicou o microajuste de precisão (DEC-069), e continua citado adiante como **histórico**. Antes dele, `ed1c29f…` (`dep-da13bts9v7es73ag89pg`) publicou a Celebração de Venda; também **deactivated**. **Nenhum dos dois é o que roda.** |
-| Estado do Git | A `main` contém, além de commits documentais, **o commit de código `8382074`** — a feature de VGV histórico mensal —, todos posteriores ao release executável. O SHA **corrente** dela **não é registrado aqui de propósito** — consulte `git rev-parse main` ou o GitHub. Um SHA de topo escrito neste documento se autoinvalida no próximo commit de documentação, que foi exatamente o defeito que esta linha existe para não repetir. (`8382074` é seguro de citar: é o commit da feature, e ele não se move.) |
-| ✅ **`main` e produção voltaram a ser equivalentes** | A feature de **VGV histórico mensal** (DEC-070) foi **publicada** em 2026-08-17T18:31Z. Entre 8382074 e esse deploy houve algumas horas de **divergência executável** — a primeira do projeto —, e ela está encerrada. O que vier depois de `46432543` na `main` volta a ser documentação, até o próximo commit de código. |
+| Estado do Git | A `main` contém, além de commits documentais, **dois commits de código** posteriores ao release executável: **`8382074`** — a feature de VGV histórico mensal, **já publicada** dentro de `46432543` — e **`bd563f0`** — a rotação das listas operacionais (DEC-071), **ainda não publicada**. O SHA **corrente** dela **não é registrado aqui de propósito** — consulte `git rev-parse main` ou o GitHub. Um SHA de topo escrito neste documento se autoinvalida no próximo commit de documentação, que foi exatamente o defeito que esta linha existe para não repetir. (`8382074` é seguro de citar: é o commit da feature, e ele não se move.) |
+| ⚠️ **`main` e produção estão executavelmente divergentes** | A `main` contém a **rotação das listas operacionais** (DEC-071, `bd563f0`), que **não** está publicada — a divergência começou no push desse commit e só se encerra com um deploy. *(A divergência anterior, do **VGV histórico mensal** (DEC-070) entre `8382074` e o deploy de `46432543` em 2026-08-17T18:31Z — a primeira do projeto —, essa sim está encerrada: a DEC-070 está em produção.)* |
 | **Migrations em produção** | **9 aplicadas.** A nona, `20260817170000_vgv_historico_mensal`, entrou no pre-deploy de `46432543` — `prisma migrate deploy` encontrou 9 no repositório e aplicou exatamente essa. |
-| ⚠️ **Trabalho local não commitado** | A **rotação das listas operacionais** (DEC-071) existe **apenas na working tree**, sobre `982c482` — 13 arquivos modificados e 1 novo (`tests/faixa-superior-ui.test.ts`), somando os 14 caminhos da feature e da documentação. Não está na `main`, não está em produção e não tem SHA. Ver a seção própria adiante. |
+| ⚠️ **Commit de código não publicado** | A **rotação das listas operacionais** (DEC-071) está **na `main`** desde o commit **`bd563f0bbee7ee06fd5c3d64b71114fe7bdb8747`** — 14 caminhos, entre implementação, testes e documentação. Ela **não está em produção**: o release executável continua sendo `46432543`, anterior a ela. Ver a seção própria adiante. |
 | ℹ️ **Auto-deploy continua OFF** | Push para `main` **não** é deploy: publicar exige disparo manual. *(Foi isso que criou a janela de divergência executável entre o fast-forward de `8382074` e o deploy de `46432543`, no mesmo dia — registro do que aconteceu, não pendência.)* |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
@@ -50,14 +50,24 @@
 >
 > A **F5 — Refinamentos** continua **futura** e **não foi iniciada**.
 
-## Rotação das listas operacionais — IMPLEMENTADA LOCALMENTE, NÃO PUBLICADA
+## Rotação das listas operacionais — VERSIONADA EM MAIN, NÃO PUBLICADA
 
-Ciclo mais recente do projeto, e o **único que ainda não está commitado**. A decisão
-durável é a **DEC-071**.
+Ciclo mais recente do projeto, e o **único commit de código ainda não publicado**. A
+decisão durável é a **DEC-071**.
 
-> **Estado.** **NÃO publicada e NÃO commitada.** O trabalho existe apenas na working tree
-> local, sobre `982c482`. Produção continua em `46432543` (ver a tabela de identificação),
-> que **não** contém esta alteração.
+> **Estado.** **VERSIONADA em `main`, NÃO publicada.** Commit
+> **`bd563f0bbee7ee06fd5c3d64b71114fe7bdb8747`**, um só, com os 14 caminhos da feature e da
+> documentação, empurrado para `origin/main` em fast-forward sobre `982c482` — sem merge
+> commit, sem branch intermediária, sem PR.
+>
+> **Produção continua em `46432543`**, que é anterior a este commit e **não** contém a
+> alteração: `main` e produção estão **executavelmente divergentes** neste momento. O
+> auto-deploy segue **OFF**, então o push não publicou nada — publicar exige disparo
+> manual.
+>
+> *(O trabalho nasceu e amadureceu inteiro na working tree, ao longo de vários ciclos de
+> implementação, documentação e recovery do banco de teste, antes de virar este commit
+> único. O histórico abaixo é o daquele percurso.)*
 
 **O defeito.** A Tela B mostra até três propostas em andamento e até três reservas de
 locação. O teto de três era aplicado **duas vezes antes da tela**: `src/lib/metricas.ts`
@@ -89,7 +99,7 @@ três a cada aparição:
 ranking ou recorte de período. Sem migration, sem schema, sem alteração de dado, sem Admin.
 Mudou **onde** o corte acontece, não o que é elegível para entrar na lista.
 
-**Arquivos (14 caminhos, nenhum commitado):**
+**Arquivos (os 14 caminhos de `bd563f0`):**
 
 | Origem | Caminhos |
 |---|---|
@@ -152,8 +162,9 @@ de primeira, e o caminho até aqui é parte do registro:
   em paralelo escrevendo enquanto outro tira o retrato. **Não corrigido**, e uma execução
   limpa não prova ausência de corrida.
 
-**O que ainda falta:** commitar, publicar e — se a rotação for observada na parede —
-registrar a validação visual. Nada disso foi feito.
+**O que ainda falta:** **publicar** — disparo manual do deploy, já que o auto-deploy está
+OFF — e, depois, se a rotação for observada na parede, registrar a validação visual.
+Nenhuma das duas foi feita. O commit, esse já existe (`bd563f0`).
 
 ## VGV histórico mensal — PUBLICADO (release `46432543`)
 
