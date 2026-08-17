@@ -40,15 +40,16 @@ proprietário em produção** em 2026-08-16, no release **`ed1c29f`** — ver a 
 abaixo do bloco da v1.
 
 Em 2026-08-17 vieram, nesta ordem: o **microajuste de precisão do VGV** (DEC-069),
-**publicado** no release `630e336`; e o **VGV histórico mensal** (DEC-070), desenvolvido na
-branch `feat/vgv-historico-mensal` e **integrado na `main`** pelo commit `8382074` — mas
-**ainda não publicado**. Produção continua em `630e336`, então **`main` e produção estão
-executavelmente divergentes** neste momento; alinhá-las exige deploy manual.
+publicado no release `630e336`; e o **VGV histórico mensal** (DEC-070), desenvolvido na
+branch `feat/vgv-historico-mensal`, integrado na `main` pelo commit `8382074` e
+**publicado** no release **`46432543`**, com a migration aplicada no pre-deploy. Falta
+apenas **cadastrar os sete valores reais** de jan–jul/2026 pelo Admin — a etapa operacional
+**O3**.
 
 ## A Entrega v1 está CONCLUÍDA e EM PRODUÇÃO
 
-O release em produção é hoje o **`630e336`** — que sucedeu o `ed1c29f` em 2026-08-17, ao
-publicar o microajuste de precisão monetária do painel (DEC-069) —, em
+O release em produção é hoje o **`46432543`** — que sucedeu o `630e336` em 2026-08-17, ao
+publicar o VGV histórico mensal (DEC-070) —, em
 `https://dashboard-casalouzada.onrender.com`, num Web Service do Render (região Virginia,
 plano Starter, Node 24.19.0, auto-deploy **OFF**). As **oito migrations estão aplicadas**
 no banco de produção — as seis da v1 mais as duas da Celebração de Venda — e a
@@ -828,7 +829,7 @@ Não são fases técnicas: correm ao lado do roadmap e dependem do proprietário
 |---|---|---|
 | O1 | reconciliação do dossiê secreto do proprietário contra o estado real de Render, Supabase e administração — **o dossiê fica fora do Git e nenhum valor secreto entra no repositório** | **concluída** — auditoria, rotação da senha exposta, contrato de conexões (DEC-066) e reconciliação do cofre e do `.env` local |
 | O2 | carga operacional inicial — cadastrar o `saldo_historico` real pela administração, **sem inventar valor** | **parcialmente concluída** — `AVALIACAO_GOOGLE` cadastrado; falta `VENDA` |
-| O3 | cadastrar os sete VGVs consolidados de **jan–jul/2026** em `/admin/vgv-historico`, depois da publicação da feature (DEC-070) | **pendente** — a feature está **integrada em `main` e não publicada**; depende do deploy, que aplica a migration. Os valores são do proprietário e **nenhum é inventado** |
+| O3 | cadastrar os sete VGVs consolidados de **jan–jul/2026** em `/admin/vgv-historico` | **pendente e desbloqueada** — a feature está **publicada** (release `46432543`) e a tabela existe e está vazia. Os valores são do proprietário e **nenhum é inventado** |
 
 O detalhamento delas está em `docs/HANDOFF_ATUAL.md`, em "Etapas operacionais".
 

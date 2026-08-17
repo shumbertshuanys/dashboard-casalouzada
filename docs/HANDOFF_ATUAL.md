@@ -6,12 +6,12 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| **Release executável em produção** | **`630e336d56e15f5a2986b9212588a17aec8476c5`** — deploy `dep-da1j42m417fc73ajgu00`, **LIVE** desde **2026-08-17T16:10:30Z**. **Este é o único SHA fixo desta tabela**, e ele só muda quando houver um deploy novo. |
-| Release anterior | `ed1c29f42045bb2097570347882b9618e232902d`, deploy `dep-da13bts9v7es73ag89pg` — **`deactivated`**, substituído em 2026-08-17. Continua citado adiante como **histórico**: foi ele que publicou a Celebração de Venda e recebeu os gates humanos daquele ciclo. **Não é mais o que roda.** |
+| **Release executável em produção** | **`46432543f322076d2c9b4b69eb658a92fd796e82`** — deploy `dep-da1l5pu417fc73ek9llg`, **LIVE** desde **2026-08-17T18:31:11Z**. **Este é o único SHA fixo desta tabela**, e ele só muda quando houver um deploy novo. |
+| Release anterior | `630e336d56e15f5a2986b9212588a17aec8476c5`, deploy `dep-da1j42m417fc73ajgu00` — **`deactivated`**, substituído em 2026-08-17T18:31Z. Foi ele que publicou o microajuste de precisão (DEC-069), e continua citado adiante como **histórico**. Antes dele, `ed1c29f…` (`dep-da13bts9v7es73ag89pg`) publicou a Celebração de Venda; também **deactivated**. **Nenhum dos dois é o que roda.** |
 | Estado do Git | A `main` contém, além de commits documentais, **o commit de código `8382074`** — a feature de VGV histórico mensal —, todos posteriores ao release executável. O SHA **corrente** dela **não é registrado aqui de propósito** — consulte `git rev-parse main` ou o GitHub. Um SHA de topo escrito neste documento se autoinvalida no próximo commit de documentação, que foi exatamente o defeito que esta linha existe para não repetir. (`8382074` é seguro de citar: é o commit da feature, e ele não se move.) |
-| ⚠️ **`main` e produção divergem em CÓDIGO** | A feature de **VGV histórico mensal** (DEC-070) está **integrada na `main`** desde `8382074`, e **não** está em produção. Esta divergência **não é apenas documental**: inclui tabela nova, migration, cálculo, leitura Prisma, validação e Admin. Alinhar as duas exige **deploy manual**, em ciclo próprio. |
-| ⚠️ **Migration pendente em produção** | `20260817170000_vgv_historico_mensal` está no repositório e na `main`; em produção seguem **as 8 anteriores**, e ela **não foi aplicada**. O pre-deploy do serviço (`npm run db:deploy`) a aplicará no próximo deploy. |
-| ℹ️ **Auto-deploy continua OFF** | Push para `main` **não** é deploy — foi isso que impediu a integração de publicar sozinha. *(Até `630e336` valia aqui a regra "a divergência é só documental"; ela **deixou de valer** em 2026-08-17, quando código executável entrou na `main` sem ir para produção.)* |
+| ✅ **`main` e produção voltaram a ser equivalentes** | A feature de **VGV histórico mensal** (DEC-070) foi **publicada** em 2026-08-17T18:31Z. Entre 8382074 e esse deploy houve algumas horas de **divergência executável** — a primeira do projeto —, e ela está encerrada. O que vier depois de `46432543` na `main` volta a ser documentação, até o próximo commit de código. |
+| **Migrations em produção** | **9 aplicadas.** A nona, `20260817170000_vgv_historico_mensal`, entrou no pre-deploy de `46432543` — `prisma migrate deploy` encontrou 9 no repositório e aplicou exatamente essa. |
+| ℹ️ **Auto-deploy continua OFF** | Push para `main` **não** é deploy: publicar exige disparo manual. *(Foi isso que criou a janela de divergência executável entre o fast-forward de `8382074` e o deploy de `46432543`, no mesmo dia — registro do que aconteceu, não pendência.)* |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
 | Data do handoff | 2026-08-17 |
@@ -49,23 +49,27 @@
 >
 > A **F5 — Refinamentos** continua **futura** e **não foi iniciada**.
 
-## VGV histórico mensal — INTEGRADO EM MAIN, NÃO PUBLICADO
+## VGV histórico mensal — PUBLICADO (release `46432543`)
 
 Ciclo mais recente do projeto. A decisão durável é a **DEC-070**.
 
-> **Estado.** **Integrada na `main`**, **não publicada**.
+> **Estado.** **PUBLICADA em produção.** Release `46432543`, deploy
+> `dep-da1l5pu417fc73ek9llg`, **LIVE** desde **2026-08-17T18:31:11Z**.
 >
 > O desenvolvimento inteiro correu na branch **`feat/vgv-historico-mensal`**, onde nasceu o
-> commit **`8382074`** com as sete etapas juntas. Em 2026-08-17 esse commit foi levado para
-> a `main` por **fast-forward** — sem merge commit, sem rebase, sem PR —, e a branch
-> continua existindo apontando para ele.
+> commit **`8382074`** com as sete etapas juntas. Ele foi levado para a `main` por
+> **fast-forward** — sem merge commit, sem rebase, sem PR —, e a branch continua existindo
+> apontando para ele. A publicação saiu de `46432543`, que é `8382074` mais a reconciliação
+> documental daquele momento.
 >
-> **Produção segue em `630e336`, sem uma linha desta feature.** Auto-deploy está OFF, então
-> o push para `main` **não** publicou nada. A migration `20260817170000_vgv_historico_mensal`
-> **não foi aplicada** em produção, e **nenhum dado real de jan–jul/2026 foi cadastrado**.
+> **A migration `20260817170000_vgv_historico_mensal` foi aplicada com sucesso** no
+> pre-deploy: `prisma migrate deploy` encontrou 9 migrations e aplicou exatamente essa,
+> terminando em `Pre-deploy complete!`.
 >
-> A partir daqui `main` e produção estão **executavelmente divergentes** — é a primeira vez
-> no projeto. Alinhá-las é um **deploy manual**, em ciclo próprio.
+> **Nenhum dado real de jan–jul/2026 foi cadastrado.** A tabela existe e está vazia — vazia
+> por construção, não por medição: a migration só cria estrutura, e nada inseriu nela. Ver a
+> ressalva sobre `SELECT` logo abaixo. Cadastrar os sete valores é a etapa operacional
+> **O3**, ainda pendente.
 
 **O problema.** O escritório tem os **totais mensais consolidados** de janeiro a julho de
 2026 e **não tem** as vendas individuais daquele período. Sem uma forma de registrar o
@@ -137,12 +141,26 @@ aquela venda (DEC-070).
 `git diff --check` exit 0. Em cada etapa os testes foram escritos **antes** da
 implementação e observados falhando pela razão esperada.
 
-**O que já aconteceu:** os gates, o commit `8382074` na branch, e a integração em `main`
-por fast-forward.
+**Verificações pós-deploy (HTTP real, read-only):** `/` → 307 `/admin`; `/login` → 200;
+`/admin` → 307 login; `/admin/vgv-historico` e `/admin/vgv-historico/novo` → 307 login, com
+a guarda administrativa ativa; `/painel/<token-inválido>` e `.../celebracao` → 404;
+`/preview` → 200. Startup sem stack trace (`✓ Ready in 474ms`).
 
-**O que ainda falta**, e que este documento não afirma como feito: **publicar** — deploy
-manual do release, com o pre-deploy aplicando a migration — e só então **cadastrar os sete
-valores reais** pelo Admin (etapa operacional **O3** no `PLANO.md`).
+**Prova de que a build nova está servida**, além do status do Render: o manifesto de rotas
+do build lista `/admin/vgv-historico`, `/admin/vgv-historico/novo` e
+`/admin/vgv-historico/[id]/editar` — rotas que não existiam no build de `630e336`. O
+redirect sozinho não serviria de prova, porque a guarda age antes da resolução da rota.
+
+> ⚠️ **O que NÃO foi medido.** Nenhum `SELECT` direto foi executado no banco de produção
+> neste ciclo: não há canal read-only autorizado no ambiente, e improvisar acesso está fora
+> de política. Portanto **não se afirma** ter medido `count(*)`, RLS, policies ou ACL em
+> produção. O que sustenta o estado é indireto e explícito: a migration aplicou com sucesso
+> (e as provas embutidas nela abortariam o pre-deploy se RLS, policy, ownership ou grants
+> estivessem errados), o startup subiu sem erro de `relation`/`permission`, e nada neste
+> ciclo inseriu dado.
+
+**O que ainda falta:** **O3** — cadastrar os sete valores reais pelo Admin, com os números
+que o proprietário fornecer. Nenhum é inventado.
 
 ## Microajuste de precisão do VGV — PUBLICADO (release `630e336`)
 
@@ -175,8 +193,12 @@ ponta a ponta e mostrou o valor **correto no núcleo** (`100000000.00 + 5000000.
 cálculo foi encontrado, e nenhum foi corrigido.
 
 **Publicação.** Release **`630e336d56e15f5a2986b9212588a17aec8476c5`**, deploy
-**`dep-da1j42m417fc73ajgu00`**, **LIVE** desde **2026-08-17T16:10:30Z**. Auto-deploy
-continua **OFF**; nenhuma configuração do serviço foi alterada.
+**`dep-da1j42m417fc73ajgu00`**, live de **2026-08-17T16:10:30Z** até **18:31:11Z**, quando o
+release `46432543` o substituiu. Auto-deploy continua **OFF**; nenhuma configuração do
+serviço foi alterada.
+
+*(O microajuste continua em produção: o release novo não o alterou — o que mudou é qual
+deploy o serve.)*
 
 **Gates registrados antes da publicação:** `npm test` **773/773**, `npx tsc --noEmit`
 exit 0, `npm run lint` exit 0, `git diff --check` exit 0. Os testes da nova política foram
@@ -663,7 +685,7 @@ A **E6 — go-live no Render + smoke público — está CONCLUÍDA**.
 
 ## A ENTREGA V1 ESTÁ CONCLUÍDA E EM PRODUÇÃO
 
-O release em produção é hoje o **`630e336`** (ver Identificação), em
+O release em produção é hoje o **`46432543`** (ver Identificação), em
 `https://dashboard-casalouzada.onrender.com`. **Nenhuma feature da v1 continua
 pendente**, as **oito migrations estão aplicadas em produção** — as seis da v1 mais as
 duas da Celebração de Venda — e a **credencial exposta na P1 foi rotacionada e revogada**
@@ -853,7 +875,7 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 | Hardening S1 — SEC-005, SEC-006 e SEC-009 | **Concluída** | encerrados no release de então, `25e62b5` |
 | **Celebração de Venda** | **Concluída e em produção** | release `ed1c29f`; gate humano aprovado |
 | **Microajuste de precisão do VGV** | **Concluído e em produção** | release `630e336` (DEC-069); sem gate visual na Samsung |
-| **VGV histórico mensal** | **Integrado em `main`, não publicado** | commit `8382074` (DEC-070), nascido em `feat/vgv-historico-mensal` e integrado por fast-forward; **sem deploy**; migration não aplicada em produção; dados reais de jan–jul ainda não cadastrados |
+| **VGV histórico mensal** | **Concluído e em produção** | release `46432543` (DEC-070), deploy `dep-da1l5pu417fc73ek9llg`; migration aplicada; **dados reais de jan–jul ainda não cadastrados — etapa O3** |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
