@@ -2243,7 +2243,9 @@ cabo, e mais um dispositivo para alguém precisar reiniciar.
 necessário**. Os critérios de seleção da DEC-065 não desaparecem: eles migram de "o que
 procurar num candidato" para **"o que medir na Samsung"**, e é isso que a F4.5C faz.
 
-**O que esta decisão NÃO afirma.** Nada além do que foi observado:
+**O que esta decisão NÃO afirma.** Nada além do que foi observado. *(Lista escrita quando
+a decisão foi tomada, e preservada como registro do que se sabia então; o "Estado final"
+adiante diz o que mudou desde aí — e o que **não** mudou.)*
 
 - **não** afirma que a F4.5 está concluída — ela continua em andamento;
 - **não** afirma 3840×2160 a 60 Hz: **resolução e refresh efetivos não foram medidos**;
@@ -2279,5 +2281,11 @@ refresh efetivos (**não se declara 4K60**), viewport, DPR, versão do navegador
 versão do Tizen, Service Worker e Cache Storage na Samsung. Nenhum deles bloqueou o
 aceite; se algum for medido e reprovar, esta decisão é reaberta.
 
-**A condição restante desta decisão é somente o gate final F4.5E.**
-**decisão registrada — F4.5C e F4.5D concluídas; F4.5E pendente**
+**Estado final.** A **F4.5E deu PASS** — aceite explícito do proprietário sobre a cadeia
+de evidência acumulada —, e com ela **a F4.5 e a F4 foram encerradas**. A **Samsung Smart
+TV do escritório está aprovada como plataforma operacional definitiva da v1**.
+
+Isso **não** torna a decisão irreversível: os itens não medidos acima continuam não
+medidos, e se uma incompatibilidade real aparecer no uso, a cláusula de reabertura desta
+decisão vale como sempre valeu.
+**decisão registrada — F4.5A a F4.5E concluídas; F4.5 e F4 encerradas**

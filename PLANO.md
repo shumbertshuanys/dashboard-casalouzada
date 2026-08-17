@@ -8,8 +8,8 @@ desenho pretendido; o estado real do que está construído fica em
 **Fase 3 — Painel** concluídos e publicados. As três camadas do painel existem:
 `src/lib/metricas.ts` calcula (núcleo **puro**), `src/lib/metricas-prisma.ts` lê o
 banco e alimenta esse núcleo, e `src/lib/apresentacao-painel.ts` traduz o resultado
-no que a tela desenha. A **F4 — Identidade e modo TV está em andamento**, com F4.0 a
-F4.4 concluídas: decisões nas DEC-047 a DEC-050, modo TV em `f49f912`, **marca
+no que a tela desenha. A **F4 — Identidade e modo TV está CONCLUÍDA**, com F4.0 a
+F4.5 encerradas: decisões nas DEC-047 a DEC-050, modo TV em `f49f912`, **marca
 oficial aplicada** em `7e0e35d`, **verificação em 3840×2160** encerrada com o
 microajuste dos quadros em `16490f0`, e **offline de navegação** em `8b9fce2`.
 
@@ -23,8 +23,8 @@ REJEITADO**. O aparelho **não será a plataforma do painel** (DEC-065), e a F4.
 ser "selecionar e validar a plataforma substituta". A **F4.5B está concluída**: a
 plataforma é a **Samsung Smart TV do escritório**, com o painel aberto direto no
 navegador nativo dela, **sem hardware externo** (DEC-068). A **F4.5C** (validação física)
-e a **F4.5D** (operação autônoma) **estão concluídas**, e resta apenas a **F4.5E — gate
-físico final**, pendente.
+a **F4.5D** (operação autônoma) e a **F4.5E** (gate físico final, **PASS**) **estão
+concluídas**. A **F4.5 e a F4 estão ENCERRADAS**.
 
 A **E1 — contratos, documental — está concluída** (`078f360`); a **E2 está concluída**
 em três commits — **`c6464b5`** (E2A — schema e migration aditiva com backfills),
@@ -693,12 +693,12 @@ A fase foi fatiada assim:
 | F4.2 | marca oficial e assets | **concluída** — commit `7e0e35d` |
 | F4.3 | verificação 4K e microajustes | **concluída** — commit `16490f0`, mais evidência visual sem commit |
 | F4.4 | offline de navegação | **concluída** — commit `8b9fce2` |
-| F4.5 | operação em hardware real | **em andamento** — reestruturada pela DEC-065, ver as cinco fatias abaixo |
+| F4.5 | operação em hardware real | **concluída** — reestruturada pela DEC-065; plataforma definitiva: Samsung Smart TV (DEC-068) |
 | F4.5A | avaliação do `Phantom Alien 4K IPTV` | **concluída** — 2026-08-16, resultado **HARDWARE REJEITADO** (DEC-065); sem commit de código |
 | F4.5B | seleção da plataforma substituta | **concluída** — **Samsung Smart TV do escritório**, navegador nativo, sem hardware externo (DEC-068) |
 | F4.5C | validação física da plataforma substituta | **concluída** — aceite operacional físico na Samsung; resolução/refresh, viewport, DPR, engine, Tizen, SW e Cache Storage seguem **não medidos** |
 | F4.5D | operação autônoma | **concluída** — power cycle **PASS**: ao religar, a TV volta direto ao painel, sem reconfiguração |
-| F4.5E | gate físico final | **pendente** — fecha a F4.5 e, com ela, a F4 |
+| F4.5E | gate físico final | **concluída — PASS** — aceite explícito do proprietário; fechou a F4.5 e, com ela, a F4 |
 
 A **F4.1** trouxe o token `--color-moldura`, o cursor oculto no painel, as hairlines
 em `cqw` e a remoção dos SVGs de scaffold.
@@ -740,8 +740,8 @@ a **F4.5D está concluída** com o teste de **power cycle aprovado**: desligada 
 a TV volta direto ao painel, sem reconfiguração. Resolução efetiva, refresh, viewport,
 DPR, versão do engine, versão do Tizen, Service Worker e Cache Storage **continuam não
 medidos** — o que **não** é o mesmo que reprovados, e nada disso bloqueou o aceite.
-**Resta a F4.5E**, o gate físico final. A F4 segue **em andamento** e só se encerra com a
-F4.5.
+A **F4.5E** deu **PASS**: o proprietário aprovou explicitamente a Samsung como plataforma
+definitiva, sobre a cadeia de evidência acumulada. **A F4.5 e a F4 estão encerradas.**
 
 **Entrega v1** · *concluída e em produção (DEC-057)*
 Aprovada pelo proprietário em 2026-08-14, entrou **antes** da F4.5 e não abre a F5. As
