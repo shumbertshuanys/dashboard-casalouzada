@@ -2016,7 +2016,7 @@ sendo **uma alternativa entre outras**, e não a escolha da F4.5B.
 **Fonte.** Inspeção física do aparelho em 2026-08-16 (F4.5A) e decisão do proprietário na
 mesma data. **decisão registrada — a rejeição do Phantom continua valendo; a escolha da
 substituta foi feita depois, na [DEC-068](#dec-068--a-plataforma-do-painel-é-a-samsung-smart-tv-do-escritório-sem-hardware-externo),
-e a F4.5C está em andamento com F4.5D e F4.5E pendentes**
+e F4.5C e F4.5D já se concluíram, restando somente a F4.5E**
 
 ## Conexões de banco
 
@@ -2265,5 +2265,19 @@ nada de sistema, navegador, resolução ou API registrado sem medição no apare
 
 **Fonte.** Ensaio físico conduzido pelo proprietário na Samsung Smart TV do escritório em
 2026-08-16, com a aplicação em produção (release `ed1c29f`). Observação direta, **não
-medição instrumentada**. **decisão registrada — F4.5C em andamento; F4.5D e F4.5E
-pendentes**
+medição instrumentada**.
+
+**Estado de execução (atualizado em 2026-08-16).** A **F4.5C está concluída**, por
+**aceite operacional físico** — o produto real rodando na TV real, com layout aprovado
+visualmente e nenhuma incompatibilidade observada que impeça o uso —, e a **F4.5D está
+concluída**, com o teste de **power cycle aprovado**: desligada e religada, a TV retorna
+direto ao painel, sem reconfiguração. A evidência da F4.5D é **comportamental**; nenhum
+mecanismo de autostart foi identificado, e nenhum é afirmado.
+
+Continuam **não medidos**, e "não medido" **não é** reprovado: resolução gráfica e
+refresh efetivos (**não se declara 4K60**), viewport, DPR, versão do navegador/engine,
+versão do Tizen, Service Worker e Cache Storage na Samsung. Nenhum deles bloqueou o
+aceite; se algum for medido e reprovar, esta decisão é reaberta.
+
+**A condição restante desta decisão é somente o gate final F4.5E.**
+**decisão registrada — F4.5C e F4.5D concluídas; F4.5E pendente**

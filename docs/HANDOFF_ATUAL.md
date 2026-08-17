@@ -16,17 +16,15 @@
 
 ## Estado executivo
 
-> ### ▶ PRÓXIMA AÇÃO: F4.5C — COMPLETAR A CARACTERIZAÇÃO FÍSICA DA SAMSUNG
+> ### ▶ PRÓXIMA AÇÃO: F4.5E — GATE FÍSICO FINAL
 >
-> A **F4.5B está concluída**: a plataforma é a **Samsung Smart TV do escritório**, com o
-> painel aberto direto no navegador nativo dela (recurso "Serviço da Web" / PC on TV).
-> **Nenhum hardware externo é necessário** (DEC-068).
+> **F4.5A, F4.5B, F4.5C e F4.5D estão concluídas.** A plataforma é a **Samsung Smart TV
+> do escritório**, com o painel aberto direto no navegador nativo dela (recurso "Serviço
+> da Web" / PC on TV) e **sem nenhum hardware externo** (DEC-068). O produto real foi
+> validado fisicamente nela e a operação sobrevive a desligar e religar a TV.
 >
-> O primeiro ensaio físico foi bem-sucedido — a aplicação real, com dados reais e a
-> Celebração de Venda, rodou na própria TV. O que falta é **medir** o que ainda não foi
-> medido: resolução efetiva, viewport, DPR, versão do navegador, Service Worker, cache,
-> offline, reboot e estabilidade prolongada. Ver "F4.5C" abaixo para a lista exata do
-> que está comprovado e do que não está.
+> Resta a **F4.5E — gate físico final**, que fecha a F4.5 e, com ela, a **F4**. As duas
+> continuam **em andamento** até lá.
 >
 > **Em paralelo, quando o proprietário tiver o número:** a **O2** continua
 > **parcialmente concluída** — falta a linha de saldo histórico de `VENDA`, e enquanto
@@ -288,8 +286,8 @@ A **F4 — Identidade e modo TV está em andamento**, e isto é o que está prov
   **não será a plataforma definitiva do painel**. A fatia deixou de ser "validar o
   Phantom" e passou a ser "selecionar e validar a plataforma substituta". A **F4.5B está
   CONCLUÍDA** — a plataforma é a **Samsung Smart TV do escritório**, pelo navegador
-  nativo dela (DEC-068) —, a **F4.5C está EM ANDAMENTO**, e **F4.5D e F4.5E seguem
-  pendentes**.
+  nativo dela (DEC-068) —, e a **F4.5C e a F4.5D também estão CONCLUÍDAS**. Resta apenas
+  a **F4.5E — gate físico final**, pendente.
 
 A **F4 como um todo continua em andamento**: ela só se encerra com a F4.5.
 
@@ -317,12 +315,12 @@ lida**. Nada se afirma sobre nenhum dos dois.
 
 Isso é observação direta do proprietário, não medição instrumentada.
 
-### F4.5C — caracterização física · EM ANDAMENTO
+### F4.5C — validação física da Samsung · CONCLUÍDA
 
-A fatia deixou de ser "pendente": o primeiro ensaio aconteceu e passou. O que resta é
-**medir**, e a distinção abaixo é a parte que importa.
+**Fechada por ACEITE OPERACIONAL FÍSICO, não por medição laboratorial exaustiva.** O
+critério é a finalidade: o produto real, na plataforma real, cumprindo a função real.
 
-**Comprovado no ensaio de 2026-08-16:**
+**Comprovado na TV, em 2026-08-16:**
 
 | | |
 |---|---|
@@ -330,22 +328,58 @@ A fatia deixou de ser "pendente": o primeiro ensaio aconteceu e passou. O que re
 | aplicação real, em produção | ✅ |
 | dados reais na tela | ✅ |
 | JavaScript necessário ao painel | ✅ (o painel atualizou e a celebração animou) |
-| layout operacional e legível | ✅ |
+| layout operacional e legível | ✅ aprovado visualmente pelo proprietário |
 | atualização automática | ✅ |
 | Celebração de Venda | ✅ |
 | uso direto da TV, sem intermediário | ✅ |
+| incompatibilidade que impeça o uso | **nenhuma observada** |
 
-**Ainda NÃO comprovado — nada disso pode ser afirmado:**
+Isso é o que o gate físico da plataforma exigia: o painel abre, permanece utilizável,
+mostra dado real, atualiza sozinho, celebra e é legível na parede. **Aprovado pelo
+proprietário.**
 
-- resolução gráfica efetiva e **refresh efetivo** — **não se declara 4K60 sem medição**;
-- viewport e DPR reais entregues ao navegador;
-- versão do navegador / engine;
-- **Service Worker** e **Cache Storage**;
-- comportamento **offline** (a tela institucional da F4.4 não foi exercitada aqui);
-- comportamento após **power cycle / reboot**;
-- **restauração do favorito ou da página** ao religar;
-- suspensão de tela e economia de energia;
-- **estabilidade prolongada** — o ensaio foi pontual.
+**O que continua NÃO MEDIDO — e "não medido" não é "reprovado":**
+
+- resolução gráfica efetiva e **refresh efetivo** — **não se declara 4K60**;
+- **viewport** e **DPR** reais entregues ao navegador;
+- **versão exata do navegador / engine**;
+- **versão exata do Tizen**;
+- **Service Worker** na Samsung;
+- **Cache Storage** na Samsung.
+
+Nenhum desses itens foi instrumentado, e **nenhum deles bloqueou o aceite operacional**.
+Registrá-los como pendências de medição é diferente de registrá-los como falha: não há
+evidência de falha em nenhum. Se algum vier a ser medido e reprovar, a DEC-068 é
+reaberta.
+
+**Offline.** A **F4.4 continua concluída como entrega de software** e **não é reaberta
+aqui**. O comportamento específico de Service Worker e Cache Storage **na Samsung** não
+foi instrumentado: **NÃO MEDIDO NA PLATAFORMA, NÃO BLOQUEANTE** para o aceite
+operacional atual. Não se declara `PASS` sem evidência.
+
+### F4.5D — operação autônoma · CONCLUÍDA
+
+**Teste real de power cycle, conduzido pelo proprietário:**
+
+| | |
+|---|---|
+| desligar a TV | executado |
+| religar a TV | executado |
+| operação retornou corretamente | ✅ |
+| **a TV entrou diretamente no painel** | ✅ |
+| reconfiguração necessária | **nenhuma** |
+| resultado | **PASS**, considerado correto pelo proprietário |
+
+**A evidência é comportamental, não de API.** O que se afirma é o que se viu: **depois de
+desligar e religar, o painel retorna direto e a TV fica pronta para operar, sem
+intervenção**. **Não** se afirma "autostart técnico por API" — nenhum mecanismo interno
+foi identificado, e nomear um seria inventar. Para a finalidade da F4.5D, o
+comportamento observado basta.
+
+**Estabilidade.** O proprietário confirmou que **a aplicação está rodando corretamente
+como deveria**. Não há medição de duração, e por isso **nenhuma janela de tempo é
+declarada** — nada de "24 horas", "8 horas" ou "teste prolongado de X minutos". A
+classificação é simplesmente: **OPERAÇÃO REAL = APROVADA PELO PROPRIETÁRIO**.
 
 A frente ativa agora é a **Entrega v1**, em seis etapas (E1 a E6). A **E1 — contratos
 e modelo de dados — está concluída e publicada em `078f360`**, registrada neste
@@ -458,7 +492,8 @@ arbitrar (ver o bloco no topo deste documento):
 
 - a **F4.5 — operação em hardware real**, **em andamento**: **F4.5A** concluída com o
   Phantom rejeitado (DEC-065) e **F4.5B** concluída com a Samsung Smart TV escolhida
-  (DEC-068); o que segue é a **F4.5C — caracterização física**, em andamento;
+  (DEC-068); **F4.5C** e **F4.5D** também concluídas, e o que resta é a **F4.5E — gate
+  físico final**, pendente;
 - das etapas operacionais, a **O1 — reconciliação do dossiê secreto — está CONCLUÍDA**,
   e a **O2 — carga operacional inicial — está PARCIALMENTE CONCLUÍDA**: o saldo de
   `AVALIACAO_GOOGLE` já está cadastrado e o de `VENDA` ainda não.
@@ -604,10 +639,10 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 | F4.4 — Offline de navegação | **Concluída** | `8b9fce2` |
 | F4.5A — Avaliação do `Phantom Alien 4K IPTV` | **Concluída** | inspeção física em 2026-08-16; resultado **HARDWARE REJEITADO** (DEC-065); sem commit de código |
 | F4.5B — Seleção da plataforma substituta | **Concluída** | **Samsung Smart TV do escritório**, navegador nativo, sem hardware externo (DEC-068) |
-| F4.5C — Validação física da plataforma substituta | **Em andamento** | primeiro ensaio passou; falta medir resolução/refresh, SW, offline, reboot e estabilidade |
-| F4.5D — Operação autônoma | **Pendente** | depende da F4.5C |
+| F4.5C — Validação física da plataforma substituta | **Concluída** | aceite operacional físico na Samsung; resolução/refresh, viewport, DPR, engine, Tizen, SW e Cache Storage seguem **não medidos** |
+| F4.5D — Operação autônoma | **Concluída** | power cycle **PASS** — ao religar, a TV volta direto ao painel, sem reconfiguração |
 | F4.5E — Gate físico final | **Pendente** | fecha a F4.5 e, com ela, a F4 |
-| **F4.5 — Operação em hardware real** | **Em andamento** | F4.5A e F4.5B concluídas; F4.5C em andamento; F4.5D e F4.5E pendentes |
+| **F4.5 — Operação em hardware real** | **Em andamento** | F4.5A a F4.5D concluídas; **F4.5E pendente** |
 | **F4 — Identidade e modo TV** | **Em andamento** | `8b9fce2` |
 | O1 — Reconciliação do dossiê secreto | **Concluída** | O1A + O1-S0 + O1-S1 + O1B; **nenhum valor secreto no repositório** |
 | O2 — Carga operacional inicial | **Parcialmente concluída** | `AVALIACAO_GOOGLE` cadastrado; **falta `VENDA`** — medido no banco |
@@ -1704,7 +1739,7 @@ hardware real —, que foi adiada pela DEC-057 até o go-live da v1 e hoje está
 andamento e reestruturada** pela DEC-065: a **F4.5A** foi executada e o `Phantom Alien
 4K IPTV` foi **rejeitado** como plataforma. A **F4.5B está concluída** — a plataforma é a
 **Samsung Smart TV do escritório**, pelo navegador nativo dela (DEC-068) —, a **F4.5C
-está em andamento** e **F4.5D e F4.5E seguem pendentes**.
+e a **F4.5D** também estão concluídas, e **resta apenas a F4.5E**, pendente.
 
 ### F4.0 — decisões de identidade e modo TV · concluída
 
@@ -2035,8 +2070,8 @@ Phantom" e passou a ser "selecionar e validar a plataforma substituta".
 |---|---|---|
 | **F4.5A** | avaliação do `Phantom Alien 4K IPTV` | **concluída — HARDWARE REJEITADO** |
 | **F4.5B** | seleção da plataforma substituta | **concluída** — Samsung Smart TV (DEC-068) |
-| **F4.5C** | validação física da plataforma substituta | **em andamento** |
-| **F4.5D** | operação autônoma | **pendente** |
+| **F4.5C** | validação física da plataforma substituta | **concluída** — aceite operacional físico |
+| **F4.5D** | operação autônoma | **concluída** — power cycle PASS |
 | **F4.5E** | gate físico final | **pendente** |
 
 #### F4.5A — avaliação do Phantom · concluída
@@ -2121,18 +2156,26 @@ saída 3840×2160 a 60 Hz; fullscreen/quiosque; autostart ou restauração autom
 Service Worker; Cache Storage; comportamento após reboot; controle de suspensão/tela; e
 operação sem intervenção diária além de ligar e desligar.
 
-#### F4.5C · em andamento — F4.5D e F4.5E · pendentes
+#### F4.5C e F4.5D · concluídas — F4.5E · pendente
 
-A **F4.5C** deixou de ser pendente: o primeiro ensaio aconteceu e passou. O que resta é
-**medir**, e os critérios de evidência da DEC-049 continuam valendo integralmente —
-nada de sistema, navegador, resolução ou API registrado sem medição no aparelho. **Não
-se declara 4K60 sem medição.** É nela que voltam o mecanismo offline da F4.4, o achado
-de viewport abaixo, a percepção das hairlines a 3–6 metros (F4.3) e o julgamento do Wake
-Lock (DEC-050). A lista exata do que já está comprovado e do que não está fica na seção
-"F4.5C" do estado executivo.
+A **F4.5C** fechou por **aceite operacional físico**: o produto real rodou na Samsung
+real, com dados reais, layout aprovado visualmente e nenhuma incompatibilidade que
+impeça o uso. Os critérios de evidência da DEC-049 continuam valendo integralmente —
+nada de sistema, navegador, resolução ou API registrado sem medição no aparelho —, e é
+por isso que resolução e refresh efetivos, viewport, DPR, versão do engine, versão do
+Tizen, Service Worker e Cache Storage seguem **NÃO MEDIDOS**. **Não se declara 4K60.**
+Não medido **não é** reprovado: nenhum desses itens bloqueou o aceite.
 
-A **F4.5D** trata da operação autônoma e a **F4.5E** é o gate físico final, que fecha a
-F4.5 e, com ela, a F4. **As duas seguem pendentes.**
+A **F4.5D** fechou com o **power cycle aprovado** — desligada e religada, a TV volta
+direto ao painel, sem reconfiguração. A evidência é comportamental; nenhum autostart de
+API foi identificado nem é afirmado.
+
+A lista exata do que está comprovado e do que não está fica nas seções "F4.5C" e "F4.5D"
+do estado executivo. O achado de viewport abaixo, a percepção das hairlines a 3–6 metros
+(F4.3) e o julgamento do Wake Lock (DEC-050) seguem como pauta possível do gate final.
+
+A **F4.5E** é o gate físico final, que fecha a F4.5 e, com ela, a F4. **Ela é a única
+fatia restante.**
 
 ## Entrega v1 — decisões de produto e modelo (E1)
 

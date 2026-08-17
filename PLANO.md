@@ -22,8 +22,9 @@ avaliação do `Phantom Alien 4K IPTV` — está concluída**, com resultado **H
 REJEITADO**. O aparelho **não será a plataforma do painel** (DEC-065), e a F4.5 passou a
 ser "selecionar e validar a plataforma substituta". A **F4.5B está concluída**: a
 plataforma é a **Samsung Smart TV do escritório**, com o painel aberto direto no
-navegador nativo dela, **sem hardware externo** (DEC-068). A **F4.5C está em andamento**
-e **F4.5D e F4.5E seguem pendentes**.
+navegador nativo dela, **sem hardware externo** (DEC-068). A **F4.5C** (validação física)
+e a **F4.5D** (operação autônoma) **estão concluídas**, e resta apenas a **F4.5E — gate
+físico final**, pendente.
 
 A **E1 — contratos, documental — está concluída** (`078f360`); a **E2 está concluída**
 em três commits — **`c6464b5`** (E2A — schema e migration aditiva com backfills),
@@ -695,8 +696,8 @@ A fase foi fatiada assim:
 | F4.5 | operação em hardware real | **em andamento** — reestruturada pela DEC-065, ver as cinco fatias abaixo |
 | F4.5A | avaliação do `Phantom Alien 4K IPTV` | **concluída** — 2026-08-16, resultado **HARDWARE REJEITADO** (DEC-065); sem commit de código |
 | F4.5B | seleção da plataforma substituta | **concluída** — **Samsung Smart TV do escritório**, navegador nativo, sem hardware externo (DEC-068) |
-| F4.5C | validação física da plataforma substituta | **em andamento** — aplicação, dados, layout, atualização e celebração comprovados na TV; falta medir resolução/refresh, SW, offline, reboot e estabilidade |
-| F4.5D | operação autônoma | **pendente** |
+| F4.5C | validação física da plataforma substituta | **concluída** — aceite operacional físico na Samsung; resolução/refresh, viewport, DPR, engine, Tizen, SW e Cache Storage seguem **não medidos** |
+| F4.5D | operação autônoma | **concluída** — power cycle **PASS**: ao religar, a TV volta direto ao painel, sem reconfiguração |
 | F4.5E | gate físico final | **pendente** — fecha a F4.5 e, com ela, a F4 |
 
 A **F4.1** trouxe o token `--color-moldura`, o cursor oculto no painel, as hairlines
@@ -733,10 +734,14 @@ porque a sonda rodou em contexto HTTP inseguro — **não se declara ausência d
 O aparelho **não é defeituoso**: é **inadequado ao objetivo definido**. A F4.5 passou a
 ser **selecionar e validar a plataforma substituta**, e essa seleção **está feita**: a
 **F4.5B concluiu** com a **Samsung Smart TV do escritório** operando o painel pelo
-navegador nativo, **sem máquina intermediária** (DEC-068). A **F4.5C está em andamento**
-— o primeiro ensaio físico passou, mas resolução efetiva, refresh, Service Worker,
-offline, reboot e estabilidade **ainda não foram medidos**. **F4.5D e F4.5E seguem
-pendentes.** A F4 segue **em andamento** e só se encerra com a F4.5.
+navegador nativo, **sem máquina intermediária** (DEC-068). A **F4.5C está concluída** por
+**aceite operacional físico** — o produto real, na TV real, cumprindo a função real —, e
+a **F4.5D está concluída** com o teste de **power cycle aprovado**: desligada e religada,
+a TV volta direto ao painel, sem reconfiguração. Resolução efetiva, refresh, viewport,
+DPR, versão do engine, versão do Tizen, Service Worker e Cache Storage **continuam não
+medidos** — o que **não** é o mesmo que reprovados, e nada disso bloqueou o aceite.
+**Resta a F4.5E**, o gate físico final. A F4 segue **em andamento** e só se encerra com a
+F4.5.
 
 **Entrega v1** · *concluída e em produção (DEC-057)*
 Aprovada pelo proprietário em 2026-08-14, entrou **antes** da F4.5 e não abre a F5. As
