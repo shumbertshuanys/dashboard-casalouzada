@@ -2376,3 +2376,133 @@ nova. Diagnóstico que originou a decisão: reprodução da cadeia
 `saldo histórico → metricas → metricas-prisma → apresentação → componente`, que mostrou o
 valor correto no núcleo e a perda apenas na compactação visual.
 **implementada localmente — não publicada neste ciclo**
+
+---
+
+## Painel — histórico mensal de VGV
+
+### DEC-070 — VGV histórico mensal substitui a contribuição do mês nos recortes trimestral e anual
+
+**Decisão.** Existe uma entidade nova e independente, `vgv_historico_mensal`, em que cada
+linha é o **VGV total consolidado de uma competência mensal já encerrada** — o número que
+o escritório apurava antes de o sistema existir, fechado por mês.
+
+O contrato completo, ponto a ponto:
+
+- **não é `Lancamento`.** Um lançamento é um **evento**: tem data do fato, participação,
+  crédito de corretor e entra em contagem. O agregado é o **resultado** de muitos eventos
+  que nunca foram digitados, e não tem nem pode inventar nenhum desses campos. Registrá-lo
+  como VENDA sintética criaria fato comercial falso — apareceria em Vendidos, em ranking e
+  no quadro mensal, creditando alguém que a linha não sabe quem é;
+- **não é `SaldoHistorico`.** O saldo é **um por tipo**, com `dataCorte`, e responde à
+  pergunta "quanto havia antes de o sistema começar". O histórico mensal é **um por mês**,
+  responde "quanto foi em julho", e serve a recortes de período. Reaproveitar o saldo
+  exigiria várias linhas por tipo e destruiria a unicidade que a DEC-035 estabeleceu;
+- **`saldo_historico` continua exclusivamente nos big numbers acumulados** — Imóveis
+  vendidos, VGV acumulado e Avaliações Google. Nada mudou ali;
+- **`vgv_historico_mensal` entra exclusivamente no VGV trimestral e no anual.** Em nenhum
+  outro lugar;
+- **o VGV mensal ignora o histórico por completo.** O mês corrente é a soma integral das
+  VENDA reais, e um agregado só existe para mês fechado — não há o que ele diga sobre o mês
+  que está acontecendo. No código isso é uma função separada (`vgvDaJanela`), não a mesma
+  com lista vazia;
+- **cada competência representa o VGV TOTAL do mês**, e não um complemento. `valorTotal`
+  é exclusivamente valor de imóveis vendidos, semanticamente o mesmo que
+  `Lancamento.valor` de uma VENDA contribui para o VGV — não é locação, comissão,
+  honorário nem receita de outra natureza;
+- **uma competência coberta substitui as VENDA daquele mês**, e só no trimestral e no
+  anual. Se julho tem agregado, nenhuma venda de julho soma individualmente ali, sejam
+  uma ou cem: o relatório consolidado já as contém, e somar as duas coisas contaria a
+  mesma venda duas vezes;
+- **as vendas reais continuam inteiras em tudo o mais** — Imóveis vendidos, quadro mensal,
+  rankings, VGV de corretor e VGV de equipe. Cobertura é regra de **recorte agregado da
+  empresa**, nunca de crédito individual. `calcularMetricasEquipes` sequer recebe o
+  parâmetro;
+- **competência corrente ou futura é recusada no Admin e ignorada pelo núcleo.** A recusa
+  é da validação; a defesa é do cálculo, que não confia no que o banco contém. Ignorar
+  significa que o mês **não fica coberto**, então as vendas reais dele continuam somando —
+  uma linha inválida nunca apaga fato comercial, e nunca lança;
+- **ausência da linha não é zero.** Um mês sem competência cadastrada é um mês calculado
+  pelas vendas reais que existirem, e não um mês que valeu zero;
+- **`valor_total > 0`**, garantido por `CHECK`. Não existe cadastro de VGV histórico zero:
+  ou o mês teve VGV, ou não há agregado a registrar. É a DEC-014 aplicada a esta entidade;
+- **não há corretor, equipe, participação nem quantidade de vendas.** A linha tem
+  competência, valor e observação, e mais nada. O que não existe não pode ser creditado a
+  ninguém por engano.
+
+**Uso operacional.** A feature nasceu para preencher uma lacuna concreta e finita: os VGVs
+consolidados de **janeiro a julho de 2026**, que o proprietário informará depois da
+publicação. **Agosto de 2026 em diante segue exclusivamente por lançamentos reais.** Não é
+um sistema genérico de importação histórica, e os sete valores **não** estão no código.
+
+**Venda retroativa em mês coberto.** Uma VENDA retroativa é **sempre registrável**, e
+registrá-la **não obriga** a editar o agregado. Se a competência estiver coberta, o valor
+individual daquela venda simplesmente não é somado de novo ao trimestral/anual — que é o
+comportamento correto quando o relatório consolidado original já a continha. O agregado só
+deve ser retificado quando a fonte consolidada usada para cadastrá-lo **não** contemplava
+aquela venda. Editar por reflexo, sem essa checagem, é que produziria erro.
+
+**Política de falha.** Se a leitura de `vgv_historico_mensal` falhar, **`empresa.periodos`
+fica `INDISPONIVEL`** — sem fallback para lista vazia. O motivo é o mesmo da DEC-042 e
+merece ser nomeado: sem os agregados, o trimestral e o anual sairiam com um número
+**plausível e errado** — só as vendas individuais, sem os meses consolidados —, e ninguém
+na sala teria como perceber. "A leitura não aconteceu" é um estado exibível; "a leitura
+trouxe metade" não é. A falha **não** derruba acumulados, equipes, propostas nem reservas,
+que têm dependências próprias.
+
+**Migration.** `20260817170000_vgv_historico_mensal`, estritamente aditiva — nenhuma tabela
+existente é tocada, sem FK, sem backfill, sem trigger. Ela instala:
+
+- índice único de `competencia`, porque duas linhas do mesmo mês seriam contadas duas
+  vezes; a unicidade é do banco, e checar antes de inserir abriria corrida entre o `SELECT`
+  e o `INSERT`;
+- `vgv_historico_mensal_competencia_dia1_check` — `EXTRACT(DAY FROM competencia) = 1`. É o
+  que dá sentido ao índice único: sem ele, `2026-08-14` e `2026-08-01` seriam competências
+  distintas do mesmo mês;
+- `vgv_historico_mensal_valor_total_positivo_check` — `valor_total > 0`;
+- **RLS ligado sem policy** e `REVOKE ALL` de `anon`/`authenticated`, continuando o SEC-001
+  (DEC-058) para a tabela nova, com prova que faz a migration falhar se qualquer uma das
+  propriedades não for verdadeira;
+- **grants de runtime** (DEC-061): `SELECT`, `INSERT`, `UPDATE` e `DELETE` para
+  `casalouzada_runtime`, e prova negativa de `TRUNCATE`, `REFERENCES`, `TRIGGER` e
+  `MAINTAIN` (este só a partir do PostgreSQL 17). `UPDATE`/`DELETE` divergem de
+  `celebracoes` de propósito: este é um número apurado à mão, retificável, e sem FK
+  apontando para cá nenhum cascade faria a remoção.
+
+A regra "somente competência passada" **não** virou `CHECK`. Um predicado sobre `now()` não
+é imutável: a linha que passou hoje reprovaria num restore amanhã. Invariante que envelhece
+é regra de aplicação.
+
+**Admin.** CRUD mínimo em `/admin/vgv-historico` — listar (competência decrescente),
+cadastrar, editar valor e observação, excluir. A **competência é imutável na edição**:
+trocá-la moveria dinheiro de um mês para outro em silêncio. Sem paginação, busca, filtro,
+gráfico, importação ou edição em lote; são poucos meses.
+
+**Sobreposição informa, não bloqueia.** Cadastrar o agregado de um mês que também tem VENDA
+lançada é legítimo — o relatório costuma já contê-las. A tela mostra quantas vendas existem
+na competência e explica que elas continuam em rankings e contagens, mas não somam de novo
+no trimestral/anual. Nenhum cadastro é impedido por isso.
+
+**Motivo.** O escritório tem os totais mensais de janeiro a julho e **não** tem as vendas
+individuais daquele período. Sem esta entidade, as duas saídas seriam ruins: digitar
+centenas de vendas inventadas — criando fato comercial falso, com corretor e data
+arbitrários — ou deixar o VGV anual da TV afirmando só o que foi lançado depois de agosto,
+que é um número real e enganoso. A separação em tabela própria é o que permite o agregado
+existir sem contaminar nada que a empresa usa para decidir, exatamente como a DEC-067 fez
+com a celebração.
+
+**Prova.** `tests/validacao-vgv-historico-mensal.test.ts` (competência, regra temporal em
+São Paulo, dinheiro, UUID, P2002); `tests/metricas.test.ts` (cobertura, anti-dupla-contagem,
+mês corrente/futuro ignorado, isolamento de acumulados e equipes, VENDA sem valor coberta e
+não coberta); `tests/metricas-prisma.test.ts` (a leitura, a conversão e a política de falha
+parcial); `tests/integracao/vgv-historico.integracao.test.ts` (Admin e banco real);
+`tests/integracao-painel/painel.integracao.test.ts` (a substituição observada de ponta a
+ponta contra o PostgreSQL local). Os testes de cada etapa foram escritos **antes** da
+implementação e observados falhando pela razão esperada.
+
+**Fonte.** `prisma/schema.prisma` (`model VgvHistoricoMensal`); migration
+`20260817170000_vgv_historico_mensal`; `src/lib/validacao/vgv-historico-mensal.ts`;
+`src/lib/metricas.ts` (`VgvHistoricoMensalMetrica`, `chaveDoMes`,
+`vgvDaJanelaComHistorico`); `src/lib/metricas-prisma.ts` (a sexta leitura e `comporEmpresa`);
+`src/app/admin/vgv-historico/**`.
+**implementada localmente — não publicada; dados reais de jan–jul ainda não cadastrados**

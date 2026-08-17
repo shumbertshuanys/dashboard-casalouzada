@@ -12,6 +12,7 @@ import {
   type SaldoHistoricoMetrica,
   type TipoEventoMetrica,
   type TipoSaldoMetrica,
+  type VgvHistoricoMensalMetrica,
 } from "@/lib/metricas";
 import { obterMetricasPainel, type MetricasEmpresaPeriodicas } from "@/lib/metricas-prisma";
 import type { PrismaClient } from "@/generated/prisma/client";
@@ -91,6 +92,12 @@ type LinhaSaldo = {
   valorTotal: DecimalFalso;
   precisao: PrecisaoSaldoMetrica;
   dataCorte: Date;
+};
+
+/** A linha de VGV histórico mensal como o `select` da fronteira a pede (E4). */
+type LinhaVgvHistorico = {
+  competencia: Date;
+  valorTotal: DecimalFalso;
 };
 
 /** Linha do banco e o objeto de domínio que ela deve virar, criados juntos. */
@@ -207,6 +214,24 @@ function saldo(
 }
 
 /**
+ * Um VGV histórico mensal, na linha do banco e no domínio.
+ *
+ * A competência entra como `YYYY-MM` só para o teste ficar legível; o que vai
+ * para a linha é o primeiro dia do mês, que é o que a coluna `@db.Date` guarda.
+ */
+function historico(
+  competenciaMes: string,
+  inteiro: string,
+  centavos = "00",
+): Par<LinhaVgvHistorico, VgvHistoricoMensalMetrica> {
+  const competencia = paraDataCivil(`${competenciaMes}-01`);
+  return {
+    linha: { competencia, valorTotal: decimal(inteiro, centavos) },
+    dominio: { competencia, valorTotal: `${inteiro}.${centavos}` },
+  };
+}
+
+/**
  * Corretor e equipe não passam por conversão de tipo nenhuma — o `select` já
  * devolve exatamente os campos do domínio —, então linha e domínio são o mesmo
  * objeto.
@@ -243,6 +268,8 @@ type Leituras = {
   equipes: readonly EquipeMetrica[] | Error;
   /** A quinta leitura, da E4: candidatas a "Reservas de locação" (DEC-055). */
   reservas?: readonly LinhaReserva[] | Error;
+  /** A sexta leitura: os agregados mensais do VGV histórico. */
+  historicos?: readonly LinhaVgvHistorico[] | Error;
 };
 
 type Chamadas = {
@@ -251,6 +278,7 @@ type Chamadas = {
   corretor: unknown[];
   equipe: unknown[];
   reservaLocacao: unknown[];
+  vgvHistoricoMensal: unknown[];
 };
 
 function criarPrismaFalso(leituras: Leituras): { prisma: PrismaClient; chamadas: Chamadas } {
@@ -260,6 +288,7 @@ function criarPrismaFalso(leituras: Leituras): { prisma: PrismaClient; chamadas:
     corretor: [],
     equipe: [],
     reservaLocacao: [],
+    vgvHistoricoMensal: [],
   };
 
   const modelo = <T>(nome: keyof Chamadas, resposta: readonly T[] | Error) => ({
@@ -276,6 +305,7 @@ function criarPrismaFalso(leituras: Leituras): { prisma: PrismaClient; chamadas:
     corretor: modelo("corretor", leituras.corretores),
     equipe: modelo("equipe", leituras.equipes),
     reservaLocacao: modelo("reservaLocacao", leituras.reservas ?? []),
+    vgvHistoricoMensal: modelo("vgvHistoricoMensal", leituras.historicos ?? []),
   };
 
   return { prisma: falso as unknown as PrismaClient, chamadas };
@@ -334,7 +364,7 @@ describe("T1 — as quatro leituras dão certo", () => {
     const { prisma } = criarPrismaFalso(LEITURAS_BASE);
     const resultado = await obterMetricasPainel(prisma, AGORA);
 
-    const esperado = calcularMetricasEmpresa(DOMINIO_LANCAMENTOS, DOMINIO_SALDOS, AGORA);
+    const esperado = calcularMetricasEmpresa(DOMINIO_LANCAMENTOS, DOMINIO_SALDOS, [], AGORA);
     assert.deepEqual(resultado.empresa, {
       periodos: { estadoLeitura: "OK", dados: periodicasDe(esperado) },
       acumulados: { estadoLeitura: "OK", dados: esperado.acumulados },
@@ -395,7 +425,7 @@ describe("T3 — a leitura de saldo histórico falha", () => {
     const { prisma } = criarPrismaFalso({ ...LEITURAS_BASE, saldos: falha("saldo_historico") });
     const resultado = await obterMetricasPainel(prisma, AGORA);
 
-    const completo = calcularMetricasEmpresa(DOMINIO_LANCAMENTOS, DOMINIO_SALDOS, AGORA);
+    const completo = calcularMetricasEmpresa(DOMINIO_LANCAMENTOS, DOMINIO_SALDOS, [], AGORA);
     assert.deepEqual(resultado.empresa.periodos, {
       estadoLeitura: "OK",
       dados: {
@@ -430,7 +460,7 @@ describe("T4 — a leitura de corretores falha", () => {
 
     assert.equal(resultado.equipes.estadoLeitura, "INDISPONIVEL");
 
-    const esperado = calcularMetricasEmpresa(DOMINIO_LANCAMENTOS, DOMINIO_SALDOS, AGORA);
+    const esperado = calcularMetricasEmpresa(DOMINIO_LANCAMENTOS, DOMINIO_SALDOS, [], AGORA);
     assert.deepEqual(resultado.empresa, {
       periodos: { estadoLeitura: "OK", dados: periodicasDe(esperado) },
       acumulados: { estadoLeitura: "OK", dados: esperado.acumulados },
@@ -892,5 +922,218 @@ describe("uma única referência temporal alimenta os blocos", () => {
     assert.equal(resultado.equipes.dados.estadoPeriodoMensal, "SEM_DADOS");
     // E o trimestre, que enxerga julho, continua somando.
     assert.equal(resultado.empresa.periodos.dados.vgvPeriodos.trimestral, "400000.00");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* E4 — leitura do VGV histórico mensal                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A sexta leitura da fronteira.
+ *
+ * O que se prova aqui é de fronteira, não de cálculo: que a consulta acontece,
+ * que ela pede só o que o núcleo usa, que `Decimal` vira string canônica sem
+ * passar por `number`, e o que cada bloco faz quando **essa** leitura falha.
+ * Quanto dá cada número continua sendo da `tests/metricas.test.ts`.
+ */
+
+/** Os sete meses fechados de 2026 — a massa de referência do ciclo. */
+const HISTORICOS = [
+  historico("2026-01", "2000000"),
+  historico("2026-02", "3000000"),
+  historico("2026-03", "4000000"),
+  historico("2026-04", "5000000"),
+  historico("2026-05", "6000000"),
+  historico("2026-06", "7000000"),
+  historico("2026-07", "8000000"),
+];
+
+const DOMINIO_HISTORICOS = HISTORICOS.map((par) => par.dominio);
+
+/** A venda real de agosto do caso de referência. */
+const VENDA_DE_AGOSTO = lancamento("VENDA", "c1", "e1", "2026-08-14", "6900000");
+
+const LEITURAS_REFERENCIA: Leituras = {
+  lancamentos: [VENDA_DE_AGOSTO.linha],
+  saldos: SALDOS.map((par) => par.linha),
+  corretores: CORRETORES,
+  equipes: EQUIPES,
+  historicos: HISTORICOS.map((par) => par.linha),
+};
+
+describe("E4 — a fronteira lê o VGV histórico mensal", () => {
+  it("1. a leitura acontece e pede só competência e valor", async () => {
+    const { prisma, chamadas } = criarPrismaFalso(LEITURAS_REFERENCIA);
+    await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(chamadas.vgvHistoricoMensal.length, 1, "uma consulta, e uma só");
+
+    const argumentos = chamadas.vgvHistoricoMensal[0] as {
+      select?: Record<string, unknown>;
+      where?: unknown;
+      orderBy?: unknown;
+      take?: unknown;
+    };
+
+    assert.deepEqual(
+      Object.keys(argumentos.select ?? {}).sort(),
+      ["competencia", "valorTotal"],
+      "nada além do que o núcleo calcula",
+    );
+    // A regra de recorte é do núcleo (DEC-013): o banco entrega as linhas e não
+    // decide período, ordem nem teto.
+    assert.equal(argumentos.where, undefined, "sem where");
+    assert.equal(argumentos.orderBy, undefined, "sem orderBy");
+    assert.equal(argumentos.take, undefined, "sem take");
+  });
+
+  it("2/3. cada Decimal vira string canônica e o domínio chega inteiro ao núcleo", async () => {
+    const { prisma } = criarPrismaFalso(LEITURAS_REFERENCIA);
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    // Comparar com a própria função pura alimentada pelo domínio esperado é o
+    // que prova a conversão sem reimplementar fórmula nenhuma. O dublê de
+    // `Decimal` já cobra `toFixed(2)` a cada chamada.
+    const esperado = calcularMetricasEmpresa(
+      [VENDA_DE_AGOSTO.dominio],
+      DOMINIO_SALDOS,
+      DOMINIO_HISTORICOS,
+      AGORA,
+    );
+
+    assert.deepEqual(resultado.empresa, {
+      periodos: { estadoLeitura: "OK", dados: periodicasDe(esperado) },
+      acumulados: { estadoLeitura: "OK", dados: esperado.acumulados },
+    });
+  });
+
+  it("4/5/6. caso de referência: 6,9 mensal · 14,9 trimestral · 41,9 anual", async () => {
+    const { prisma } = criarPrismaFalso(LEITURAS_REFERENCIA);
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(resultado.empresa.periodos.estadoLeitura, "OK");
+    if (resultado.empresa.periodos.estadoLeitura !== "OK") return;
+
+    assert.deepEqual(resultado.empresa.periodos.dados.vgvPeriodos, {
+      mensal: "6900000.00",
+      trimestral: "14900000.00",
+      anual: "41900000.00",
+    });
+  });
+
+  it("7. o histórico mensal não toca nos acumulados", async () => {
+    const comHistorico = await obterMetricasPainel(
+      criarPrismaFalso(LEITURAS_REFERENCIA).prisma,
+      AGORA,
+    );
+    const semHistorico = await obterMetricasPainel(
+      criarPrismaFalso({ ...LEITURAS_REFERENCIA, historicos: [] }).prisma,
+      AGORA,
+    );
+
+    assert.deepEqual(comHistorico.empresa.acumulados, semHistorico.empresa.acumulados);
+
+    // O saldo de abertura continua sendo o único dono dos acumulados: 5.000.000
+    // do saldo mais a venda de agosto, que é posterior ao corte de 30/06.
+    assert.equal(comHistorico.empresa.acumulados.estadoLeitura, "OK");
+    if (comHistorico.empresa.acumulados.estadoLeitura !== "OK") return;
+    assert.equal(comHistorico.empresa.acumulados.dados.vgv.valor, "11900000.00");
+    assert.equal(comHistorico.empresa.acumulados.dados.vendidos.valor, 101);
+  });
+
+  it("8. o histórico mensal não toca nas equipes", async () => {
+    const comHistorico = await obterMetricasPainel(
+      criarPrismaFalso(LEITURAS_REFERENCIA).prisma,
+      AGORA,
+    );
+    const semHistorico = await obterMetricasPainel(
+      criarPrismaFalso({ ...LEITURAS_REFERENCIA, historicos: [] }).prisma,
+      AGORA,
+    );
+
+    assert.deepEqual(comHistorico.equipes, semHistorico.equipes);
+  });
+
+  it("9. falha só desta leitura derruba os períodos", async () => {
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_REFERENCIA,
+      historicos: falha("vgv_historico_mensal"),
+    });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    // Sem os agregados de jan–jul, o trimestral e o anual pareceriam válidos e
+    // estariam errados. `[]` como fallback seria pior do que dizer que a leitura
+    // não aconteceu (DEC-042).
+    assert.equal(resultado.empresa.periodos.estadoLeitura, "INDISPONIVEL");
+    assert.equal(
+      "dados" in resultado.empresa.periodos,
+      false,
+      "o ramo indisponível não carrega número nenhum",
+    );
+  });
+
+  it("10. e os acumulados continuam OK nessa falha", async () => {
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_REFERENCIA,
+      historicos: falha("vgv_historico_mensal"),
+    });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(resultado.empresa.acumulados.estadoLeitura, "OK");
+    if (resultado.empresa.acumulados.estadoLeitura !== "OK") return;
+
+    // Os acumulados não dependem do histórico mensal, então derrubá-los junto
+    // apagaria dado bom por falha alheia.
+    assert.equal(resultado.empresa.acumulados.dados.vgv.valor, "11900000.00");
+  });
+
+  it("11. equipes, propostas e reservas também continuam OK nessa falha", async () => {
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_REFERENCIA,
+      historicos: falha("vgv_historico_mensal"),
+    });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(resultado.equipes.estadoLeitura, "OK");
+    assert.equal(resultado.propostas.estadoLeitura, "OK");
+    assert.equal(resultado.reservas.estadoLeitura, "OK");
+  });
+
+  it("12. lista histórica vazia preserva exatamente o comportamento anterior", async () => {
+    const { prisma } = criarPrismaFalso(LEITURAS_BASE);
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    const esperado = calcularMetricasEmpresa(DOMINIO_LANCAMENTOS, DOMINIO_SALDOS, [], AGORA);
+
+    assert.equal(resultado.empresa.periodos.estadoLeitura, "OK");
+    if (resultado.empresa.periodos.estadoLeitura !== "OK") return;
+    assert.deepEqual(resultado.empresa.periodos.dados, periodicasDe(esperado));
+  });
+
+  it("a falha das outras leituras não é confundida com a desta", async () => {
+    // Saldo cai sozinho: períodos continuam OK, porque o histórico veio.
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_REFERENCIA,
+      saldos: falha("saldo_historico"),
+    });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(resultado.empresa.periodos.estadoLeitura, "OK");
+    assert.equal(resultado.empresa.acumulados.estadoLeitura, "INDISPONIVEL");
+    if (resultado.empresa.periodos.estadoLeitura !== "OK") return;
+    assert.equal(resultado.empresa.periodos.dados.vgvPeriodos.anual, "41900000.00");
+  });
+
+  it("lançamentos e histórico caindo juntos derrubam os dois blocos", async () => {
+    const { prisma } = criarPrismaFalso({
+      ...LEITURAS_REFERENCIA,
+      lancamentos: falha("lancamentos"),
+      historicos: falha("vgv_historico_mensal"),
+    });
+    const resultado = await obterMetricasPainel(prisma, AGORA);
+
+    assert.equal(resultado.empresa.periodos.estadoLeitura, "INDISPONIVEL");
+    assert.equal(resultado.empresa.acumulados.estadoLeitura, "INDISPONIVEL");
   });
 });

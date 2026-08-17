@@ -468,7 +468,7 @@ describe("leitura completa — todos os blocos", () => {
   });
 
   it("empresa bate exatamente com o núcleo puro sobre os dados esperados", () => {
-    const esperado = calcularMetricasEmpresa(lancamentosEsperados, saldosEsperados, AGORA);
+    const esperado = calcularMetricasEmpresa(lancamentosEsperados, saldosEsperados, [], AGORA);
     assert.deepEqual(resultado.empresa, {
       periodos: { estadoLeitura: "OK", dados: periodicasDe(esperado) },
       acumulados: { estadoLeitura: "OK", dados: esperado.acumulados },
@@ -702,7 +702,7 @@ describe("configuração inválida não contamina os números da empresa", () =>
       assert.equal(dadosEquipes(comQuatro).estadoEquipes, "CONFIGURACAO_INVALIDA");
       assert.deepEqual(dadosEquipes(comQuatro).equipes, []);
 
-      const esperado = calcularMetricasEmpresa(lancamentosEsperados, saldosEsperados, AGORA);
+      const esperado = calcularMetricasEmpresa(lancamentosEsperados, saldosEsperados, [], AGORA);
       assert.deepEqual(comQuatro.empresa, {
         periodos: { estadoLeitura: "OK", dados: periodicasDe(esperado) },
         acumulados: { estadoLeitura: "OK", dados: esperado.acumulados },
@@ -891,5 +891,134 @@ describe("listas operacionais — banco → leitura → apresentação", () => {
 
     assert.equal(ana?.valor, "300000.00", "a fração da venda compartilhada não mudou");
     assert.equal(dadosPeriodos(resultado).quadroMensal.VENDA, 3);
+  });
+});
+
+/**
+ * E4 — o VGV histórico mensal, lido do banco de verdade.
+ *
+ * Bloco isolado, com fixture própria: as sete competências entram **depois** de
+ * a leitura compartilhada da suíte já ter sido calculada, então nenhuma
+ * asserção anterior muda de valor por causa delas.
+ *
+ * A massa do escritório é exatamente esta — jan a jul de 2026 consolidados, e
+ * agosto em diante alimentado por VENDA real. Os três meses cobertos que têm
+ * venda na fixture (maio, junho e julho) são o que torna a substituição
+ * observável de ponta a ponta.
+ */
+describe("E4 — VGV histórico mensal lido do PostgreSQL", () => {
+  const COMPETENCIAS = [
+    { mes: "2026-01", valor: "2000000.00" },
+    { mes: "2026-02", valor: "3000000.00" },
+    { mes: "2026-03", valor: "4000000.00" },
+    { mes: "2026-04", valor: "5000000.00" },
+    { mes: "2026-05", valor: "6000000.00" },
+    { mes: "2026-06", valor: "7000000.00" },
+    { mes: "2026-07", valor: "8000000.00" },
+  ] as const;
+
+  let comHistorico: ResultadoPainel;
+
+  before(async () => {
+    assert.equal(
+      await prisma.vgvHistoricoMensal.count(),
+      0,
+      "a tabela precisa estar vazia antes desta fixture",
+    );
+
+    for (const competencia of COMPETENCIAS) {
+      await prisma.vgvHistoricoMensal.create({
+        data: {
+          competencia: paraDataCivil(`${competencia.mes}-01`),
+          valorTotal: competencia.valor,
+        },
+      });
+    }
+
+    comHistorico = await obterMetricasPainel(prisma, AGORA);
+  });
+
+  after(async () => {
+    await prisma.vgvHistoricoMensal.deleteMany({});
+    assert.equal(
+      await prisma.vgvHistoricoMensal.count(),
+      0,
+      "a limpeza precisa zerar o VGV histórico mensal",
+    );
+  });
+
+  it("a leitura chega ao núcleo com competência e valor canônico", () => {
+    // A conversão é provada comparando com a própria função pura alimentada
+    // pelo domínio esperado: se `competencia` fosse reinterpretada noutro fuso,
+    // ou se o `Decimal` passasse por `number`, os números divergiriam aqui.
+    const historicosEsperados = COMPETENCIAS.map((competencia) => ({
+      competencia: paraDataCivil(`${competencia.mes}-01`),
+      valorTotal: competencia.valor,
+    }));
+
+    const esperado = calcularMetricasEmpresa(
+      lancamentosEsperados,
+      saldosEsperados,
+      historicosEsperados,
+      AGORA,
+    );
+
+    assert.equal(comHistorico.empresa.periodos.estadoLeitura, "OK");
+    if (comHistorico.empresa.periodos.estadoLeitura !== "OK") return;
+    assert.deepEqual(comHistorico.empresa.periodos.dados.vgvPeriodos, esperado.vgvPeriodos);
+  });
+
+  it("o mensal não muda — agosto continua sendo só VENDA real", () => {
+    assert.equal(comHistorico.empresa.periodos.estadoLeitura, "OK");
+    if (comHistorico.empresa.periodos.estadoLeitura !== "OK") return;
+
+    assert.equal(comHistorico.empresa.periodos.dados.vgvPeriodos.mensal, "3134567.89");
+    assert.equal(
+      comHistorico.empresa.periodos.dados.vgvPeriodos.mensal,
+      dadosPeriodos(resultado).vgvPeriodos.mensal,
+      "idêntico ao da leitura sem histórico",
+    );
+  });
+
+  it("o trimestral substitui julho pelo agregado", () => {
+    assert.equal(comHistorico.empresa.periodos.estadoLeitura, "OK");
+    if (comHistorico.empresa.periodos.estadoLeitura !== "OK") return;
+
+    // Q3 é jul–set. Antes: a venda de 1.000.000 de julho mais os 3.134.567,89 de
+    // agosto. Agora julho está coberto, sua venda sai, e entram 8.000.000.
+    assert.equal(dadosPeriodos(resultado).vgvPeriodos.trimestral, "4134567.89");
+    assert.equal(comHistorico.empresa.periodos.dados.vgvPeriodos.trimestral, "11134567.89");
+  });
+
+  it("o anual substitui maio, junho e julho pelos agregados", () => {
+    assert.equal(comHistorico.empresa.periodos.estadoLeitura, "OK");
+    if (comHistorico.empresa.periodos.estadoLeitura !== "OK") return;
+
+    // Antes: 700.000 (maio) + 800.000 (junho) + 4.134.567,89 (Q3) = 5.634.567,89.
+    // Agora os três meses com venda estão cobertos e entram os sete agregados:
+    // 35.000.000 + 3.134.567,89 de agosto.
+    assert.equal(dadosPeriodos(resultado).vgvPeriodos.anual, "5634567.89");
+    assert.equal(comHistorico.empresa.periodos.dados.vgvPeriodos.anual, "38134567.89");
+  });
+
+  it("os acumulados e as equipes ficam exatamente onde estavam", () => {
+    assert.deepEqual(
+      comHistorico.empresa.acumulados,
+      resultado.empresa.acumulados,
+      "saldo histórico continua sendo o único dono dos acumulados",
+    );
+    assert.deepEqual(comHistorico.equipes, resultado.equipes);
+    assert.deepEqual(comHistorico.propostas, resultado.propostas);
+    assert.deepEqual(comHistorico.reservas, resultado.reservas);
+  });
+
+  it("o quadro mensal continua contando só VENDA real", () => {
+    assert.equal(comHistorico.empresa.periodos.estadoLeitura, "OK");
+    if (comHistorico.empresa.periodos.estadoLeitura !== "OK") return;
+
+    assert.deepEqual(
+      comHistorico.empresa.periodos.dados.quadroMensal,
+      dadosPeriodos(resultado).quadroMensal,
+    );
   });
 });

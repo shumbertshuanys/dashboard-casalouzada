@@ -20,6 +20,7 @@ import {
   type StatusReservaMetrica,
   type TipoEventoMetrica,
   type TipoSaldoMetrica,
+  type VgvHistoricoMensalMetrica,
 } from "@/lib/metricas";
 
 /**
@@ -163,6 +164,17 @@ type LinhaSaldo = {
   dataCorte: Date;
 };
 
+/**
+ * A linha de `vgv_historico_mensal`, com só o que o cálculo usa.
+ *
+ * `id` e `observacao` existem na tabela e não entram: eles não dizem nada a uma
+ * soma, e o que não é pedido não precisa ser mantido compatível.
+ */
+type LinhaVgvHistorico = {
+  competencia: Date;
+  valorTotal: DecimalPrisma;
+};
+
 type LinhaCorretor = {
   id: string;
   nomeExibicao: string;
@@ -264,6 +276,28 @@ function paraSaldos(linhas: readonly LinhaSaldo[]): SaldoHistoricoMetrica[] {
 }
 
 /**
+ * Converte os agregados mensais para o domínio.
+ *
+ * Duas conversões, e nenhuma decisão: `competencia` é `@db.Date` e chega como a
+ * meia-noite UTC do primeiro dia do mês, que já é a data civil de
+ * `src/lib/datas.ts` — passa direto, sem reinterpretar fuso, pelo mesmo motivo
+ * de `dataReferencia` e `dataCorte`. `valorTotal` sai do `Decimal` por
+ * `toFixed(2)`, nunca por `Number` ou `toNumber`.
+ *
+ * Nada é filtrado aqui. Qual competência conta em qual janela, e o que fazer com
+ * uma competência do mês corrente, é regra do núcleo (DEC-013) — duplicá-la
+ * nesta camada criaria uma segunda opinião sobre o mesmo assunto.
+ */
+function paraHistoricosMensais(
+  linhas: readonly LinhaVgvHistorico[],
+): VgvHistoricoMensalMetrica[] {
+  return linhas.map((linha) => ({
+    competencia: linha.competencia,
+    valorTotal: linha.valorTotal.toFixed(2),
+  }));
+}
+
+/**
  * As propostas candidatas à lista operacional, extraídas das mesmas linhas de
  * lançamento que alimentam as métricas.
  *
@@ -337,15 +371,30 @@ function soPeriodicas(metricas: MetricasEmpresaPuras): MetricasEmpresaPeriodicas
  * Fica deliberadamente fora de qualquer `try`: se o núcleo lançar — VENDA
  * relevante sem valor —, a exceção propaga em vez de virar `INDISPONIVEL`.
  *
- * No caso de saldo indisponível com lançamentos disponíveis, o núcleo é chamado
- * com `[]` no lugar dos saldos **apenas** para obter a metade periódica, que
- * não olha saldo nenhum. Os acumulados que essa chamada produz descrevem um
- * banco fictício sem saldo cadastrado (`SEM_SALDO_HISTORICO`), não o banco
- * real que falhou na leitura — por isso são descartados aqui e nunca expostos.
+ * Cada metade tem dependências próprias, e o `[]` entra só onde ele é
+ * **verdade sobre o que se vai expor**, nunca como remendo:
+ *
+ * - **saldo indisponível, lançamentos e histórico disponíveis**: o núcleo é
+ *   chamado com `[]` no lugar dos saldos apenas para obter a metade periódica,
+ *   que não olha saldo nenhum. Os acumulados que essa chamada produz descrevem
+ *   um banco fictício sem saldo cadastrado (`SEM_SALDO_HISTORICO`), não o banco
+ *   real que falhou na leitura — por isso são descartados e nunca expostos;
+ * - **histórico mensal indisponível**: simétrico. O núcleo é chamado com `[]` no
+ *   lugar dos históricos só para obter os **acumulados**, que provadamente os
+ *   ignoram (E3), e a metade periódica dessa chamada é descartada. Os períodos
+ *   viram `INDISPONIVEL`.
+ *
+ * A assimetria com o saldo é deliberada e vale a pena nomear. Um `[]` exposto no
+ * lugar dos agregados mensais não produziria um estado reconhecível: o VGV
+ * trimestral e o anual sairiam com um número **plausível e errado** — só as
+ * vendas individuais, sem os meses consolidados —, e ninguém na sala teria como
+ * saber. É exatamente o caso que a DEC-042 separa: "a leitura não aconteceu" é
+ * um estado exibível; "a leitura trouxe metade" não é.
  */
 function comporEmpresa(
   lancamentos: readonly LancamentoMetrica[] | null,
   saldos: readonly SaldoHistoricoMetrica[] | null,
+  historicosMensais: readonly VgvHistoricoMensalMetrica[] | null,
   instante: Date,
 ): ResultadoPainel["empresa"] {
   if (lancamentos === null) {
@@ -355,15 +404,30 @@ function comporEmpresa(
     };
   }
 
+  if (historicosMensais === null) {
+    if (saldos === null) {
+      return {
+        periodos: { estadoLeitura: "INDISPONIVEL" },
+        acumulados: { estadoLeitura: "INDISPONIVEL" },
+      };
+    }
+
+    const soAcumulados = calcularMetricasEmpresa(lancamentos, saldos, [], instante);
+    return {
+      periodos: { estadoLeitura: "INDISPONIVEL" },
+      acumulados: { estadoLeitura: "OK", dados: soAcumulados.acumulados },
+    };
+  }
+
   if (saldos === null) {
-    const parciais = calcularMetricasEmpresa(lancamentos, [], instante);
+    const parciais = calcularMetricasEmpresa(lancamentos, [], historicosMensais, instante);
     return {
       periodos: { estadoLeitura: "OK", dados: soPeriodicas(parciais) },
       acumulados: { estadoLeitura: "INDISPONIVEL" },
     };
   }
 
-  const completas = calcularMetricasEmpresa(lancamentos, saldos, instante);
+  const completas = calcularMetricasEmpresa(lancamentos, saldos, historicosMensais, instante);
   return {
     periodos: { estadoLeitura: "OK", dados: soPeriodicas(completas) },
     acumulados: { estadoLeitura: "OK", dados: completas.acumulados },
@@ -396,8 +460,14 @@ export async function obterMetricasPainel(
   // produzir uma tela em que a empresa e as equipes falam de períodos distintos.
   const instante = agora ?? new Date();
 
-  const [lidosLancamentos, lidosSaldos, lidosCorretores, lidosEquipes, lidasReservas] =
-    await Promise.allSettled([
+  const [
+    lidosLancamentos,
+    lidosSaldos,
+    lidosCorretores,
+    lidosEquipes,
+    lidasReservas,
+    lidosHistoricos,
+  ] = await Promise.allSettled([
       // As participações vêm aninhadas, não numa leitura própria: elas são parte
       // do mesmo fato, e separá-las criaria um bloco cuja falha isolada — venda
       // sem crédito — não tem significado de tela. Falhando junto, cai o mesmo
@@ -448,6 +518,15 @@ export async function obterMetricasPainel(
           corretor: { select: { nomeExibicao: true } },
         },
       }),
+      // Os agregados mensais, em leitura própria. Ela é separada da de
+      // lançamentos porque o fato é de outra natureza — um total consolidado,
+      // não um evento —, e porque é justamente essa separação que permite os
+      // períodos caírem sozinhos sem levar acumulados, equipes ou as listas
+      // operacionais junto. Sem `where`, `orderBy` ou `take`: o banco entrega as
+      // linhas e o recorte por janela é do núcleo.
+      prisma.vgvHistoricoMensal.findMany({
+        select: { competencia: true, valorTotal: true },
+      }),
     ]);
 
   // `null` aqui é leitura que falhou. Lista vazia é leitura que deu certo e não
@@ -455,6 +534,8 @@ export async function obterMetricasPainel(
   const lancamentos =
     lidosLancamentos.status === "fulfilled" ? lidosLancamentos.value.map(paraLancamento) : null;
   const saldos = lidosSaldos.status === "fulfilled" ? paraSaldos(lidosSaldos.value) : null;
+  const historicosMensais =
+    lidosHistoricos.status === "fulfilled" ? paraHistoricosMensais(lidosHistoricos.value) : null;
   const corretores =
     lidosCorretores.status === "fulfilled" ? lidosCorretores.value.map(paraCorretor) : null;
   const equipes = lidosEquipes.status === "fulfilled" ? lidosEquipes.value.map(paraEquipe) : null;
@@ -471,7 +552,7 @@ export async function obterMetricasPainel(
   // As chamadas ao núcleo ficam deliberadamente fora de qualquer `try`: exceção
   // de domínio precisa escapar, não virar `INDISPONIVEL`.
   return {
-    empresa: comporEmpresa(lancamentos, saldos, instante),
+    empresa: comporEmpresa(lancamentos, saldos, historicosMensais, instante),
 
     equipes:
       lancamentos !== null && corretores !== null && equipes !== null

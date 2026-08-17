@@ -64,6 +64,12 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
             >
               Saldo histórico
             </Link>
+            <Link
+              href="/admin/vgv-historico"
+              className="text-sm text-texto-secundario underline-offset-4 hover:text-texto hover:underline"
+            >
+              VGV histórico
+            </Link>
           </nav>
           <form action={sair}>
             <button

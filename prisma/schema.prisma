@@ -249,6 +249,42 @@ model SaldoHistorico {
   @@map("saldo_historico")
 }
 
+/// VGV total consolidado de uma competência mensal passada.
+///
+/// **Entidade independente, e a independência é o ponto.** Não é `Lancamento`,
+/// não é `VENDA`, não é `SaldoHistorico`, e não credita corretor nem equipe. É o
+/// número fechado que o escritório já apurava antes de o sistema existir, por
+/// mês, sem os eventos individuais que o compõem.
+///
+/// `valorTotal` representa **exclusivamente o valor dos imóveis vendidos** —
+/// semanticamente o mesmo que `Lancamento.valor` de uma `VENDA` contribui para o
+/// VGV. Não é locação, não é comissão, não é honorário, não é receita de outra
+/// natureza.
+///
+/// **O destino é o VGV trimestral e anual, e nada mais.** Esta tabela nunca deve
+/// alimentar VGV mensal, big numbers acumulados, Vendidos, rankings, VGV de
+/// corretor ou VGV de equipe. O consumo ainda **não** existe: esta etapa só
+/// persiste o fato.
+///
+/// `competencia` é o **primeiro dia do mês** como data civil — a mesma base
+/// `@db.Date` de `dataReferencia` e `dataCorte`, em meia-noite UTC. O banco
+/// recusa qualquer outro dia; a unicidade também é do banco, porque checar antes
+/// de inserir abriria corrida entre o SELECT e o INSERT.
+///
+/// A regra "somente competência passada" **não** mora aqui: um `CHECK` sobre
+/// `now()` não é imutável e envelheceria a própria linha que validou. Ela é da
+/// aplicação, e ainda não foi implementada.
+model VgvHistoricoMensal {
+  id           String   @id @default(uuid()) @db.Uuid
+  competencia  DateTime @unique @db.Date
+  valorTotal   Decimal  @map("valor_total") @db.Decimal(14, 2)
+  observacao   String?
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+
+  @@map("vgv_historico_mensal")
+}
+
 model Usuario {
   id           String   @id @default(uuid()) @db.Uuid
   nome         String

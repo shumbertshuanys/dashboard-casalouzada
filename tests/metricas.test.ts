@@ -14,6 +14,7 @@ import {
   type SaldoHistoricoMetrica,
   type TipoEventoMetrica,
   type TipoSaldoMetrica,
+  type VgvHistoricoMensalMetrica,
 } from "@/lib/metricas";
 
 /**
@@ -70,11 +71,22 @@ function saldo(
   return { tipo, quantidade, valorTotal, precisao, dataCorte: paraDataCivil(dataCorte) };
 }
 
+/**
+ * Um VGV histórico mensal — o agregado consolidado de um mês fechado.
+ *
+ * A competência é sempre o primeiro dia do mês, como o banco exige; o helper
+ * recebe `YYYY-MM` só para o teste ficar legível.
+ */
+function historico(competenciaMes: string, valorTotal: string): VgvHistoricoMensalMetrica {
+  return { competencia: paraDataCivil(`${competenciaMes}-01`), valorTotal };
+}
+
 describe("acumulados — ausência de saldo histórico", () => {
   it("sem saldo de VENDA, vendidos e VGV acumulado ficam indisponíveis", () => {
     // Há lançamentos de venda; ainda assim não se mostra o parcial.
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", "2026-08-10", "500000.00")],
+      [],
       [],
       AGORA,
     );
@@ -90,6 +102,7 @@ describe("acumulados — ausência de saldo histórico", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("AVALIACAO_GOOGLE", "2026-08-10")],
       [saldo("VENDA", 10, "1000.00", "2026-07-31")],
+      [],
       AGORA,
     );
 
@@ -105,6 +118,7 @@ describe("acumulados — ausência de saldo histórico", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", "2026-08-10", "500000.00")],
       [],
+      [],
       AGORA,
     );
 
@@ -118,7 +132,7 @@ describe("acumulados — o corte é inclusivo no saldo", () => {
   const saldos = [saldo("VENDA", 100, "250000.00", CORTE)];
 
   it("sem lançamentos posteriores, o acumulado é exatamente o saldo", () => {
-    const metricas = calcularMetricasEmpresa([], saldos, AGORA);
+    const metricas = calcularMetricasEmpresa([], saldos, [], AGORA);
 
     assert.deepEqual(metricas.acumulados.vendidos, { estado: "OK", valor: 100, precisao: "EXATO" });
     assert.deepEqual(metricas.acumulados.vgv, { estado: "OK", valor: "250000.00", precisao: "EXATO" });
@@ -128,6 +142,7 @@ describe("acumulados — o corte é inclusivo no saldo", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", "2026-05-15", "900000.00")],
       saldos,
+      [],
       AGORA,
     );
 
@@ -139,6 +154,7 @@ describe("acumulados — o corte é inclusivo no saldo", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", CORTE, "900000.00")],
       saldos,
+      [],
       AGORA,
     );
 
@@ -150,6 +166,7 @@ describe("acumulados — o corte é inclusivo no saldo", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", "2026-07-01", "900000.00")],
       saldos,
+      [],
       AGORA,
     );
 
@@ -168,6 +185,7 @@ describe("acumulados — o corte é inclusivo no saldo", () => {
         lancamento("VENDA", CORTE, "800000.00"),
       ],
       saldos,
+      [],
       AGORA,
     );
 
@@ -183,6 +201,7 @@ describe("acumulados — o corte é inclusivo no saldo", () => {
         lancamento("CAPTACAO_VENDA", "2026-07-12"),
       ],
       saldos,
+      [],
       AGORA,
     );
 
@@ -208,6 +227,7 @@ describe("acumulados — cada tipo usa o próprio corte", () => {
         lancamento("AVALIACAO_GOOGLE", "2026-08-01"),
       ],
       saldos,
+      [],
       AGORA,
     );
 
@@ -228,6 +248,7 @@ describe("acumulados — cada tipo usa o próprio corte", () => {
         lancamento("AVALIACAO_GOOGLE", "2026-07-31"),
       ],
       [saldo("AVALIACAO_GOOGLE", 2640, "0.00", "2026-07-31")],
+      [],
       AGORA,
     );
 
@@ -242,6 +263,7 @@ describe("VGV por período", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", JANELA_AGOSTO.primeiro, "100000.00")],
       [],
+      [],
       AGORA,
     );
     assert.equal(metricas.vgvPeriodos.mensal, "100000.00");
@@ -251,6 +273,7 @@ describe("VGV por período", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", JANELA_AGOSTO.ultimo, "100000.00")],
       [],
+      [],
       AGORA,
     );
     assert.equal(metricas.vgvPeriodos.mensal, "100000.00");
@@ -259,6 +282,7 @@ describe("VGV por período", () => {
   it("exclui o primeiro dia da janela seguinte", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", "2026-09-01", "100000.00")],
+      [],
       [],
       AGORA,
     );
@@ -277,6 +301,7 @@ describe("VGV por período", () => {
         lancamento("VENDA", "2025-12-31", "4.00"), // nenhum
       ],
       [],
+      [],
       AGORA,
     );
 
@@ -293,6 +318,7 @@ describe("VGV por período", () => {
         lancamento("CAPTACAO_VENDA", "2026-08-07"),
       ],
       [],
+      [],
       AGORA,
     );
 
@@ -304,6 +330,7 @@ describe("VGV por período", () => {
     const metricas = calcularMetricasEmpresa(
       [],
       [saldo("VENDA", 500, "4200000000.00", "2026-07-31")],
+      [],
       AGORA,
     );
 
@@ -319,6 +346,7 @@ describe("VGV por período", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", "2026-08-10", "123456.78")],
       [saldo("VENDA", 300, "1000.00", "2026-12-31")],
+      [],
       AGORA,
     );
 
@@ -335,6 +363,7 @@ describe("dinheiro é somado sem ponto flutuante", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", "2026-08-01", "0.10"), lancamento("VENDA", "2026-08-02", "0.20")],
       [],
+      [],
       AGORA,
     );
     assert.equal(metricas.vgvPeriodos.mensal, "0.30");
@@ -347,6 +376,7 @@ describe("dinheiro é somado sem ponto flutuante", () => {
         lancamento("VENDA", "2026-08-02", "0.01"),
       ],
       [],
+      [],
       AGORA,
     );
     assert.equal(metricas.vgvPeriodos.mensal, "1000000000000.00");
@@ -356,6 +386,7 @@ describe("dinheiro é somado sem ponto flutuante", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", "2026-08-01", "0.01")],
       [saldo("VENDA", 1, "999999999999.99", "2026-07-31")],
+      [],
       AGORA,
     );
     assert.equal(metricas.acumulados.vgv.valor, "1000000000000.00");
@@ -363,12 +394,12 @@ describe("dinheiro é somado sem ponto flutuante", () => {
 
   it("centavos sobrevivem a muitas parcelas pequenas", () => {
     const centavos = Array.from({ length: 101 }, () => lancamento("VENDA", "2026-08-01", "0.01"));
-    const metricas = calcularMetricasEmpresa(centavos, [], AGORA);
+    const metricas = calcularMetricasEmpresa(centavos, [], [], AGORA);
     assert.equal(metricas.vgvPeriodos.mensal, "1.01");
   });
 
   it("nenhuma venda no período é zero real, não ausência", () => {
-    const metricas = calcularMetricasEmpresa([lancamento("PROPOSTA", "2026-08-01")], [], AGORA);
+    const metricas = calcularMetricasEmpresa([lancamento("PROPOSTA", "2026-08-01")], [], [], AGORA);
     assert.equal(metricas.vgvPeriodos.mensal, "0.00");
     assert.equal(metricas.estadoPeriodoMensal, "OK");
   });
@@ -377,7 +408,7 @@ describe("dinheiro é somado sem ponto flutuante", () => {
 describe("venda sem valor falha explicitamente", () => {
   it("no VGV do período", () => {
     assert.throws(
-      () => calcularMetricasEmpresa([lancamento("VENDA", "2026-08-10", null)], [], AGORA),
+      () => calcularMetricasEmpresa([lancamento("VENDA", "2026-08-10", null)], [], [], AGORA),
       /VENDA sem valor/,
     );
   });
@@ -388,6 +419,7 @@ describe("venda sem valor falha explicitamente", () => {
         calcularMetricasEmpresa(
           [lancamento("VENDA", "2026-08-10", null)],
           [saldo("VENDA", 1, "1.00", "2026-07-31")],
+          [],
           AGORA,
         ),
       /VENDA sem valor/,
@@ -396,11 +428,11 @@ describe("venda sem valor falha explicitamente", () => {
 
   it("recusa valor fora da forma canônica em vez de arredondar", () => {
     assert.throws(
-      () => calcularMetricasEmpresa([lancamento("VENDA", "2026-08-10", "1000")], [], AGORA),
+      () => calcularMetricasEmpresa([lancamento("VENDA", "2026-08-10", "1000")], [], [], AGORA),
       /forma canônica/,
     );
     assert.throws(
-      () => calcularMetricasEmpresa([lancamento("VENDA", "2026-08-10", "1.5")], [], AGORA),
+      () => calcularMetricasEmpresa([lancamento("VENDA", "2026-08-10", "1.5")], [], [], AGORA),
       /forma canônica/,
     );
   });
@@ -410,6 +442,7 @@ describe("venda sem valor falha explicitamente", () => {
     const metricas = calcularMetricasEmpresa(
       [lancamento("VENDA", "2025-03-10", null)],
       [saldo("VENDA", 7, "70.00", "2025-12-31")],
+      [],
       AGORA,
     );
     assert.equal(metricas.acumulados.vgv.valor, "70.00");
@@ -434,6 +467,7 @@ describe("quadro mensal", () => {
         lancamento("AVALIACAO_GOOGLE", "2026-08-11"),
       ],
       [],
+      [],
       AGORA,
     );
 
@@ -456,6 +490,7 @@ describe("quadro mensal", () => {
         lancamento("CAPTACAO_EXCLUSIVA", "2026-08-06"),
       ],
       [],
+      [],
       AGORA,
     );
 
@@ -473,6 +508,7 @@ describe("quadro mensal", () => {
         lancamento("PROPOSTA", "2026-09-01"),
       ],
       [],
+      [],
       AGORA,
     );
 
@@ -486,6 +522,7 @@ describe("quadro mensal", () => {
         saldo("VENDA", 528, "4200000000.00", "2026-07-31"),
         saldo("AVALIACAO_GOOGLE", 2643, "0.00", "2026-07-31"),
       ],
+      [],
       AGORA,
     );
 
@@ -496,7 +533,7 @@ describe("quadro mensal", () => {
 
 describe("estado do mês", () => {
   it("nenhum lançamento no mês é SEM_DADOS", () => {
-    const metricas = calcularMetricasEmpresa([], [], AGORA);
+    const metricas = calcularMetricasEmpresa([], [], [], AGORA);
     assert.equal(metricas.estadoPeriodoMensal, "SEM_DADOS");
   });
 
@@ -508,13 +545,14 @@ describe("estado do mês", () => {
         lancamento("AVALIACAO_GOOGLE", "2025-08-15"),
       ],
       [],
+      [],
       AGORA,
     );
     assert.equal(metricas.estadoPeriodoMensal, "SEM_DADOS");
   });
 
   it("um único lançamento de qualquer tipo já é OK, e os zeros são reais", () => {
-    const metricas = calcularMetricasEmpresa([lancamento("PROPOSTA", "2026-08-20")], [], AGORA);
+    const metricas = calcularMetricasEmpresa([lancamento("PROPOSTA", "2026-08-20")], [], [], AGORA);
 
     assert.equal(metricas.estadoPeriodoMensal, "OK");
     assert.equal(metricas.quadroMensal.PROPOSTA, 1);
@@ -526,6 +564,7 @@ describe("estado do mês", () => {
     const metricas = calcularMetricasEmpresa(
       [],
       [saldo("VENDA", 528, "4200000000.00", "2026-07-31")],
+      [],
       AGORA,
     );
 
@@ -544,6 +583,7 @@ describe("período corrente segue São Paulo, não UTC", () => {
         lancamento("PROPOSTA", "2026-02-10"),
         lancamento("VENDA", "2026-03-01", "900.00"),
       ],
+      [],
       [],
       virada,
     );
@@ -565,6 +605,7 @@ describe("período corrente segue São Paulo, não UTC", () => {
         lancamento("VENDA", "2026-03-01", "900.00"),
       ],
       [],
+      [],
       depois,
     );
 
@@ -579,6 +620,7 @@ describe("período corrente segue São Paulo, não UTC", () => {
         lancamento("VENDA", "2026-12-31", "10.00"),
         lancamento("VENDA", "2027-01-01", "20.00"),
       ],
+      [],
       [],
       reveillon,
     );
@@ -909,7 +951,7 @@ describe("corretor inativo (DEC-006)", () => {
   });
 
   it("mas os eventos dele continuam nos totais da empresa", () => {
-    const empresa = calcularMetricasEmpresa(lancamentos, [], AGORA);
+    const empresa = calcularMetricasEmpresa(lancamentos, [], [], AGORA);
 
     assert.equal(empresa.quadroMensal.VENDA, 2, "as duas vendas contam");
     assert.equal(empresa.quadroMensal.PROPOSTA, 1);
@@ -1228,7 +1270,7 @@ describe("estado do mês nas equipes", () => {
     const lancamentos = [evento("PROPOSTA", "2026-08-10", "a1", "A")];
     assert.equal(
       calcularMetricasEquipes(lancamentos, corretores, TRES_EQUIPES, AGORA).estadoPeriodoMensal,
-      calcularMetricasEmpresa(lancamentos, [], AGORA).estadoPeriodoMensal,
+      calcularMetricasEmpresa(lancamentos, [], [], AGORA).estadoPeriodoMensal,
     );
   });
 });
@@ -1264,5 +1306,332 @@ describe("rankings seguem São Paulo, não UTC", () => {
     );
 
     assert.equal(linha(resultado, "A", "vgv", "a1")?.valor, "900.00");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* VGV histórico mensal (E3)                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * O agregado mensal consolidado entra **só** no trimestral e no anual.
+ *
+ * A regra que organiza tudo abaixo: uma competência histórica **substitui o mês
+ * inteiro** nesses dois recortes. Se julho tem histórico, nenhuma VENDA de julho
+ * soma individualmente ali — o número do relatório já a contém, e somar as duas
+ * coisas contaria a mesma venda duas vezes.
+ *
+ * O que ele nunca toca: VGV mensal, acumulados, quadro mensal, estado do mês e
+ * qualquer métrica de equipe ou corretor.
+ */
+describe("VGV histórico mensal — recortes trimestral e anual", () => {
+  /** Os sete meses fechados de 2026, do caso de referência. */
+  const SETE_MESES = [
+    historico("2026-01", "2000000.00"),
+    historico("2026-02", "3000000.00"),
+    historico("2026-03", "4000000.00"),
+    historico("2026-04", "5000000.00"),
+    historico("2026-05", "6000000.00"),
+    historico("2026-06", "7000000.00"),
+    historico("2026-07", "8000000.00"),
+  ];
+
+  it("1. caso de referência: jan–jul históricos mais uma venda de agosto", () => {
+    const vendaDeAgosto = lancamento("VENDA", "2026-08-14", "6900000.00");
+    const metricas = calcularMetricasEmpresa([vendaDeAgosto], [], SETE_MESES, AGORA);
+
+    assert.equal(metricas.vgvPeriodos.mensal, "6900000.00", "mensal é só a venda real");
+    // Q3 = jul, ago, set. Julho vem do histórico; agosto, da venda.
+    assert.equal(metricas.vgvPeriodos.trimestral, "14900000.00");
+    // 2 + 3 + 4 + 5 + 6 + 7 + 8 = 35, mais 6,9 da venda de agosto.
+    assert.equal(metricas.vgvPeriodos.anual, "41900000.00");
+  });
+
+  it("2. o mensal ignora histórico, inclusive o do próprio mês corrente", () => {
+    const vendaDeAgosto = lancamento("VENDA", "2026-08-14", "1000000.00");
+    const metricas = calcularMetricasEmpresa(
+      [vendaDeAgosto],
+      [],
+      [historico("2026-08", "99000000.00"), ...SETE_MESES],
+      AGORA,
+    );
+
+    assert.equal(metricas.vgvPeriodos.mensal, "1000000.00");
+  });
+
+  it("3. mês coberto: a VENDA de julho não soma de novo no trimestral", () => {
+    const vendaDeJulho = lancamento("VENDA", "2026-07-20", "500000.00");
+    const metricas = calcularMetricasEmpresa(
+      [vendaDeJulho],
+      [],
+      [historico("2026-07", "8000000.00")],
+      AGORA,
+    );
+
+    assert.equal(metricas.vgvPeriodos.trimestral, "8000000.00");
+  });
+
+  it("4. mês coberto: a VENDA de julho não soma de novo no anual", () => {
+    const vendaDeJulho = lancamento("VENDA", "2026-07-20", "500000.00");
+    const metricas = calcularMetricasEmpresa(
+      [vendaDeJulho],
+      [],
+      [historico("2026-07", "8000000.00")],
+      AGORA,
+    );
+
+    assert.equal(metricas.vgvPeriodos.anual, "8000000.00");
+  });
+
+  it("5. junho fica fora do Q3 e dentro do ano", () => {
+    const metricas = calcularMetricasEmpresa([], [], [historico("2026-06", "7000000.00")], AGORA);
+
+    assert.equal(metricas.vgvPeriodos.trimestral, "0.00", "junho é Q2, não Q3");
+    assert.equal(metricas.vgvPeriodos.anual, "7000000.00");
+  });
+
+  it("6. dezembro de 2025 não entra no ano de 2026", () => {
+    const metricas = calcularMetricasEmpresa([], [], [historico("2025-12", "9000000.00")], AGORA);
+
+    assert.equal(metricas.vgvPeriodos.anual, "0.00");
+    assert.equal(metricas.vgvPeriodos.trimestral, "0.00");
+  });
+
+  it("7. histórico do mês corrente é ignorado e não apaga a venda real", () => {
+    // Defesa de domínio: o Admin recusa cadastrar agosto enquanto agosto corre,
+    // mas o núcleo não confia nisso. Ignorar é a resposta certa — e ignorar
+    // significa que agosto **não** está coberto, então a venda real continua.
+    const vendaDeAgosto = lancamento("VENDA", "2026-08-10", "1500000.00");
+    const metricas = calcularMetricasEmpresa(
+      [vendaDeAgosto],
+      [],
+      [historico("2026-08", "99000000.00")],
+      AGORA,
+    );
+
+    assert.equal(metricas.vgvPeriodos.trimestral, "1500000.00");
+    assert.equal(metricas.vgvPeriodos.anual, "1500000.00");
+    assert.equal(metricas.vgvPeriodos.mensal, "1500000.00");
+  });
+
+  it("8. histórico de mês futuro é ignorado e não cobre venda nenhuma", () => {
+    const vendaDeSetembro = lancamento("VENDA", "2026-09-05", "1200000.00");
+    const metricas = calcularMetricasEmpresa(
+      [vendaDeSetembro],
+      [],
+      [historico("2026-09", "99000000.00")],
+      AGORA,
+    );
+
+    // Setembro é Q3 e 2026: a venda real entra nos dois; o histórico, em nenhum.
+    assert.equal(metricas.vgvPeriodos.trimestral, "1200000.00");
+    assert.equal(metricas.vgvPeriodos.anual, "1200000.00");
+  });
+
+  it("9. lista vazia devolve exatamente o comportamento anterior", () => {
+    const lancamentos = [
+      lancamento("VENDA", "2026-07-10", "300000.00"),
+      lancamento("VENDA", "2026-08-10", "400000.00"),
+      lancamento("VENDA", "2026-02-10", "500000.00"),
+    ];
+    const metricas = calcularMetricasEmpresa(lancamentos, [], [], AGORA);
+
+    assert.equal(metricas.vgvPeriodos.mensal, "400000.00");
+    assert.equal(metricas.vgvPeriodos.trimestral, "700000.00");
+    assert.equal(metricas.vgvPeriodos.anual, "1200000.00");
+  });
+
+  it("10. os acumulados não enxergam histórico mensal", () => {
+    const saldos = [saldo("VENDA", 100, "250000.00", "2026-06-30")];
+    const lancamentos = [lancamento("VENDA", "2026-07-10", "300000.00")];
+
+    const semHistorico = calcularMetricasEmpresa(lancamentos, saldos, [], AGORA);
+    const comHistorico = calcularMetricasEmpresa(lancamentos, saldos, SETE_MESES, AGORA);
+
+    assert.deepEqual(comHistorico.acumulados, semHistorico.acumulados);
+    assert.equal(comHistorico.acumulados.vgv.valor, "550000.00");
+    assert.equal(comHistorico.acumulados.vendidos.valor, 101);
+  });
+
+  it("11. o quadro mensal continua contando só VENDA real", () => {
+    const lancamentos = [lancamento("VENDA", "2026-08-10", "400000.00")];
+    const metricas = calcularMetricasEmpresa(lancamentos, [], SETE_MESES, AGORA);
+
+    assert.equal(metricas.quadroMensal.VENDA, 1, "histórico não cria venda fictícia");
+  });
+
+  it("12. o estado do mês continua vindo só dos lançamentos reais", () => {
+    const semLancamentos = calcularMetricasEmpresa([], [], SETE_MESES, AGORA);
+    assert.equal(semLancamentos.estadoPeriodoMensal, "SEM_DADOS");
+
+    const comVenda = calcularMetricasEmpresa(
+      [lancamento("VENDA", "2026-08-10", "400000.00")],
+      [],
+      SETE_MESES,
+      AGORA,
+    );
+    assert.equal(comVenda.estadoPeriodoMensal, "OK");
+  });
+
+  it("13. VENDA sem valor em mês coberto não derruba trimestral nem anual", () => {
+    // Ela é filtrada **antes** de o valor ser exigido: o mês já está
+    // representado pelo agregado, então a venda não precisa ser somada.
+    const semValorEmJulho = lancamento("VENDA", "2026-07-10", null);
+    const metricas = calcularMetricasEmpresa(
+      [semValorEmJulho],
+      [],
+      [historico("2026-07", "8000000.00")],
+      AGORA,
+    );
+
+    assert.equal(metricas.vgvPeriodos.trimestral, "8000000.00");
+    assert.equal(metricas.vgvPeriodos.anual, "8000000.00");
+  });
+
+  it("14. VENDA sem valor em mês NÃO coberto continua lançando", () => {
+    const semValorEmAgosto = lancamento("VENDA", "2026-08-10", null);
+
+    assert.throws(
+      () =>
+        calcularMetricasEmpresa(
+          [semValorEmAgosto],
+          [],
+          [historico("2026-07", "8000000.00")],
+          AGORA,
+        ),
+      /VENDA sem valor/,
+    );
+  });
+
+  it("15. meses históricos fora do trimestre corrente somam só no ano", () => {
+    // Instante em outubro: Q4 não tem mês fechado com histórico, e os três
+    // agregados de Q3 permanecem no ano.
+    const emOutubro = new Date("2026-10-15T15:00:00.000Z");
+    const metricas = calcularMetricasEmpresa(
+      [],
+      [],
+      [
+        historico("2026-07", "1000000.00"),
+        historico("2026-08", "2000000.00"),
+        historico("2026-09", "3000000.00"),
+      ],
+      emOutubro,
+    );
+
+    assert.equal(metricas.vgvPeriodos.trimestral, "0.00");
+    assert.equal(metricas.vgvPeriodos.anual, "6000000.00");
+  });
+
+  it("15b. vários meses fechados dentro do trimestre corrente somam uma vez cada", () => {
+    // Visto de setembro, Q3 tem julho e agosto fechados; setembro ainda corre.
+    const emSetembro = new Date("2026-09-15T15:00:00.000Z");
+    const metricas = calcularMetricasEmpresa(
+      [],
+      [],
+      [historico("2026-07", "1000000.00"), historico("2026-08", "2000000.00")],
+      emSetembro,
+    );
+
+    assert.equal(metricas.vgvPeriodos.trimestral, "3000000.00");
+  });
+
+  it("16. histórico de Q1/Q2 não vaza para o trimestre corrente", () => {
+    const metricas = calcularMetricasEmpresa([], [], SETE_MESES, AGORA);
+
+    // Dos sete, só julho é Q3.
+    assert.equal(metricas.vgvPeriodos.trimestral, "8000000.00");
+    assert.equal(metricas.vgvPeriodos.anual, "35000000.00");
+  });
+
+  it("17. valores grandes somam exato, sem perder centavos", () => {
+    const metricas = calcularMetricasEmpresa(
+      [lancamento("VENDA", "2026-08-01", "0.01")],
+      [],
+      [historico("2026-07", "99999999999.99")],
+      AGORA,
+    );
+
+    assert.equal(metricas.vgvPeriodos.trimestral, "100000000000.00");
+  });
+
+  it("18. duas vendas reais em mês não coberto somam normalmente", () => {
+    const metricas = calcularMetricasEmpresa(
+      [
+        lancamento("VENDA", "2026-08-05", "1000000.00"),
+        lancamento("VENDA", "2026-08-20", "2000000.00"),
+      ],
+      [],
+      [historico("2026-07", "8000000.00")],
+      AGORA,
+    );
+
+    assert.equal(metricas.vgvPeriodos.mensal, "3000000.00");
+    assert.equal(metricas.vgvPeriodos.trimestral, "11000000.00");
+  });
+
+  it("19. mês coberto com várias vendas reais: nenhuma soma individualmente", () => {
+    const metricas = calcularMetricasEmpresa(
+      [
+        lancamento("VENDA", "2026-07-02", "1000000.00"),
+        lancamento("VENDA", "2026-07-15", "2000000.00"),
+        lancamento("VENDA", "2026-07-28", "3000000.00"),
+      ],
+      [],
+      [historico("2026-07", "8000000.00")],
+      AGORA,
+    );
+
+    assert.equal(metricas.vgvPeriodos.trimestral, "8000000.00");
+    assert.equal(metricas.vgvPeriodos.anual, "8000000.00");
+  });
+
+  it("20. as métricas de equipe não recebem histórico e não mudam", () => {
+    // Os rankings de equipe são do **mês corrente** (agosto), então a venda que
+    // os alimenta é de agosto. O histórico de julho existe em paralelo e cobre
+    // julho para a empresa — sem encostar em nada de equipe.
+    const vendaDeAgosto = evento("VENDA", "2026-08-20", "c1", "A", "1000000.00");
+    const corretores = [corretor("c1", "Ana", "A")];
+
+    // A assinatura de `calcularMetricasEquipes` continua com quatro parâmetros e
+    // nenhum deles é histórico: não há por onde o agregado alcançar equipe.
+    const equipes = calcularMetricasEquipes([vendaDeAgosto], corretores, TRES_EQUIPES, AGORA);
+    assert.equal(calcularMetricasEquipes.length, 3, "três obrigatórios mais `agora` opcional");
+
+    const empresa = calcularMetricasEmpresa(
+      [vendaDeAgosto],
+      [],
+      [historico("2026-07", "8000000.00")],
+      AGORA,
+    );
+
+    // Empresa: julho vem do agregado, agosto da venda real.
+    assert.equal(empresa.vgvPeriodos.trimestral, "9000000.00");
+    // Equipe: só a venda real, pelo valor integral do participante único.
+    assert.equal(linha(equipes, "A", "vgv", "c1")?.valor, "1000000.00");
+  });
+
+  it("20b. o resultado das equipes independe do histórico da empresa", () => {
+    // A prova de isolamento sem depender de assinatura: a mesma massa de equipe
+    // produz o mesmo objeto, enquanto a empresa muda por causa do agregado.
+    const vendaDeAgosto = evento("VENDA", "2026-08-20", "c1", "A", "1000000.00");
+    const corretores = [corretor("c1", "Ana", "A")];
+
+    const equipes = calcularMetricasEquipes([vendaDeAgosto], corretores, TRES_EQUIPES, AGORA);
+    const equipesDeNovo = calcularMetricasEquipes([vendaDeAgosto], corretores, TRES_EQUIPES, AGORA);
+
+    const semHistorico = calcularMetricasEmpresa([vendaDeAgosto], [], [], AGORA);
+    const comHistorico = calcularMetricasEmpresa(
+      [vendaDeAgosto],
+      [],
+      [historico("2026-07", "8000000.00")],
+      AGORA,
+    );
+
+    assert.deepEqual(equipesDeNovo, equipes, "equipes não têm entrada para o histórico");
+    assert.notEqual(
+      comHistorico.vgvPeriodos.trimestral,
+      semHistorico.vgvPeriodos.trimestral,
+      "a empresa, essa sim, muda",
+    );
   });
 });

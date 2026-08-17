@@ -39,6 +39,10 @@ Depois da v1, a **Celebração de Venda** foi implementada, publicada e **aprova
 proprietário em produção** em 2026-08-16, no release **`ed1c29f`** — ver a seção logo
 abaixo do bloco da v1.
 
+Em 2026-08-17 vieram, nesta ordem: o **microajuste de precisão do VGV** (DEC-069),
+**publicado** no release `630e336`; e o **VGV histórico mensal** (DEC-070), **implementado
+e ainda não publicado**, na branch `feat/vgv-historico-mensal`.
+
 ## A Entrega v1 está CONCLUÍDA e EM PRODUÇÃO
 
 O release em produção é hoje o **`630e336`** — que sucedeu o `ed1c29f` em 2026-08-17, ao
@@ -231,6 +235,23 @@ Evita cadastrar retroativamente centenas de vendas antigas.
 | descricao | text |
 
 Entra apenas nos big numbers acumulados. Nunca nos períodos.
+
+### `vgv_historico_mensal`
+O VGV **total consolidado** de um mês já encerrado — o que o escritório apurava antes do
+sistema, fechado por competência. Entidade independente: **não é** lançamento, **não é**
+venda e **não é** saldo histórico (DEC-070).
+
+| Campo | Tipo | Observação |
+|---|---|---|
+| id | uuid | |
+| competencia | date | primeiro dia do mês; único, com `CHECK` de dia 1 |
+| valor_total | numeric(14,2) | só valor de imóveis vendidos; `CHECK > 0` |
+| observacao | text | opcional |
+
+Entra apenas no **VGV trimestral e anual**. Nunca no mês corrente, nos acumulados, em
+Vendidos, no quadro mensal ou em ranking. Uma competência cadastrada **substitui** a
+contribuição das VENDA daquele mês nesses dois recortes — as vendas continuam inteiras em
+todo o resto. Sem corretor, sem equipe, sem quantidade.
 
 > Restringido depois pela Q8, já implementado: só `VENDA` e `AVALIACAO_GOOGLE`
 > recebem saldo, e existe no máximo uma linha por tipo, garantida por índice
@@ -432,9 +453,15 @@ o registro inicial vem pelo seed e a senha se troca pela própria área administ
   `dataReferencia` **estritamente posterior** ao `dataCorte` daquele saldo. Cada linha de
   `saldo_historico` é a fonte do acumulado até o próprio corte, inclusive; somar também os
   lançamentos anteriores contaria a mesma produção duas vezes. Ver DEC-036.
-- **VGV mensal** = soma de `valor` das vendas do mês civil corrente.
+- **VGV mensal** = soma de `valor` das vendas do mês civil corrente. **Nunca** recebe VGV
+  histórico mensal — um agregado só existe para mês fechado.
 - **VGV trimestral** = trimestre civil corrente (jan–mar, abr–jun, jul–set, out–dez).
 - **VGV anual** = ano civil corrente.
+- **VGV trimestral e anual, desde a DEC-070**, somam o `valor_total` das competências de
+  `vgv_historico_mensal` que caem na janela **e** são anteriores ao mês corrente, mais as
+  VENDA da janela cujo mês **não** está coberto por competência. Uma competência cadastrada
+  substitui o mês inteiro nesses dois recortes: se julho tem agregado, nenhuma venda de
+  julho soma individualmente ali.
 - **Quadro mensal geral** = mês civil corrente, contagem por tipo.
 - **Quadros de equipe** = mês civil corrente, corretores ordenados do maior para o menor na
   métrica que estiver ativa no momento.
@@ -443,6 +470,11 @@ o registro inicial vem pelo seed e a senha se troca pela própria área administ
 > **O saldo histórico nunca participa de mês, trimestre ou ano.** Ele só entra nos
 > acumulados dos big numbers. Os recortes por período usam exclusivamente lançamentos,
 > e ignoram `dataCorte` (DEC-004, DEC-036).
+
+> **As duas tabelas históricas não se misturam.** `saldo_historico` responde "quanto havia
+> antes do sistema" e entra **só** nos acumulados; `vgv_historico_mensal` responde "quanto
+> foi naquele mês" e entra **só** no trimestral e no anual. Nenhuma das duas alcança
+> Vendidos, quadro mensal, ranking ou VGV de corretor e de equipe (DEC-036, DEC-070).
 
 Os limites desses recortes vêm da F3.1: `mesCorrente`, `trimestreCorrente` e
 `anoCorrente`, em `src/lib/datas.ts`, devolvem a janela civil corrente em
@@ -794,8 +826,11 @@ Não são fases técnicas: correm ao lado do roadmap e dependem do proprietário
 |---|---|---|
 | O1 | reconciliação do dossiê secreto do proprietário contra o estado real de Render, Supabase e administração — **o dossiê fica fora do Git e nenhum valor secreto entra no repositório** | **concluída** — auditoria, rotação da senha exposta, contrato de conexões (DEC-066) e reconciliação do cofre e do `.env` local |
 | O2 | carga operacional inicial — cadastrar o `saldo_historico` real pela administração, **sem inventar valor** | **parcialmente concluída** — `AVALIACAO_GOOGLE` cadastrado; falta `VENDA` |
+| O3 | cadastrar os sete VGVs consolidados de **jan–jul/2026** em `/admin/vgv-historico`, depois da publicação da feature (DEC-070) | **pendente** — a feature está implementada e não publicada; os valores são do proprietário e **nenhum é inventado** |
 
-O detalhamento das duas está em `docs/HANDOFF_ATUAL.md`, em "Etapas operacionais".
+O detalhamento delas está em `docs/HANDOFF_ATUAL.md`, em "Etapas operacionais".
+
+> ⚠️ **O2 — reconciliação pendente.** Há **evidência operacional posterior incompatível** com o "falta `VENDA`" acima: o diagnóstico de 2026-08-17 partiu de um saldo de `VENDA` cadastrado, com corte em 31/07/2026, e o big number exibindo um valor real — o que só é possível com a linha presente. **A O2 não é declarada concluída** sem um `SELECT` real em produção, que ainda não foi feito. Ver `docs/HANDOFF_ATUAL.md`.
 
 ---
 

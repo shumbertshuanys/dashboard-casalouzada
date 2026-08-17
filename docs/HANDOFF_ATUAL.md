@@ -9,6 +9,7 @@
 | **Release executável em produção** | **`630e336d56e15f5a2986b9212588a17aec8476c5`** — deploy `dep-da1j42m417fc73ajgu00`, **LIVE** desde **2026-08-17T16:10:30Z**. **Este é o único SHA fixo desta tabela**, e ele só muda quando houver um deploy novo. |
 | Release anterior | `ed1c29f42045bb2097570347882b9618e232902d`, deploy `dep-da13bts9v7es73ag89pg` — **`deactivated`**, substituído em 2026-08-17. Continua citado adiante como **histórico**: foi ele que publicou a Celebração de Venda e recebeu os gates humanos daquele ciclo. **Não é mais o que roda.** |
 | Estado do Git | A `main` contém **commits documentais posteriores** ao release executável — inclusive esta própria reconciliação. O SHA corrente dela **não é registrado aqui de propósito** — consulte `git rev-parse main` ou o GitHub. Um SHA de `main` escrito neste documento se autoinvalida no próximo commit de documentação, que foi exatamente o defeito que esta linha existe para não repetir. |
+| ⚠️ **Trabalho em branch** | A branch **`feat/vgv-historico-mensal`** contém a feature de VGV histórico mensal **implementada e não commitada** (ver a seção adiante). Ela **não** está na `main` e **não** está em produção. A linha abaixo descreve a `main`, não esta branch. |
 | ℹ️ **A divergência é só documental** | Tudo que vier depois de `630e336` na `main` é **documentação** — nenhuma linha de `src/`, `prisma/`, `tests/` ou configuração. O **código executável de `main` e de produção é equivalente** enquanto isso continuar sendo verdade, então **nenhum deploy é necessário só para alinhar SHA**. Auto-deploy continua **OFF**: push para `main` **não** é deploy. |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
@@ -27,13 +28,107 @@
 > direto no navegador nativo dela (recurso "Serviço da Web" / PC on TV) e **sem nenhum
 > hardware externo** (DEC-068).
 >
-> **PRÓXIMA PENDÊNCIA OPERACIONAL: O2 — completar o saldo histórico de `VENDA`** quando
-> os dados forem fornecidos pelo proprietário. Enquanto a linha não existir, imóveis
-> vendidos e VGV acumulado seguem em `—`. **Isso não é bug**: é ausência de dado, que o
-> sistema afirma em vez de inventar zero (DEC-014, DEC-037). Só o proprietário tem os
-> números de abertura.
+> **PENDÊNCIA OPERACIONAL: O2 — completar o saldo histórico de `VENDA`** quando os dados
+> forem fornecidos pelo proprietário. Enquanto a linha não existir, imóveis vendidos e VGV
+> acumulado seguem em `—`. **Isso não é bug**: é ausência de dado, que o sistema afirma em
+> vez de inventar zero (DEC-014, DEC-037). Só o proprietário tem os números de abertura.
+>
+> ⚠️ **O2 — reconciliação operacional pendente.** Existe **evidência operacional posterior
+> incompatível** com a afirmação acima. No diagnóstico do VGV de 2026-08-17 o caso
+> observado partia de um saldo histórico de `VENDA` **cadastrado**, com
+> `dataCorte = 31/07/2026`, e o big number exibindo um valor na casa das centenas de
+> milhão. Isso é conclusivo pelo código: sem linha de `VENDA` em `saldo_historico`,
+> `acumulados.vgv` seria `SEM_SALDO_HISTORICO` e a TV renderizaria `—`, **nunca um número**.
+> Um valor exibido só é possível com a linha presente.
+>
+> **A O2 não é declarada concluída aqui**, porque isso exige um `SELECT` real em produção
+> que ainda não foi feito — nenhum ciclo recente acessou o banco de produção. Até lá, o
+> estado correto desta etapa é **indeterminado**, e as demais menções à O2 neste documento
+> e no `PLANO.md` devem ser lidas com esta ressalva.
 >
 > A **F5 — Refinamentos** continua **futura** e **não foi iniciada**.
+
+## VGV histórico mensal — IMPLEMENTADO, NÃO PUBLICADO
+
+Ciclo mais recente do projeto, **inteiro numa branch de feature**. A decisão durável é a
+**DEC-070**.
+
+> **Estado.** Implementado e testado localmente na branch **`feat/vgv-historico-mensal`**.
+> **Nada foi commitado, versionado ou publicado**, e **nenhum dado real foi cadastrado**. A
+> `main` e a produção seguem em `630e336`, sem uma linha desta feature.
+
+**O problema.** O escritório tem os **totais mensais consolidados** de janeiro a julho de
+2026 e **não tem** as vendas individuais daquele período. Sem uma forma de registrar o
+total, as duas saídas seriam ruins: digitar centenas de vendas inventadas — criando fato
+comercial falso, com corretor e data arbitrários — ou deixar o VGV anual da TV afirmando
+só o que foi lançado de agosto em diante, que é um número real e enganoso.
+
+**A entidade.** `vgv_historico_mensal`: uma linha por competência, com `competencia`
+(primeiro dia do mês), `valor_total` e `observacao`. Sem corretor, sem equipe, sem
+participação, sem quantidade. Não é `Lancamento` e não é `SaldoHistorico` — a DEC-070
+explica por que nenhum dos dois servia.
+
+**Onde entra, e onde não entra:**
+
+| Número | Recebe histórico mensal? |
+|---|---|
+| VGV **trimestral** e **anual** | **Sim** — é o único lugar |
+| VGV mensal | Não — só VENDA real do mês corrente |
+| Big numbers acumulados (Vendidos, VGV acumulado, Avaliações) | Não — continuam só de `saldo_historico` |
+| Quadro mensal | Não |
+| Rankings, VGV de corretor, VGV de equipe | Não — `calcularMetricasEquipes` sequer recebe o parâmetro |
+
+**A regra que importa.** Uma competência cadastrada **substitui o mês inteiro** no
+trimestral e no anual: se julho tem agregado, nenhuma venda de julho soma individualmente
+ali, sejam uma ou cem. As mesmas vendas continuam inteiras em Vendidos, no quadro mensal e
+em todo ranking — cobertura é recorte agregado da empresa, nunca crédito individual.
+
+**Defesa de domínio.** O Admin recusa competência do mês corrente ou futura; o núcleo
+**ignora** a que aparecer assim, sem lançar. Ignorar significa que o mês não fica coberto,
+então as vendas reais dele continuam somando: uma linha inválida nunca apaga fato
+comercial.
+
+**Política de falha.** Se a leitura de `vgv_historico_mensal` falhar, `empresa.periodos`
+fica `INDISPONIVEL` — **sem fallback para lista vazia**, porque o trimestral e o anual
+sairiam com um número plausível e errado. Acumulados, equipes, propostas e reservas não
+caem junto.
+
+**Migration `20260817170000_vgv_historico_mensal`** — aditiva, verificada contra
+PostgreSQL local real: índice único de `competencia`, `CHECK` de dia 1, `CHECK` de
+`valor_total > 0`, RLS ligado sem policy com `REVOKE` de `anon`/`authenticated`
+(DEC-058), e grants de runtime `SELECT/INSERT/UPDATE/DELETE` com prova negativa de
+`TRUNCATE/REFERENCES/TRIGGER/MAINTAIN` (DEC-061). As onze provas SQL passaram.
+
+**Admin** em `/admin/vgv-historico`: listar por competência decrescente, cadastrar, editar
+valor e observação, excluir. Competência **imutável** na edição. A tela informa quantas
+vendas reais existem na competência — **informação, nunca bloqueio**.
+
+**Uso previsto.** Preencher jan–jul/2026 com os sete VGVs consolidados, que o proprietário
+informará **depois da publicação**. **Agosto/2026 em diante segue por lançamentos reais.**
+Os valores não estão no código.
+
+**Venda retroativa em mês coberto** é sempre registrável e **não obriga** editar o
+agregado. O agregado só se retifica quando a fonte consolidada original não contemplava
+aquela venda (DEC-070).
+
+**Etapas e artefatos:**
+
+| Etapa | Entrega | Arquivos |
+|---|---|---|
+| **E1** | schema + migration, provados contra PostgreSQL local | `prisma/schema.prisma`, `prisma/migrations/20260817170000_vgv_historico_mensal/` |
+| **E2** | validação de domínio | `src/lib/validacao/vgv-historico-mensal.ts`, `tests/validacao-vgv-historico-mensal.test.ts` |
+| **E3** | núcleo puro (cobertura e anti-dupla-contagem) | `src/lib/metricas.ts`, `tests/metricas.test.ts` (+ adaptação mecânica de assinatura em `tests/venda-compartilhada.test.ts`) |
+| **E4** | leitura Prisma e política de falha | `src/lib/metricas-prisma.ts`, `tests/metricas-prisma.test.ts`, `tests/integracao-painel/painel.integracao.test.ts` |
+| **E5** | Admin mínimo | `src/app/admin/vgv-historico/**`, `src/app/admin/layout.tsx`, `tests/integracao/vgv-historico.integracao.test.ts` |
+| **E6/E7** | gates finais e documentação | `docs/DECISOES.md` (DEC-070), `docs/HANDOFF_ATUAL.md`, `PLANO.md` |
+
+**Gates ao fim da E7:** `npm test` **844/844**; `npm run test:integracao` **208/208**;
+`npm run test:integracao:painel` **55/55**; `tsc --noEmit` exit 0; `lint` exit 0;
+`git diff --check` exit 0. Em cada etapa os testes foram escritos **antes** da
+implementação e observados falhando pela razão esperada.
+
+**O que ainda falta**, e que este documento não afirma como feito: versionar, revisar,
+publicar, e só então cadastrar os sete valores reais pelo Admin.
 
 ## Microajuste de precisão do VGV — PUBLICADO (release `630e336`)
 
@@ -744,6 +839,7 @@ exige, e esse `GRANT` fica versionado e revisável no diff — ver DEC-061.
 | Hardening S1 — SEC-005, SEC-006 e SEC-009 | **Concluída** | encerrados no release de então, `25e62b5` |
 | **Celebração de Venda** | **Concluída e em produção** | release `ed1c29f`; gate humano aprovado |
 | **Microajuste de precisão do VGV** | **Concluído e em produção** | release `630e336` (DEC-069); sem gate visual na Samsung |
+| **VGV histórico mensal** | **Implementado, não publicado** | branch `feat/vgv-historico-mensal` (DEC-070); sem commit, sem deploy; dados reais de jan–jul ainda não cadastrados |
 | F5 — Refinamentos | **Futura** | metas, comparativos, fotos, exportação |
 
 ## Fundação técnica
@@ -1319,8 +1415,8 @@ serialização e recomposição do snapshot. É uma limitação registrada, não
 
 ## Banco de teste
 
-- PostgreSQL 17 **local**, database `casalouzada_test`, role `casalouzada_test` com
-  **`NOCREATEDB`**.
+- PostgreSQL **local** em `127.0.0.1:5433`, database `casalouzada_test`, role
+  `casalouzada_test` com **`NOCREATEDB`**.
 - A connection string vive só em `.env.test.local`, ignorado pelo Git.
 - `tests/helpers/banco-teste.ts` exige, antes de conectar: protocolo PostgreSQL, host
   local, database e role esperados. Erro de leitura nunca repassa o valor lido.
@@ -1328,7 +1424,36 @@ serialização e recomposição do snapshot. É uma limitação registrada, não
 - Como a role não pode criar shadow database, `prisma migrate dev` não funciona. A
   migration da F2.5 foi gerada por `prisma migrate diff` e aplicada com
   `prisma migrate deploy`. **Foi decisão manter a role restrita** em vez de conceder
-  `CREATEDB`.
+  `CREATEDB`. A migration do VGV histórico mensal seguiu a mesma convenção.
+
+### O que o mecanismo faz — e o que ele não faz
+
+`scripts/banco-teste.ts` **injeta variáveis de ambiente** no processo filho
+(`DATABASE_URL`, `DIRECT_URL`, `ADMIN_DATABASE_URL`, mapeadas de `*_TEST`) depois de
+`urlBancoTeste()` validar protocolo, host local, database e role. Ele **não provisiona
+servidor**: se não houver um PostgreSQL escutando em 5433, todas as suítes de integração
+falham com `Can't reach database server`. **Não existe mecanismo de bootstrap no
+repositório.**
+
+### Ambiente efetivamente usado no ciclo do VGV histórico mensal
+
+Registro honesto do que aconteceu, porque a diferença importa para quem repetir:
+
+- a instância PG17 que esta seção descrevia **não existia mais** na máquina; o que havia
+  era um PostgreSQL 18 em 5432, alheio ao projeto e **não usado**;
+- o ciclo provisionou um **cluster dedicado e descartável** via `initdb`, com data
+  directory próprio, `port = 5433` e `listen_addresses = '127.0.0.1'`, sem tocar a
+  instância de 5432. Nele foram criadas as roles `casalouzada_test`, `anon`,
+  `authenticated` e `casalouzada_runtime` — as três últimas para que os blocos de RLS e de
+  grants das migrations **executem de fato** em vez de caírem no ramo "role não existe";
+- versão usada: **PostgreSQL 18.4**. **Produção está em 17.6.** A diferença é favorável às
+  provas de `MAINTAIN`, que só existem a partir do 17, mas **é uma divergência real** e
+  fica registrada como tal;
+- **limitação conhecida:** o data directory desse cluster ficou num diretório temporário de
+  sessão, que pode ser limpo. **Não é solução permanente** e não deve ser tratado como
+  tal. Recriar exige `initdb` + as quatro roles + `prisma migrate deploy` + `npm run
+  db:seed`. Estabilizar isso — caminho fixo, ou um container com a major de produção — é
+  trabalho ainda não feito.
 
 ## Segurança e credenciais
 

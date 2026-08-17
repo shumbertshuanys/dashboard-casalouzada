@@ -29,7 +29,13 @@
  * tem mais de um participante na mesma venda.
  */
 
-import { anoCorrente, type JanelaCivil, mesCorrente, trimestreCorrente } from "@/lib/datas";
+import {
+  anoCorrente,
+  deDataCivil,
+  type JanelaCivil,
+  mesCorrente,
+  trimestreCorrente,
+} from "@/lib/datas";
 
 /** Os sete tipos do enum, na ordem de domínio do quadro mensal. */
 export const TIPOS_EVENTO = [
@@ -127,6 +133,26 @@ export type SaldoHistoricoMetrica = {
   valorTotal: string;
   precisao: PrecisaoSaldoMetrica;
   dataCorte: Date;
+};
+
+/**
+ * O VGV **total consolidado** de um mês já fechado, como o cálculo precisa dele.
+ *
+ * Dois campos, e a escassez é o ponto: `id` e `observacao` existem no banco e não
+ * dizem nada a uma soma. O núcleo recebe só o que calcula.
+ *
+ * `competencia` é o **primeiro dia do mês**, meia-noite UTC, como toda data civil
+ * do projeto. `valorTotal` é string decimal canônica e representa
+ * exclusivamente valor de imóveis vendidos — o mesmo que `VendaMetrica.valor`
+ * contribui para o VGV.
+ *
+ * Ele participa **apenas** de `vgvPeriodos.trimestral` e `vgvPeriodos.anual`.
+ * Nunca do VGV mensal, dos acumulados, do quadro mensal ou de qualquer número de
+ * equipe ou corretor — `calcularMetricasEquipes` sequer o recebe.
+ */
+export type VgvHistoricoMensalMetrica = {
+  competencia: Date;
+  valorTotal: string;
 };
 
 /** Há ou não evento no período. Nada além disso (DEC-039). */
@@ -549,6 +575,76 @@ function vgvDaJanela(
 }
 
 /**
+ * `2026-07` — a identidade do mês civil de uma data.
+ *
+ * Deriva de `deDataCivil`, que é o único lugar do projeto que converte data civil
+ * em texto, e só por getters **UTC**. `getFullYear`/`getMonth` leriam o fuso da
+ * máquina e jogariam o dia 1 para o mês anterior num servidor a oeste de
+ * Greenwich — exatamente o erro que a comparação de competência não pode ter.
+ */
+function chaveDoMes(data: Date): string {
+  return deDataCivil(data).slice(0, 7);
+}
+
+/**
+ * VGV de uma janela com o histórico mensal substituindo os meses que ele cobre.
+ *
+ * Só existe para trimestre e ano. O mensal continua em `vgvDaJanela`, sem
+ * conhecer histórico nenhum — e a separação é deliberada: passar `[]` para uma
+ * função genérica esconderia que a regra do mensal é **outra**, não a mesma com
+ * lista vazia.
+ *
+ * Três decisões:
+ *
+ * 1. **O agregado substitui o mês inteiro.** Se julho tem competência histórica,
+ *    nenhuma VENDA de julho soma individualmente aqui. O número do relatório já
+ *    a contém, e somar as duas coisas contaria a mesma venda duas vezes — o que
+ *    é pior do que qualquer imprecisão, porque inventa VGV.
+ * 2. **Competência corrente ou futura é ignorada.** O validador do Admin já a
+ *    recusa, e o núcleo não confia nisso: uma linha inválida no banco não pode
+ *    decidir o número da parede. Ignorar, e não lançar — e ignorar significa que
+ *    o mês **não** fica coberto, então as vendas reais dele continuam somando.
+ *    Uma linha ruim não apaga fato comercial.
+ * 3. **O filtro de cobertura vem antes de `valorDaVenda`.** Uma VENDA sem valor
+ *    num mês coberto não é lida, e portanto não lança: ela não precisava ser
+ *    somada. Fora de mês coberto o comportamento não muda — continua lançando,
+ *    porque ali o valor é necessário e a ausência dele é dado corrompido.
+ *
+ * A aritmética é a mesma de sempre: uma chamada a `somar`, em centavos `bigint`.
+ * Não há segundo somador.
+ */
+function vgvDaJanelaComHistorico(
+  lancamentos: readonly LancamentoMetrica[],
+  historicosMensais: readonly VgvHistoricoMensalMetrica[],
+  janela: JanelaCivil,
+  inicioDoMesCorrente: Date,
+  origem: string,
+): string {
+  const aplicaveis = historicosMensais.filter(
+    (historico) =>
+      dentroDaJanela(janela, historico.competencia) &&
+      historico.competencia < inicioDoMesCorrente,
+  );
+
+  const cobertos = new Set(aplicaveis.map((historico) => chaveDoMes(historico.competencia)));
+
+  const vendasNaoCobertas = lancamentos.filter(
+    (lancamento): lancamento is VendaMetrica =>
+      ehVenda(lancamento) &&
+      dentroDaJanela(janela, lancamento.dataReferencia) &&
+      !cobertos.has(chaveDoMes(lancamento.dataReferencia)),
+  );
+
+  return somar(
+    [
+      ...aplicaveis.map((historico) => historico.valorTotal),
+      ...vendasNaoCobertas.map(valorDaVenda),
+    ],
+    origem,
+  );
+}
+
+/**
  * Mês sem **nenhum** lançamento não afirma desempenho zero (DEC-039).
  *
  * A mesma regra vale para os números da empresa e para os quadros de equipe, e
@@ -574,10 +670,16 @@ function contarPorTipo(lancamentos: readonly LancamentoMetrica[]): QuadroMensal 
  * Recebe **todos** os lançamentos: o recorte por período é feito aqui, e o
  * acumulado precisa enxergar os anteriores ao corte para saber que não deve
  * somá-los. Não existe filtro global por `dataCorte`.
+ *
+ * `historicosMensais` são os agregados de meses já fechados, e entram **só** no
+ * VGV trimestral e anual. O parâmetro é obrigatório de propósito: um default
+ * `[]` deixaria um chamador esquecido devolvendo número silenciosamente
+ * incompleto, e é o compilador que precisa apontar cada ponto de leitura.
  */
 export function calcularMetricasEmpresa(
   lancamentos: readonly LancamentoMetrica[],
   saldos: readonly SaldoHistoricoMetrica[],
+  historicosMensais: readonly VgvHistoricoMensalMetrica[],
   agora: Date = new Date(),
 ): MetricasEmpresaPuras {
   const mes = mesCorrente(agora);
@@ -631,10 +733,29 @@ export function calcularMetricasEmpresa(
     },
 
     // Períodos ignoram saldo e `dataCorte` por completo (DEC-004, DEC-036).
+    //
+    // O **mensal** continua em `vgvDaJanela`: ele é a soma integral das VENDA
+    // reais do mês corrente, e o histórico mensal — que só existe para meses já
+    // fechados — não tem o que dizer sobre o mês que está acontecendo.
+    //
+    // Trimestre e ano passam pelo caminho com histórico, onde uma competência
+    // consolidada substitui o mês que ela cobre.
     vgvPeriodos: {
       mensal: vgvDaJanela(lancamentos, mes, "VGV mensal"),
-      trimestral: vgvDaJanela(lancamentos, trimestreCorrente(agora), "VGV trimestral"),
-      anual: vgvDaJanela(lancamentos, anoCorrente(agora), "VGV anual"),
+      trimestral: vgvDaJanelaComHistorico(
+        lancamentos,
+        historicosMensais,
+        trimestreCorrente(agora),
+        mes.inicio,
+        "VGV trimestral",
+      ),
+      anual: vgvDaJanelaComHistorico(
+        lancamentos,
+        historicosMensais,
+        anoCorrente(agora),
+        mes.inicio,
+        "VGV anual",
+      ),
     },
 
     quadroMensal: contarPorTipo(doMes),

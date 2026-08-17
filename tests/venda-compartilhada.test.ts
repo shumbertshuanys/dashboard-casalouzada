@@ -184,7 +184,7 @@ describe("validarParticipacoesDaVenda — estrutura exigida", () => {
 describe("empresa não infla com o número de participantes", () => {
   it("uma venda de três conta uma venda e um VGV", () => {
     const compartilhada = venda("900000.00", participacoes(["a", "A"], ["b", "A"], ["c", "B"]));
-    const metricas = calcularMetricasEmpresa([compartilhada], [], AGORA);
+    const metricas = calcularMetricasEmpresa([compartilhada], [], [], AGORA);
 
     assert.equal(metricas.quadroMensal.VENDA, 1);
     assert.equal(metricas.vgvPeriodos.mensal, "900000.00");
@@ -205,6 +205,7 @@ describe("empresa não infla com o número de participantes", () => {
           dataCorte: paraDataCivil("2026-07-31"),
         },
       ],
+      [],
       AGORA,
     );
 
@@ -214,7 +215,7 @@ describe("empresa não infla com o número de participantes", () => {
 
   it("venda sem valor continua falhando alto", () => {
     const semValor = venda(null, participacoes(["a", "A"], ["b", "B"]));
-    assert.throws(() => calcularMetricasEmpresa([semValor], [], AGORA), /VENDA sem valor/);
+    assert.throws(() => calcularMetricasEmpresa([semValor], [], [], AGORA), /VENDA sem valor/);
   });
 });
 
@@ -267,7 +268,7 @@ describe("exemplo canônico da DEC-052 — R$ 900.000, A e B na equipe A, C na B
   });
 
   it("a empresa continua contando uma venda de 900 mil", () => {
-    const empresa = calcularMetricasEmpresa([compartilhada], [], AGORA);
+    const empresa = calcularMetricasEmpresa([compartilhada], [], [], AGORA);
     assert.equal(empresa.quadroMensal.VENDA, 1);
     assert.equal(empresa.vgvPeriodos.mensal, "900000.00");
   });
@@ -335,7 +336,7 @@ describe("crédito por equipe", () => {
     assert.equal(linha(resultado, "A", "vgv", "a")?.valor, "450000.00");
 
     // A venda inteira continua nos números da empresa.
-    const empresa = calcularMetricasEmpresa([compartilhada], [], AGORA);
+    const empresa = calcularMetricasEmpresa([compartilhada], [], [], AGORA);
     assert.equal(empresa.vgvPeriodos.mensal, "900000.00");
     assert.equal(empresa.quadroMensal.VENDA, 1);
   });
