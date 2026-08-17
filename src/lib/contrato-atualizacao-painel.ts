@@ -84,9 +84,6 @@ const ESTADOS_QUADRO = ["OK", "INDISPONIVEL", "SEM_DADOS"];
 const ESTADOS_AREA = ["OK", "SEM_DADOS", "INDISPONIVEL", "CONFIGURACAO_INVALIDA"];
 const ESTADOS_LISTA = ["OK", "INDISPONIVEL"];
 
-/** O teto da Tela B (DEC-056). Um payload com quatro itens está fora do contrato. */
-const MAXIMO_OPERACIONAIS = 3;
-
 /** Quantas equipes o painel v1 exige quando há quadros a mostrar (DEC-040). */
 const EQUIPES_ESPERADAS = 3;
 const METRICAS_ESPERADAS = 8;
@@ -264,8 +261,10 @@ function ehItemOperacional(valor: unknown): valor is ItemOperacional {
  * Uma lista da Tela B.
  *
  * `INDISPONIVEL` chega **sem** `itens`: um bloco caído carregando lista seria
- * contraditório, e aceitá-lo apagaria da parede a lista retida. `OK` traz de
- * zero a três itens — zero é dado válido, quatro está fora do contrato.
+ * contraditório, e aceitá-lo apagaria da parede a lista retida. `OK` traz todos
+ * os itens elegíveis, quantos forem — zero é dado válido, e não há teto aqui: a
+ * Tela B mostra três por vez e gira entre os demais a cada aparição (DEC-056).
+ * Um limite no contrato cortaria a rotação antes de ela existir.
  */
 function ehListaOperacional(valor: unknown): valor is ListaOperacional {
   if (!ehObjeto(valor)) return false;
@@ -274,7 +273,6 @@ function ehListaOperacional(valor: unknown): valor is ListaOperacional {
   if (valor.estado === "INDISPONIVEL") return !("itens" in valor);
 
   if (!Array.isArray(valor.itens)) return false;
-  if (valor.itens.length > MAXIMO_OPERACIONAIS) return false;
   return valor.itens.every(ehItemOperacional);
 }
 

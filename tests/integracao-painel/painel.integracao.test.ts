@@ -118,7 +118,7 @@ const VENDAS = [
 /**
  * Candidatas às listas operacionais da Tela B (DEC-056).
  *
- * Mais de três `AGUARDANDO` para o corte aparecer; uma `ACEITA` e uma
+ * Mais de três `AGUARDANDO` para haver o que a UI paginar; uma `ACEITA` e uma
  * `REJEITADA` mais recentes, que precisam ficar de fora mesmo sendo as últimas;
  * e duas empatadas em data, para o desempate por criação/id valer.
  */
@@ -814,10 +814,14 @@ describe("banco → leitura → apresentação", () => {
 });
 
 /**
- * A Tela B do banco até a tela (DEC-056).
+ * A Tela B do banco até a tela (DEC-056, DEC-071).
  *
- * A seleção — status, ordem e corte em três — é do núcleo, e o que se prova aqui
- * é que ela atravessa a leitura real inteira, com os nomes e imóveis certos.
+ * A seleção — **status e ordem** — é do núcleo, e o que se prova aqui é que ela
+ * atravessa a leitura real inteira, com os nomes e imóveis certos.
+ *
+ * **Todas as elegíveis chegam à apresentação.** O corte em janelas de três é da
+ * UI (DEC-071): cortar aqui esconderia da rotação tudo o que passasse do
+ * terceiro item, e a paginação em si é provada na camada de componente.
  */
 describe("listas operacionais — banco → leitura → apresentação", () => {
   function itensDe(lista: (typeof apresentacaoReal)["operacionais"]["propostas"]) {
@@ -826,13 +830,17 @@ describe("listas operacionais — banco → leitura → apresentação", () => {
     return lista.itens;
   }
 
-  it("propostas: só AGUARDANDO, as três mais recentes, imóvel e corretor", () => {
+  it("propostas: só AGUARDANDO, todas, das mais recentes às mais antigas", () => {
     const itens = itensDe(apresentacaoReal.operacionais.propostas);
 
+    // A última é a proposta legada sem imóvel (DEC-053), a mais antiga das
+    // cinco: ela continua na lista dizendo o que falta, em vez de sumir.
     assert.deepEqual(itens, [
       { imovel: "AP-204", corretor: "Diego" },
       { imovel: "AP-203", corretor: "Carla" },
       { imovel: "AP-202", corretor: "Bruno" },
+      { imovel: "AP-201", corretor: "Ana" },
+      { imovel: "Imóvel não informado", corretor: "Fábio" },
     ]);
   });
 
@@ -843,13 +851,14 @@ describe("listas operacionais — banco → leitura → apresentação", () => {
     assert.equal(imoveis.includes("AP-902"), false, "REJEITADA não entra");
   });
 
-  it("reservas: só ATIVA, as três mais recentes, imóvel e corretor", () => {
+  it("reservas: só ATIVA, todas, das mais recentes às mais antigas", () => {
     const itens = itensDe(apresentacaoReal.operacionais.reservas);
 
     assert.deepEqual(itens, [
       { imovel: "CA-104", corretor: "Diego" },
       { imovel: "CA-103", corretor: "Carla" },
       { imovel: "CA-102", corretor: "Bruno" },
+      { imovel: "CA-101", corretor: "Ana" },
     ]);
   });
 
@@ -860,9 +869,12 @@ describe("listas operacionais — banco → leitura → apresentação", () => {
     assert.equal(imoveis.includes("CA-902"), false, "CANCELADA não entra");
   });
 
-  it("as duas listas param em três, mesmo com quatro candidatas cada", () => {
-    assert.equal(itensDe(apresentacaoReal.operacionais.propostas).length, 3);
-    assert.equal(itensDe(apresentacaoReal.operacionais.reservas).length, 3);
+  it("esta camada não pagina: todas as elegíveis chegam à apresentação", () => {
+    // Cinco propostas `AGUARDANDO` e quatro reservas `ATIVA` na fixture. Nenhum
+    // corte acontece daqui para trás — a janela de três é da UI, e é lá que a
+    // paginação circular é provada (DEC-071).
+    assert.equal(itensDe(apresentacaoReal.operacionais.propostas).length, 5);
+    assert.equal(itensDe(apresentacaoReal.operacionais.reservas).length, 4);
   });
 
   it("os dois blocos de leitura ficam OK", () => {

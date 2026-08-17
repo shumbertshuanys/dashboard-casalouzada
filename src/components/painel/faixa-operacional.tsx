@@ -38,8 +38,11 @@ function Coluna({
       ) : (
         <div className={estilos.operacionalItens}>
           {lista.itens.map((item, posicao) => (
-            // A chave é a posição: a lista vem pronta e ordenada, e o mesmo
-            // imóvel pode aparecer em duas propostas distintas.
+            // A chave é a posição: a lista já chega pronta, ordenada e recortada
+            // na página visível, e o mesmo imóvel pode aparecer em duas
+            // propostas distintas. Trocar de página troca o texto de três linhas
+            // que não guardam estado nem animam sozinhas — uma identidade
+            // própria não mudaria o que a parede desenha.
             <div key={posicao} className={estilos.operacionalItem}>
               <span className={estilos.operacionalImovel}>{item.imovel}</span>
               <span className={estilos.operacionalCorretor}>{item.corretor}</span>

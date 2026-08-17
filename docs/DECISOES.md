@@ -2506,3 +2506,79 @@ implementação e observados falhando pela razão esperada.
 `vgvDaJanelaComHistorico`); `src/lib/metricas-prisma.ts` (a sexta leitura e `comporEmpresa`);
 `src/app/admin/vgv-historico/**`.
 **implementada localmente — não publicada; dados reais de jan–jul ainda não cadastrados**
+
+---
+
+## Painel — rotação das listas operacionais
+
+### DEC-071 — O limite de três itens operacionais é uma janela visual, não um limite de dados
+
+**Decisão.** A **DEC-056** continua valendo integralmente, **exceto** onde ela atribui ao
+núcleo o **corte em 3** — que esta decisão substitui. A DEC-056 **não é reescrita**: ela
+permanece no arquivo como registro do que se decidiu na E4 e do porquê.
+
+O que passa a valer:
+
+- **o filtro de status não muda.** Propostas operacionais continuam sendo exclusivamente
+  `AGUARDANDO`; reservas operacionais, exclusivamente `ATIVA`. Nenhum status entrou, saiu
+  ou trocou de significado nesta decisão;
+- **o domínio continua dono do filtro de status e da ordenação determinística** — mais
+  recentes primeiro, com `criadoEm` decrescente e `id` crescente como desempates (DEC-013).
+  Isso não se move para a interface;
+- **o domínio devolve TODAS as elegíveis.** `selecionarPropostasEmAndamento` e
+  `selecionarReservasAtivas` filtram e ordenam, e **não limitam quantidade**;
+- **o contrato de atualização transporta TODAS as elegíveis.** O guard do payload valida a
+  forma de cada item e a coerência com o `estadoLeitura`, e **não** o tamanho da lista;
+- **nenhum teto de 3 pode existir no núcleo nem no guard do payload.** Um corte em qualquer
+  um dos dois destrói candidatos antes de a tela poder alterná-los, e o efeito é
+  indistinguível de o registro não existir;
+- **o número 3 significa uma coisa só**: a quantidade máxima simultaneamente visível em
+  cada coluna da Tela B. É constante de apresentação, e existe em um lugar apenas;
+- **a interface pagina circularmente a lista já ordenada.** Para 7 itens as voltas são
+  **3 / 3 / 1**, e depois recomeçam do primeiro;
+- **a última página não é preenchida com repetição.** Completar três repetindo o começo
+  faria o mesmo imóvel aparecer duas vezes na mesma tela, como se fossem dois registros;
+- **propostas e reservas mantêm índices independentes**, porque as duas listas têm
+  tamanhos diferentes e cada uma fecha a própria volta;
+- **a página avança na entrada `A → B`**, e o conteúdo **não troca durante os 20 segundos**
+  da Tela B. Alternar dentro da tela tornaria a lista ilegível para quem passa pelo
+  escritório, que é justamente o público da parede;
+- **o refresh de dados não reinicia a rotação por si só.** Uma leitura nova troca o
+  conteúdo por baixo sem devolver a rotação ao primeiro grupo nem remontar o timer;
+- **lista vazia continua diferente de indisponibilidade.** Paginar não cria estado: `OK`
+  com zero itens permanece a frase "não há nada em aberto", e `INDISPONIVEL` permanece
+  "a leitura não aconteceu" (DEC-014, DEC-042);
+- **`MAXIMO_DESTAQUES` deixa de existir como limite de domínio.** Não foi renomeado nem
+  movido: o conceito de "teto de candidatos" acabou.
+
+O intervalo A/B de 20 segundos, a inexistência de terceira tela e os textos de lista vazia
+seguem exatamente como a DEC-056 os fixou.
+
+**Motivo.** Com o corte no núcleo, um registro genuinamente em aberto ficava **eternamente
+invisível** na TV enquanto os três mais recentes continuassem `AGUARDANDO`/`ATIVA` — e como
+esses status só mudam por ação humana, "mais recente" não rotativa sozinha. Sete propostas
+em aberto exibiam três; as outras quatro não existiam para quem olhasse a parede. O defeito
+não era de cálculo nem de exibição, e sim de **onde** o limite morava: um teto de
+apresentação aplicado à camada que decide quais dados existem.
+
+**O que NÃO mudou.** Nenhuma regra de status. Nenhuma ordenação. Nenhum número, contagem,
+soma, ranking ou recorte de período. Sem migration, sem schema, sem alteração de dado, sem
+Admin. A alteração é de **onde o corte acontece**, não de o que é elegível.
+
+**Prova.** `tests/destaques-operacionais.test.ts` — os status que entram e ficam de fora, a
+ordenação e os desempates (inalterados); 7 propostas e 5 reservas elegíveis retornando
+inteiras; a paginação circular para 0, 1, 3, 4, 6 e 7 itens; a última página sem repetição;
+a normalização do índice quando a quantidade muda; a ausência de mutação da entrada; e o
+avanço de página amarrado à entrada em B. `tests/faixa-superior-ui.test.ts` — a fiação do
+componente, incluindo a prova de que `operacionais` não entra em dependência de efeito.
+`tests/contrato-atualizacao-painel.test.ts` e
+`tests/integracao-painel/leitura-painel.integracao.test.ts` — a lista atravessando a
+fronteira sem teto. Os testes da semântica nova foram escritos **antes** da implementação e
+observados falhando pela razão esperada.
+
+**Fonte.** `src/lib/metricas.ts` (saída do corte); `src/lib/contrato-atualizacao-painel.ts`
+(saída do teto no guard); `src/components/painel/rotacao-faixa.ts` (`ITENS_POR_PAGINA`,
+`paginaCircular`, `janelaOperacional` e o avanço da rotação);
+`src/components/painel/faixa-superior.tsx`. DEC-013; DEC-014; DEC-042; DEC-053; DEC-055;
+DEC-056.
+**implementada localmente — não publicada neste ciclo**

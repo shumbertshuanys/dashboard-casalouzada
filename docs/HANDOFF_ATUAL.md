@@ -11,6 +11,7 @@
 | Estado do Git | A `main` contém, além de commits documentais, **o commit de código `8382074`** — a feature de VGV histórico mensal —, todos posteriores ao release executável. O SHA **corrente** dela **não é registrado aqui de propósito** — consulte `git rev-parse main` ou o GitHub. Um SHA de topo escrito neste documento se autoinvalida no próximo commit de documentação, que foi exatamente o defeito que esta linha existe para não repetir. (`8382074` é seguro de citar: é o commit da feature, e ele não se move.) |
 | ✅ **`main` e produção voltaram a ser equivalentes** | A feature de **VGV histórico mensal** (DEC-070) foi **publicada** em 2026-08-17T18:31Z. Entre 8382074 e esse deploy houve algumas horas de **divergência executável** — a primeira do projeto —, e ela está encerrada. O que vier depois de `46432543` na `main` volta a ser documentação, até o próximo commit de código. |
 | **Migrations em produção** | **9 aplicadas.** A nona, `20260817170000_vgv_historico_mensal`, entrou no pre-deploy de `46432543` — `prisma migrate deploy` encontrou 9 no repositório e aplicou exatamente essa. |
+| ⚠️ **Trabalho local não commitado** | A **rotação das listas operacionais** (DEC-071) existe **apenas na working tree**, sobre `982c482` — 13 arquivos modificados e 1 novo (`tests/faixa-superior-ui.test.ts`), somando os 14 caminhos da feature e da documentação. Não está na `main`, não está em produção e não tem SHA. Ver a seção própria adiante. |
 | ℹ️ **Auto-deploy continua OFF** | Push para `main` **não** é deploy: publicar exige disparo manual. *(Foi isso que criou a janela de divergência executável entre o fast-forward de `8382074` e o deploy de `46432543`, no mesmo dia — registro do que aconteceu, não pendência.)* |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
@@ -49,9 +50,114 @@
 >
 > A **F5 — Refinamentos** continua **futura** e **não foi iniciada**.
 
+## Rotação das listas operacionais — IMPLEMENTADA LOCALMENTE, NÃO PUBLICADA
+
+Ciclo mais recente do projeto, e o **único que ainda não está commitado**. A decisão
+durável é a **DEC-071**.
+
+> **Estado.** **NÃO publicada e NÃO commitada.** O trabalho existe apenas na working tree
+> local, sobre `982c482`. Produção continua em `46432543` (ver a tabela de identificação),
+> que **não** contém esta alteração.
+
+**O defeito.** A Tela B mostra até três propostas em andamento e até três reservas de
+locação. O teto de três era aplicado **duas vezes antes da tela**: `src/lib/metricas.ts`
+cortava com `.slice(0, 3)`, e o guard de `src/lib/contrato-atualizacao-painel.ts` recusava
+payload operacional com mais de três itens. O resultado é que, existindo 4, 5, 7 ou mais
+registros elegíveis, **só os três mais recentes sobreviviam** — e como `AGUARDANDO` e
+`ATIVA` só mudam por ação humana, os demais ficavam **eternamente invisíveis** na parede
+enquanto os três da frente continuassem em aberto.
+
+**ANTES.** Apenas os três mais recentes sobreviviam ao núcleo e ao contrato. O quarto item
+não chegava à apresentação.
+
+**DEPOIS.** Todas as elegíveis chegam à apresentação, e a Tela B percorre páginas de até
+três a cada aparição:
+
+- propostas elegíveis = **todas** com status `AGUARDANDO`; reservas = **todas** com `ATIVA`;
+- o núcleo filtra e ordena, e **não** limita quantidade;
+- o contrato de atualização aceita a lista inteira;
+- a interface mostra uma janela de até 3 e avança na entrada `A → B`;
+- propostas e reservas giram **independentemente** — 7 propostas fecham a volta em três
+  aparições, 5 reservas em duas;
+- a última página **não** repete itens para completar três (7 itens → 3 / 3 / 1);
+- depois da última página, volta à primeira;
+- refresh de dados **não** reinicia a rotação nem remonta o timer;
+- o intervalo A/B permanece **20 segundos**;
+- **nenhuma regra de status mudou**.
+
+**O que NÃO mudou.** Nenhum status, nenhuma ordenação, nenhum número, contagem, soma,
+ranking ou recorte de período. Sem migration, sem schema, sem alteração de dado, sem Admin.
+Mudou **onde** o corte acontece, não o que é elegível para entrar na lista.
+
+**Arquivos (14 caminhos, nenhum commitado):**
+
+| Origem | Caminhos |
+|---|---|
+| Núcleo e contrato | `src/lib/metricas.ts`, `src/lib/contrato-atualizacao-painel.ts` |
+| Componentes | `src/components/painel/rotacao-faixa.ts`, `faixa-superior.tsx`, `faixa-operacional.tsx` |
+| Testes alterados | `tests/destaques-operacionais.test.ts`, `tests/contrato-atualizacao-painel.test.ts`, `tests/metricas-prisma.test.ts`, `tests/integracao-painel/leitura-painel.integracao.test.ts`, `tests/integracao-painel/painel.integracao.test.ts` |
+| Teste novo | `tests/faixa-superior-ui.test.ts` |
+| Documentação | `docs/DECISOES.md`, `docs/HANDOFF_ATUAL.md`, `PLANO.md` |
+
+**Gates finais — os seis verdes, no mesmo ambiente:**
+
+| Gate | Resultado |
+|---|---|
+| `npm test` | **872 testes · 196 suítes · 872 PASS · 0 fail** |
+| `npm run test:integracao` | **208 testes · 76 suítes · 208 PASS · 0 fail · 0 skipped · 0 cancelled** |
+| `npm run test:integracao:painel` | **55 testes · 15 suítes · 55 PASS · 0 fail · 0 skipped · 0 cancelled** |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run lint` | exit 0 |
+| `git diff --check` | exit 0 |
+
+Os testes da semântica nova foram escritos **antes** da implementação e observados falhando
+pela razão esperada.
+
+**Como os gates chegaram ao verde — o histórico importa.** As integrações **não** passaram
+de primeira, e o caminho até aqui é parte do registro:
+
+1. **as duas integrações ficaram bloqueadas** por falha do PostgreSQL local. O servidor
+   aceitava a conexão e derrubava o backend em seguida — `Server has closed the connection`
+   / `Unable to start a transaction in the given time` —, com a queda no **setup**
+   (`exigirRepouso`), antes de qualquer asserção de domínio. A mesma falha foi reproduzida
+   com o diff guardado por `git stash`, em HEAD limpo (14 pass, 1 fail, 40 cancelled), o
+   que caracterizou falha ambiental **pré-existente**, não regressão do ciclo. Enquanto
+   durou, o estado correto foi **NÃO VERIFICADA** — nunca PASS;
+2. **o cluster de teste da porta 5433 foi recuperado.** Ele é um cluster efêmero, e o
+   `pg_ctl` contra o próprio data dir dele bastou: `stop -m fast` não derrubou em 60 s
+   (servidor travado), e o `start` seguinte subiu um postmaster novo. Nenhum `initdb`,
+   nenhum `db push`, nenhuma migration tocada. `prisma migrate status` confirmou em
+   seguida **9 migrations** e `Database schema is up to date!`. O PostgreSQL pessoal da
+   porta **5432 não foi tocado** — ele não é o banco deste projeto;
+3. **com o banco de pé, a integração painel revelou três expectativas antigas de "corte em
+   três"** em `tests/integracao-painel/painel.integracao.test.ts` — arquivo que nunca
+   chegou a falhar à vista enquanto o banco esteve fora, e por isso escapou da varredura
+   dos ciclos anteriores. Não era regressão: os vizinhos de status (`ACEITA`/`REJEITADA`
+   fora, `FINALIZADA`/`CANCELADA` fora) passaram, e os três primeiros itens vinham exatos e
+   na mesma ordem — o único delta era o teto que a DEC-071 removeu;
+4. **as três expectativas foram reconciliadas com a DEC-071**: as listas passam a esperar
+   **todas** as elegíveis da fixture (5 propostas `AGUARDANDO`, terminando na legada sem
+   imóvel; 4 reservas `ATIVA`), e o teste "param em três" virou "esta camada não pagina".
+   As asserções de status **não** foram enfraquecidas;
+5. **depois disso os seis gates fecharam verdes.**
+
+**Pendências conhecidas, não bloqueantes e NÃO resolvidas:**
+
+- `scripts/banco-teste.ts` imprime `destino: 127.0.0.1:5432/...` num rótulo, embora o
+  datasource real seja **5433**. O rótulo é hardcoded e mentiroso, e foi ele que atrasou o
+  diagnóstico do cluster. **Não corrigido** — não pertence à DEC-071;
+- **flakiness de isolamento na integração geral.** Em duas execuções anteriores ao verde,
+  `tests/integracao/vgv-historico.integracao.test.ts` (itens 8 e 10) falhou porque as
+  contagens de `lancamentos`/`participacoes` mudaram **durante** o teste — arquivos rodando
+  em paralelo escrevendo enquanto outro tira o retrato. **Não corrigido**, e uma execução
+  limpa não prova ausência de corrida.
+
+**O que ainda falta:** commitar, publicar e — se a rotação for observada na parede —
+registrar a validação visual. Nada disso foi feito.
+
 ## VGV histórico mensal — PUBLICADO (release `46432543`)
 
-Ciclo mais recente do projeto. A decisão durável é a **DEC-070**.
+Ciclo publicado mais recente. A decisão durável é a **DEC-070**.
 
 > **Estado.** **PUBLICADA em produção.** Release `46432543`, deploy
 > `dep-da1l5pu417fc73ek9llg`, **LIVE** desde **2026-08-17T18:31:11Z**.

@@ -200,12 +200,14 @@ export type MetricasEmpresaPuras = {
  * total e não conhecem `dataCorte` — e por isso, também, uma lista vazia é dado
  * legítimo, nunca `0`.
  *
- * O banco entrega candidatos; a regra de produto — quais status entram, em que
- * ordem e quantos cabem — mora inteira aqui (DEC-013).
+ * O banco entrega candidatos; a regra de produto — quais status entram e em que
+ * ordem — mora inteira aqui (DEC-013).
+ *
+ * **Quantos aparecem de cada vez não é decidido aqui.** A Tela B mostra três por
+ * vez e gira entre os demais a cada aparição, e um corte no núcleo destruiria os
+ * candidatos antes de a tela poder alterná-los: o quarto item nunca chegaria à
+ * parede. O teto visual mora em `src/components/painel/rotacao-faixa.ts`.
  */
-
-/** Quantos itens cabem em cada lista da Tela B (DEC-056). */
-export const MAXIMO_DESTAQUES = 3;
 
 /** Uma proposta candidata à lista "Propostas em andamento". */
 export type PropostaOperacional = {
@@ -272,7 +274,7 @@ function paraDestaque(item: {
 }
 
 /**
- * As até três propostas em andamento: só `AGUARDANDO`, mais recentes primeiro.
+ * As propostas em andamento: só `AGUARDANDO`, mais recentes primeiro, todas.
  *
  * Toda proposta continua contando na métrica mensal qualquer que seja o status
  * (DEC-053) — o filtro aqui é só da lista operacional. A proposta legada sem
@@ -282,13 +284,13 @@ function paraDestaque(item: {
 export function selecionarPropostasEmAndamento(
   candidatas: readonly PropostaOperacional[],
 ): DestaqueOperacional[] {
-  return ordenarDestaques(candidatas.filter((proposta) => proposta.status === "AGUARDANDO"))
-    .slice(0, MAXIMO_DESTAQUES)
-    .map(paraDestaque);
+  return ordenarDestaques(candidatas.filter((proposta) => proposta.status === "AGUARDANDO")).map(
+    paraDestaque,
+  );
 }
 
 /**
- * As até três reservas de locação ativas, mais recentes primeiro.
+ * As reservas de locação ativas, mais recentes primeiro, todas.
  *
  * Reserva é operação, não produção (DEC-055): `FINALIZADA` e `CANCELADA` saem da
  * lista sem afetar contagem nenhuma, porque nunca houve contagem de reserva.
@@ -296,9 +298,9 @@ export function selecionarPropostasEmAndamento(
 export function selecionarReservasAtivas(
   candidatas: readonly ReservaOperacional[],
 ): DestaqueOperacional[] {
-  return ordenarDestaques(candidatas.filter((reserva) => reserva.status === "ATIVA"))
-    .slice(0, MAXIMO_DESTAQUES)
-    .map(paraDestaque);
+  return ordenarDestaques(candidatas.filter((reserva) => reserva.status === "ATIVA")).map(
+    paraDestaque,
+  );
 }
 
 /** O corretor como o ranking precisa dele. Sem foto, CRECI ou datas. */

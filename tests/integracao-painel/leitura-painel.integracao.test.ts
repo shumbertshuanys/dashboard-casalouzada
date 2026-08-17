@@ -104,10 +104,11 @@ describe("estrutura da leitura", () => {
     assert.equal(leitura.blocos.acumulados.bigNumbers.length, 3);
   });
 
-  it("as listas operacionais nunca passam de três itens", () => {
+  it("as listas operacionais atravessam inteiras, sem corte de três", () => {
+    // O teto de três é da janela visível da Tela B, não da leitura: cortar aqui
+    // esconderia da rotação tudo o que passasse do terceiro item (DEC-056).
     for (const bloco of [leitura.blocos.propostas, leitura.blocos.reservas]) {
       if (bloco.lista.estado !== "OK") continue;
-      assert.ok(bloco.lista.itens.length <= 3, "o teto da Tela B é três (DEC-056)");
       for (const item of bloco.lista.itens) {
         assert.equal(typeof item.imovel, "string");
         assert.equal(typeof item.corretor, "string");

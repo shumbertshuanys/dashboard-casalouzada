@@ -734,15 +734,16 @@ describe("listas operacionais na fronteira", () => {
     if (resultado.propostas.estadoLeitura !== "OK") return;
     assert.deepEqual(
       resultado.propostas.dados.map((item) => item.id),
-      ["p4", "p3", "p2"],
-      "só AGUARDANDO, as três mais recentes",
+      ["p4", "p3", "p2", "p1"],
+      "só AGUARDANDO, todas, das mais recentes para as mais antigas",
     );
 
     assert.equal(resultado.reservas.estadoLeitura, "OK");
     if (resultado.reservas.estadoLeitura !== "OK") return;
     assert.deepEqual(
       resultado.reservas.dados.map((item) => item.id),
-      ["r4", "r3", "r2"],
+      ["r4", "r3", "r2", "r1"],
+      "quantas cabem por vez é da tela, não da fronteira",
     );
   });
 

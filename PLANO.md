@@ -118,6 +118,13 @@ informado" em vez de sumir da parede.
 Prisma não filtra status, não ordena operacionalmente e não aplica `take`; os
 componentes não filtram, não ordenam e não cortam.
 
+> **Revisto pela DEC-071 — implementada localmente, ainda não publicada.** O **corte**
+> saiu do núcleo e do contrato de atualização: ambos passam a entregar **todas** as
+> elegíveis, e o teto de três vira **janela visível**, com a Tela B paginando
+> circularmente a cada aparição (7 itens → 3 / 3 / 1 → volta). Seleção e ordenação
+> continuam no núcleo, sem alteração. O parágrafo acima descreve o estado da E4
+> (`c24a0c9`), que é o que está em produção.
+
 O saldo `MINIMO_CONHECIDO` também chegou à tela: ele **não muda cálculo nenhum** e
 qualifica a apresentação dos acumulados com "+ de" — "+ de 527", "+ de R$ 800 mi". A
 precisão do saldo de `VENDA` qualifica imóveis vendidos **e** VGV acumulado; a do

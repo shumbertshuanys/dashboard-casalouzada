@@ -147,7 +147,9 @@ describe("listas operacionais no contrato", () => {
     );
   });
 
-  it("recusa quatro itens: o teto da Tela B é três", () => {
+  it("aceita mais de três: o teto de três é da tela, não do contrato", () => {
+    // A Tela B mostra três por vez e gira entre as demais a cada aparição. Se o
+    // contrato cortasse em três, a quarta proposta nunca chegaria à parede.
     assert.equal(
       ehLeituraPainel(
         corromper((leitura) => {
@@ -158,11 +160,14 @@ describe("listas operacionais no contrato", () => {
               { imovel: "B", corretor: "2" },
               { imovel: "C", corretor: "3" },
               { imovel: "D", corretor: "4" },
+              { imovel: "E", corretor: "5" },
+              { imovel: "F", corretor: "6" },
+              { imovel: "G", corretor: "7" },
             ],
           };
         }),
       ),
-      false,
+      true,
     );
   });
 
