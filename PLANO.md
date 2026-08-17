@@ -20,8 +20,10 @@ conhecido, reservas de locação e a faixa superior alternada —, gate completo
 no Render. **Essa entrega está concluída e no ar**, e a F4.5 foi retomada: a **F4.5A —
 avaliação do `Phantom Alien 4K IPTV` — está concluída**, com resultado **HARDWARE
 REJEITADO**. O aparelho **não será a plataforma do painel** (DEC-065), e a F4.5 passou a
-ser "selecionar e validar a plataforma substituta", em **F4.5B a F4.5E, pendentes**.
-Nenhuma marca ou modelo substituto foi escolhida.
+ser "selecionar e validar a plataforma substituta". A **F4.5B está concluída**: a
+plataforma é a **Samsung Smart TV do escritório**, com o painel aberto direto no
+navegador nativo dela, **sem hardware externo** (DEC-068). A **F4.5C está em andamento**
+e **F4.5D e F4.5E seguem pendentes**.
 
 A **E1 — contratos, documental — está concluída** (`078f360`); a **E2 está concluída**
 em três commits — **`c6464b5`** (E2A — schema e migration aditiva com backfills),
@@ -519,9 +521,10 @@ e resolve de uma vez o autostart, a suspensão de tela e a compatibilidade.
 > como hardware alvo, foi **inspecionado fisicamente na F4.5A e rejeitado** como
 > plataforma do painel (DEC-065) — plataforma antiga, Android 7, patch de 2018, Chrome
 > 112, UI limitada a 1080p e 2160p só até 30 Hz. Ele não foi declarado defeituoso: é
-> **inadequado ao objetivo**. A plataforma substituta é a **F4.5B** e **não está
-> escolhida**; o mini PC descrito acima continua sendo **uma alternativa entre outras**,
-> não a escolha feita. Os critérios de seleção estão na DEC-065.
+> **inadequado ao objetivo**. A **F4.5B foi concluída** e a plataforma substituta é a
+> **Samsung Smart TV do escritório**, com o painel no navegador nativo dela (DEC-068).
+> **O mini PC descrito acima deixou de ser necessário** — nenhum hardware externo entra
+> na operação. Os critérios da DEC-065 seguem valendo como pauta de medição da F4.5C.
 
 ### 5.2 Rotação dos quadros de equipe
 
@@ -691,8 +694,8 @@ A fase foi fatiada assim:
 | F4.4 | offline de navegação | **concluída** — commit `8b9fce2` |
 | F4.5 | operação em hardware real | **em andamento** — reestruturada pela DEC-065, ver as cinco fatias abaixo |
 | F4.5A | avaliação do `Phantom Alien 4K IPTV` | **concluída** — 2026-08-16, resultado **HARDWARE REJEITADO** (DEC-065); sem commit de código |
-| F4.5B | seleção da plataforma substituta | **pendente** — critérios na DEC-065; nenhuma marca ou modelo escolhida |
-| F4.5C | validação física da plataforma substituta | **pendente** |
+| F4.5B | seleção da plataforma substituta | **concluída** — **Samsung Smart TV do escritório**, navegador nativo, sem hardware externo (DEC-068) |
+| F4.5C | validação física da plataforma substituta | **em andamento** — aplicação, dados, layout, atualização e celebração comprovados na TV; falta medir resolução/refresh, SW, offline, reboot e estabilidade |
 | F4.5D | operação autônoma | **pendente** |
 | F4.5E | gate físico final | **pendente** — fecha a F4.5 e, com ela, a F4 |
 
@@ -728,10 +731,12 @@ foram comprovados; **Service Worker, Cache Storage e Wake Lock ficaram inconclus
 porque a sonda rodou em contexto HTTP inseguro — **não se declara ausência de suporte**.
 
 O aparelho **não é defeituoso**: é **inadequado ao objetivo definido**. A F4.5 passou a
-ser **selecionar e validar a plataforma substituta**, que **não está escolhida** —
-F4.5B a F4.5E, todas pendentes. O mini PC com Chrome em quiosque descrito na §5.1
-continua sendo alternativa, não o que está em mãos. A F4 segue **em andamento** e só se
-encerra com a F4.5.
+ser **selecionar e validar a plataforma substituta**, e essa seleção **está feita**: a
+**F4.5B concluiu** com a **Samsung Smart TV do escritório** operando o painel pelo
+navegador nativo, **sem máquina intermediária** (DEC-068). A **F4.5C está em andamento**
+— o primeiro ensaio físico passou, mas resolução efetiva, refresh, Service Worker,
+offline, reboot e estabilidade **ainda não foram medidos**. **F4.5D e F4.5E seguem
+pendentes.** A F4 segue **em andamento** e só se encerra com a F4.5.
 
 **Entrega v1** · *concluída e em produção (DEC-057)*
 Aprovada pelo proprietário em 2026-08-14, entrou **antes** da F4.5 e não abre a F5. As

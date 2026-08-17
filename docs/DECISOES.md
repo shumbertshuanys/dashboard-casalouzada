@@ -1172,7 +1172,8 @@ comunica indisponibilidade sem inventar desempenho.
 > 2026-08-13 e 2026-08-16. O `Phantom Alien 4K IPTV` **deixou de ser o hardware alvo**
 > depois da avaliação física da F4.5A. O **princípio continua valendo integralmente**:
 > nenhuma característica de plataforma é inferida sem evidência direta do aparelho — e
-> ele passa a valer para a plataforma substituta, ainda não escolhida.
+> ele passa a valer para a plataforma substituta, hoje a **Samsung Smart TV do
+> escritório** (DEC-068).
 
 **Decisão.** O equipamento pretendido para conduzir a TV é o `Phantom Alien 4K IPTV`.
 
@@ -2013,7 +2014,9 @@ recomendação genérica de mini PC com Chrome em quiosque do `PLANO.md` §5.1 c
 sendo **uma alternativa entre outras**, e não a escolha da F4.5B.
 
 **Fonte.** Inspeção física do aparelho em 2026-08-16 (F4.5A) e decisão do proprietário na
-mesma data. **decisão registrada — F4.5B a F4.5E pendentes**
+mesma data. **decisão registrada — a rejeição do Phantom continua valendo; a escolha da
+substituta foi feita depois, na [DEC-068](#dec-068--a-plataforma-do-painel-é-a-samsung-smart-tv-do-escritório-sem-hardware-externo),
+e a F4.5C está em andamento com F4.5D e F4.5E pendentes**
 
 ## Conexões de banco
 
@@ -2204,6 +2207,63 @@ comercial desaparecer entre elas.
 **Prova de campo.** Publicada no release **`ed1c29f`**, com as **8 migrations aplicadas**
 em produção e zero falha ativa. Dois gates humanos, ambos aprovados e nenhum
 automatizado: o visual **no navegador local**, e o de produção, em que o proprietário
-abriu o painel real e **confirmou que a animação foi executada corretamente** — o
-hardware desse segundo gate não está identificado.
+abriu o painel real e **confirmou que a animação foi executada corretamente** — **naquele
+gate o hardware não foi registrado**. Depois, e em separado, no ensaio da F4.5B/C a
+celebração foi comprovada rodando na **Samsung Smart TV física** (DEC-068); isso não
+retroage ao gate original.
 **implementada e publicada em produção**
+
+## Operação em hardware real
+
+### DEC-068 — A plataforma do painel é a Samsung Smart TV do escritório, sem hardware externo
+
+**Decisão.** O painel passa a ser operado **na própria Samsung Smart TV que já existe no
+escritório**, com a URL aberta **direto no navegador dela** — o recurso de "Serviço da
+Web" do PC on TV. **Nenhum hardware adicional entra na operação:** sem set-top box, sem
+mini PC, sem notebook acoplado à TV.
+
+Isto **substitui** a busca por um aparelho a comprar que a DEC-065 abriu, e **encerra a
+F4.5B**.
+
+**Motivo.** Cinco razões, e a última é a que decide:
+
+- o aparelho **já existe** e já está na parede;
+- **zero hardware adicional** — nada a comprar, instalar, alimentar ou manter;
+- a **aplicação real** foi aberta nele, com **dados reais**, e o layout ficou operacional;
+- a **Celebração de Venda executou corretamente** na própria TV;
+- **evidência física direta supera seleção teórica.** A DEC-065 listava critérios para
+  escolher um substituto no papel; aqui houve ensaio no aparelho de verdade, e o que se
+  viu funcionar vale mais do que a especificação de um candidato não testado.
+
+Eliminar o intermediário também elimina a classe inteira de problemas que ele traria:
+autostart de um segundo sistema operacional, atualização desse sistema, ponto de energia,
+cabo, e mais um dispositivo para alguém precisar reiniciar.
+
+**Impacto.** O mini PC com Chrome em quiosque descrito no PLANO §5.1 **deixa de ser
+necessário**. Os critérios de seleção da DEC-065 não desaparecem: eles migram de "o que
+procurar num candidato" para **"o que medir na Samsung"**, e é isso que a F4.5C faz.
+
+**O que esta decisão NÃO afirma.** Nada além do que foi observado:
+
+- **não** afirma que a F4.5 está concluída — ela continua em andamento;
+- **não** afirma 3840×2160 a 60 Hz: **resolução e refresh efetivos não foram medidos**;
+- **não** afirma que o offline da F4.4 funciona ali — **Service Worker e Cache Storage
+  não foram exercitados**;
+- **não** afirma autostart, restauração de página ou comportamento após reboot;
+- **não** registra modelo da TV, versão do Tizen nem versão do navegador — **nada disso
+  foi identificado**;
+- **não** afirma estabilidade prolongada: o ensaio foi pontual.
+
+A decisão fica, portanto, **condicionada à conclusão dos gates F4.5C, F4.5D e F4.5E**. Se
+a caracterização reprovar algum requisito operacional, ela é reaberta.
+
+**Preserva.** A **DEC-065** integralmente: o `Phantom Alien 4K IPTV` continua **avaliado
+e rejeitado**, e o histórico daquela inspeção não é apagado. A Samsung é a substituta
+escolhida **depois** dele. Preserva também a **DEC-049** quanto ao padrão de evidência —
+nada de sistema, navegador, resolução ou API registrado sem medição no aparelho — e a
+**DEC-050**, que mantém o Wake Lock fora por decisão até que um ensaio prove necessidade.
+
+**Fonte.** Ensaio físico conduzido pelo proprietário na Samsung Smart TV do escritório em
+2026-08-16, com a aplicação em produção (release `ed1c29f`). Observação direta, **não
+medição instrumentada**. **decisão registrada — F4.5C em andamento; F4.5D e F4.5E
+pendentes**
