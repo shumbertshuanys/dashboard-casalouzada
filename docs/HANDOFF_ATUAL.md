@@ -6,12 +6,11 @@
 |---|---|
 | Repositório | `github.com/shumbertshuanys/dashboard-casalouzada` (público) |
 | Branch | `main` |
-| **Release executável em produção** | **`46432543f322076d2c9b4b69eb658a92fd796e82`** — deploy `dep-da1l5pu417fc73ek9llg`, **LIVE** desde **2026-08-17T18:31:11Z**. **Este é o único SHA fixo desta tabela**, e ele só muda quando houver um deploy novo. |
-| Release anterior | `630e336d56e15f5a2986b9212588a17aec8476c5`, deploy `dep-da1j42m417fc73ajgu00` — **`deactivated`**, substituído em 2026-08-17T18:31Z. Foi ele que publicou o microajuste de precisão (DEC-069), e continua citado adiante como **histórico**. Antes dele, `ed1c29f…` (`dep-da13bts9v7es73ag89pg`) publicou a Celebração de Venda; também **deactivated**. **Nenhum dos dois é o que roda.** |
-| Estado do Git | A `main` contém, além de commits documentais, **dois commits de código** posteriores ao release executável: **`8382074`** — a feature de VGV histórico mensal, **já publicada** dentro de `46432543` — e **`bd563f0`** — a rotação das listas operacionais (DEC-071), **ainda não publicada**. O SHA **corrente** dela **não é registrado aqui de propósito** — consulte `git rev-parse main` ou o GitHub. Um SHA de topo escrito neste documento se autoinvalida no próximo commit de documentação, que foi exatamente o defeito que esta linha existe para não repetir. (`8382074` é seguro de citar: é o commit da feature, e ele não se move.) |
-| ⚠️ **`main` e produção estão executavelmente divergentes** | A `main` contém a **rotação das listas operacionais** (DEC-071, `bd563f0`), que **não** está publicada — a divergência começou no push desse commit e só se encerra com um deploy. *(A divergência anterior, do **VGV histórico mensal** (DEC-070) entre `8382074` e o deploy de `46432543` em 2026-08-17T18:31Z — a primeira do projeto —, essa sim está encerrada: a DEC-070 está em produção.)* |
-| **Migrations em produção** | **9 aplicadas.** A nona, `20260817170000_vgv_historico_mensal`, entrou no pre-deploy de `46432543` — `prisma migrate deploy` encontrou 9 no repositório e aplicou exatamente essa. |
-| ⚠️ **Commit de código não publicado** | A **rotação das listas operacionais** (DEC-071) está **na `main`** desde o commit **`bd563f0bbee7ee06fd5c3d64b71114fe7bdb8747`** — 14 caminhos, entre implementação, testes e documentação. Ela **não está em produção**: o release executável continua sendo `46432543`, anterior a ela. Ver a seção própria adiante. |
+| **Release executável em produção** | **`ce70d70b88eefb3ccbc59485f02f832dc0c59885`** — deploy **manual** pelo painel do Render, **LIVE**. Publicou a **rotação das listas operacionais** (DEC-071). **Este é o único SHA fixo desta tabela**, e ele só muda quando houver um deploy novo. |
+| Release anterior | `46432543f322076d2c9b4b69eb658a92fd796e82`, deploy `dep-da1l5pu417fc73ek9llg` — live de 2026-08-17T18:31:11Z até ser substituído por `ce70d70`. Foi ele que publicou o **VGV histórico mensal** (DEC-070), e continua citado adiante como **histórico**. Antes dele, `630e336…` (`dep-da1j42m417fc73ajgu00`) publicou o microajuste de precisão (DEC-069) e `ed1c29f…` (`dep-da13bts9v7es73ag89pg`) a Celebração de Venda; ambos **deactivated**. **Nenhum dos três é o que roda.** |
+| Estado do Git | **Nenhum commit de código pendente de publicação.** Os dois últimos — **`8382074`** (VGV histórico mensal, publicado em `46432543`) e **`bd563f0`** (rotação das listas operacionais, publicada em `ce70d70`) — já estão em produção. O SHA **corrente** da `main` **não é registrado aqui de propósito** — consulte `git rev-parse main` ou o GitHub. Um SHA de topo escrito neste documento se autoinvalida no próximo commit de documentação, que foi exatamente o defeito que esta linha existe para não repetir. (`8382074` é seguro de citar: é o commit da feature, e ele não se move.) |
+| ✅ **`main` e produção voltaram a ser executavelmente equivalentes** | A **rotação das listas operacionais** (DEC-071) foi publicada em `ce70d70`, encerrando a divergência aberta pelo push de `bd563f0`. *(Foi a segunda divergência executável do projeto; a primeira, do **VGV histórico mensal** (DEC-070) entre `8382074` e o deploy de `46432543`, também está encerrada.)* O que vier depois de `ce70d70` na `main` volta a ser documentação, até o próximo commit de código. |
+| **Migrations em produção** | **9 aplicadas.** A nona, `20260817170000_vgv_historico_mensal`, entrou no pre-deploy de `46432543` — `prisma migrate deploy` encontrou 9 no repositório e aplicou exatamente essa. O deploy de `ce70d70` rodou o pre-deploy normalmente e **não aplicou nenhuma migration nova**: a DEC-071 não tem migration, e o Prisma encontrou as 9 existentes sem pendências. |
 | ℹ️ **Auto-deploy continua OFF** | Push para `main` **não** é deploy: publicar exige disparo manual. *(Foi isso que criou a janela de divergência executável entre o fast-forward de `8382074` e o deploy de `46432543`, no mesmo dia — registro do que aconteceu, não pendência.)* |
 | **URL pública** | `https://dashboard-casalouzada.onrender.com` |
 | **URL do painel (TV)** | `https://dashboard-casalouzada.onrender.com/painel/<TOKEN>` — token nunca publicado |
@@ -50,24 +49,32 @@
 >
 > A **F5 — Refinamentos** continua **futura** e **não foi iniciada**.
 
-## Rotação das listas operacionais — VERSIONADA EM MAIN, NÃO PUBLICADA
+## Rotação das listas operacionais — PUBLICADA (release `ce70d70`)
 
-Ciclo mais recente do projeto, e o **único commit de código ainda não publicado**. A
-decisão durável é a **DEC-071**.
+Ciclo mais recente do projeto, **concluído**. A decisão durável é a **DEC-071**.
 
-> **Estado.** **VERSIONADA em `main`, NÃO publicada.** Commit
-> **`bd563f0bbee7ee06fd5c3d64b71114fe7bdb8747`**, um só, com os 14 caminhos da feature e da
-> documentação, empurrado para `origin/main` em fast-forward sobre `982c482` — sem merge
-> commit, sem branch intermediária, sem PR.
+> **Estado.** **PUBLICADA em produção.** Release
+> **`ce70d70b88eefb3ccbc59485f02f832dc0c59885`**, deploy **manual** pelo painel do Render,
+> **LIVE**. O pre-deploy correu normalmente e **não aplicou migration nenhuma** — a DEC-071
+> não tem migration, e o Prisma encontrou as 9 existentes sem pendências. O startup subiu
+> sem erro e o health check passou.
 >
-> **Produção continua em `46432543`**, que é anterior a este commit e **não** contém a
-> alteração: `main` e produção estão **executavelmente divergentes** neste momento. O
-> auto-deploy segue **OFF**, então o push não publicou nada — publicar exige disparo
-> manual.
+> A implementação é o commit **`bd563f0bbee7ee06fd5c3d64b71114fe7bdb8747`**, um só, com os
+> 14 caminhos da feature e da documentação, empurrado para `origin/main` em fast-forward
+> sobre `982c482` — sem merge commit, sem branch intermediária, sem PR. `ce70d70` é
+> `bd563f0` mais a reconciliação documental daquele momento.
 >
-> *(O trabalho nasceu e amadureceu inteiro na working tree, ao longo de vários ciclos de
-> implementação, documentação e recovery do banco de teste, antes de virar este commit
-> único. O histórico abaixo é o daquele percurso.)*
+> **✅ Gate visual físico APROVADO.** O proprietário observou a Tela B em produção e
+> confirmou que propostas e reservas **alternam entre os grupos elegíveis** conforme
+> especificado. Não há mais pendência funcional da DEC-071.
+>
+> Auto-deploy continua **OFF**: esta publicação foi disparo manual, como todas.
+>
+> *(Percurso completo: o trabalho nasceu e amadureceu na working tree ao longo de vários
+> ciclos — implementação, recovery do banco de teste, reconciliação de expectativas e
+> documentação —, virou o commit único `bd563f0`, abriu uma janela de divergência
+> executável entre `main` e produção, e só então foi publicado e validado na parede. O
+> histórico abaixo é o daquele percurso.)*
 
 **O defeito.** A Tela B mostra até três propostas em andamento e até três reservas de
 locação. O teto de três era aplicado **duas vezes antes da tela**: `src/lib/metricas.ts`
@@ -162,9 +169,15 @@ de primeira, e o caminho até aqui é parte do registro:
   em paralelo escrevendo enquanto outro tira o retrato. **Não corrigido**, e uma execução
   limpa não prova ausência de corrida.
 
-**O que ainda falta:** **publicar** — disparo manual do deploy, já que o auto-deploy está
-OFF — e, depois, se a rotação for observada na parede, registrar a validação visual.
-Nenhuma das duas foi feita. O commit, esse já existe (`bd563f0`).
+**Verificação pós-deploy (HTTP real, read-only):** `/` → 307 `/admin`; `/login` → 200;
+`/preview` → 200. **Prova objetiva de que a build nova está servida:** o chunk
+`/_next/static/chunks/19-x4uqsc4ff6.js` contém os marcadores da DEC-071
+(`paginaPropostas`/`paginaCircular`/`janelaOperacional`). A mesma sondagem, feita **antes**
+do deploy, não encontrou esses marcadores em nenhum dos 9 chunks servidos — é prova de
+artefato, não inferência a partir do SHA nem redirect HTTP.
+
+**O que ainda falta: nada.** A DEC-071 está implementada, versionada, publicada e validada
+na parede.
 
 ## VGV histórico mensal — PUBLICADO (release `46432543`)
 
